@@ -1,3 +1,8 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@plugin "@tailwindcss/forms";
+
+/*
+ * Tailwind v4 does not scan git-ignored paths, and the v3 tailwind.config.js
+ * explicitly listed the framework pagination views as content sources.
+ */
+@source "../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php";
