@@ -146,7 +146,11 @@ test('blocks deleting a category that has products', function () {
     Livewire::test(Index::class)
         ->call('delete', $category->id)
         ->assertSet('noticeType', 'error')
-        ->assertSee('productos asociados');
+        ->assertDispatched('toast', function (string $name, array $params) {
+            return $name === 'toast'
+                && $params['tone'] === 'error'
+                && str_contains($params['message'], 'productos asociados');
+        });
 
     $this->assertModelExists($category);
     $this->assertModelExists($product);
@@ -159,10 +163,31 @@ test('blocks deleting a category that has subcategories', function () {
     Livewire::test(Index::class)
         ->call('delete', $root->id)
         ->assertSet('noticeType', 'error')
-        ->assertSee('subcategorías');
+        ->assertDispatched('toast', function (string $name, array $params) {
+            return $name === 'toast'
+                && $params['tone'] === 'error'
+                && str_contains($params['message'], 'subcategorías');
+        });
 
     $this->assertModelExists($root);
     $this->assertModelExists($child);
+});
+
+test('announces a created category in the toast stack', function () {
+    Livewire::test(Index::class)
+        ->call('create')
+        ->set('name', 'Pantalones')
+        ->call('save')
+        ->assertHasNoErrors()
+        ->assertDispatched('toast', message: 'Categoría creada correctamente.', tone: 'success');
+});
+
+test('asks for confirmation through the dialog instead of the native confirm', function () {
+    Category::factory()->create(['name' => "Camiseta de John's"]);
+
+    Livewire::test(Index::class)
+        ->assertSee('ask-confirm')
+        ->assertDontSeeHtml('confirm(');
 });
 
 test('guests are redirected to the login screen from the categories page', function () {

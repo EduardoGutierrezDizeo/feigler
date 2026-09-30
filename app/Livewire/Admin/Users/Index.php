@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin\Users;
 
+use App\Livewire\Concerns\Notifies;
 use App\Models\User;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
@@ -14,6 +15,8 @@ use Livewire\Component;
 #[Title('Usuarios')]
 class Index extends Component
 {
+    use Notifies;
+
     /** @var list<string> */
     public const INTERNAL_ROLES = ['admin', 'vendedor', 'bodega', 'contador'];
 
@@ -31,20 +34,14 @@ class Index extends Component
 
     public string $role = '';
 
-    public ?string $notice = null;
-
-    public string $noticeType = 'success';
-
     public function create(): void
     {
-        $this->notice = null;
         $this->resetForm();
         $this->showForm = true;
     }
 
     public function edit(User $user): void
     {
-        $this->notice = null;
         $this->resetForm();
         $this->editingId = $user->id;
         $this->name = $user->name;
@@ -61,8 +58,6 @@ class Index extends Component
 
     public function save(): void
     {
-        $this->notice = null;
-
         if ($this->editingId !== null) {
             $this->editingId = (int) $this->editingId;
         }
@@ -91,8 +86,7 @@ class Index extends Component
 
             $user->syncRoles([$validated['role']]);
 
-            $this->notice = 'Usuario actualizado correctamente.';
-            $this->noticeType = 'success';
+            $this->notifySuccess('Usuario actualizado correctamente.');
             $this->resetForm();
 
             return;
@@ -109,40 +103,32 @@ class Index extends Component
 
         $this->sendInvitation($user);
 
-        $this->notice = 'Usuario creado correctamente. Se envió un correo para que defina su contraseña.';
-        $this->noticeType = 'success';
+        $this->notifySuccess('Usuario creado correctamente. Se envió un correo para que defina su contraseña.');
         $this->resetForm();
     }
 
     public function toggleActive(User $user): void
     {
-        $this->notice = null;
-
         if ($user->id === auth()->id() && $user->is_active) {
-            $this->notice = 'No puedes desactivar tu propia cuenta de administrador.';
-            $this->noticeType = 'error';
+            $this->notifyError('No puedes desactivar tu propia cuenta de administrador.');
 
             return;
         }
 
         $user->update(['is_active' => ! $user->is_active]);
 
-        $this->notice = $user->is_active
+        $this->notifySuccess($user->is_active
             ? "Cuenta de «{$user->name}» activada correctamente."
-            : "Cuenta de «{$user->name}» desactivada correctamente.";
-        $this->noticeType = 'success';
+            : "Cuenta de «{$user->name}» desactivada correctamente.");
     }
 
     public function resendInvitation(User $user): void
     {
-        $this->notice = null;
-
         Password::deleteToken($user);
 
         $this->sendInvitation($user);
 
-        $this->notice = "Se reenvió el correo de definición de contraseña a «{$user->email}».";
-        $this->noticeType = 'success';
+        $this->notifySuccess("Se reenvió el correo de definición de contraseña a «{$user->email}».");
     }
 
     public function render()

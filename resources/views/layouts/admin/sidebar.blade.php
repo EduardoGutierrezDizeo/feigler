@@ -1,6 +1,9 @@
-<div class="flex h-16 shrink-0 items-center border-b border-gray-200 px-4 dark:border-gray-700">
-    <a href="{{ route('admin.dashboard') }}" class="text-lg font-semibold text-gray-900 dark:text-white">
-        Feigler Admin
+<div class="flex h-16 shrink-0 items-center gap-3 border-b border-gold/30 px-4">
+    <a href="{{ route('admin.dashboard') }}" class="flex items-center gap-2">
+        <x-application-logo class="h-8 w-8 fill-current text-gold" />
+        <span class="font-display text-lg font-semibold tracking-wide text-cream">
+            Feigler
+        </span>
     </a>
 </div>
 
@@ -8,9 +11,9 @@
     <a
         href="{{ route('admin.dashboard') }}"
         @class([
-            'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium',
-            'bg-gray-900 text-white dark:bg-gray-700' => request()->routeIs('admin.dashboard'),
-            'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white' => ! request()->routeIs('admin.dashboard'),
+            'flex items-center gap-3 rounded-md border-l-2 px-3 py-2 text-sm font-medium transition duration-150 ease-in-out',
+            'border-gold bg-charcoal/30 text-cream' => request()->routeIs('admin.dashboard'),
+            'border-transparent text-cream/75 hover:bg-charcoal/25 hover:text-cream' => ! request()->routeIs('admin.dashboard'),
         ])
     >
         <svg class="h-5 w-5 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
@@ -21,9 +24,9 @@
     <a
         href="{{ route('admin.categories.index') }}"
         @class([
-            'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium',
-            'bg-gray-900 text-white dark:bg-gray-700' => request()->routeIs('admin.categories.index'),
-            'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white' => ! request()->routeIs('admin.categories.index'),
+            'flex items-center gap-3 rounded-md border-l-2 px-3 py-2 text-sm font-medium transition duration-150 ease-in-out',
+            'border-gold bg-charcoal/30 text-cream' => request()->routeIs('admin.categories.index'),
+            'border-transparent text-cream/75 hover:bg-charcoal/25 hover:text-cream' => ! request()->routeIs('admin.categories.index'),
         ])
     >
         <svg class="h-5 w-5 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
@@ -34,9 +37,9 @@
     <a
         href="{{ route('admin.users.index') }}"
         @class([
-            'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium',
-            'bg-gray-900 text-white dark:bg-gray-700' => request()->routeIs('admin.users.index'),
-            'text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white' => ! request()->routeIs('admin.users.index'),
+            'flex items-center gap-3 rounded-md border-l-2 px-3 py-2 text-sm font-medium transition duration-150 ease-in-out',
+            'border-gold bg-charcoal/30 text-cream' => request()->routeIs('admin.users.index'),
+            'border-transparent text-cream/75 hover:bg-charcoal/25 hover:text-cream' => ! request()->routeIs('admin.users.index'),
         ])
     >
         <svg class="h-5 w-5 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
@@ -46,11 +49,11 @@
     </a>
 </nav>
 
-<div class="border-t border-gray-200 p-3 dark:border-gray-700">
+<div class="border-t border-gold/30 p-3">
     <form method="POST" action="{{ route('logout') }}">
         @csrf
 
-        <button type="submit" class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white">
+        <button type="submit" class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-cream/75 transition duration-150 ease-in-out hover:bg-charcoal/25 hover:text-cream">
             <svg class="h-5 w-5 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M3 12h16.5m0 0-3-3m3 3-3 3" />
             </svg>

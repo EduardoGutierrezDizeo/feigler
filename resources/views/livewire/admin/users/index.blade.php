@@ -1,11 +1,11 @@
 <div>
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-            <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">
+            <h1 class="font-display text-3xl font-semibold text-brand-green">
                 Usuarios
             </h1>
 
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            <p class="mt-1 text-sm text-clay">
                 Gestiona las cuentas internas del personal.
             </p>
         </div>
@@ -14,28 +14,6 @@
             Nuevo usuario
         </x-primary-button>
     </div>
-
-    @if ($notice)
-        <div
-            @class([
-                'mt-6 flex items-start justify-between gap-4 rounded-lg border px-4 py-3 text-sm',
-                'border-green-200 bg-green-50 text-green-800 dark:border-green-700 dark:bg-green-900/30 dark:text-green-300' => $noticeType === 'success',
-                'border-red-200 bg-red-50 text-red-800 dark:border-red-700 dark:bg-red-900/30 dark:text-red-300' => $noticeType === 'error',
-            ])
-            role="status"
-        >
-            <p>{{ $notice }}</p>
-
-            <button
-                type="button"
-                wire:click="$set('notice', null)"
-                class="shrink-0 font-medium opacity-70 hover:opacity-100"
-                aria-label="Cerrar aviso"
-            >
-                ✕
-            </button>
-        </div>
-    @endif
 
     <div class="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
         <x-text-input
@@ -48,7 +26,7 @@
 
         <select
             wire:model.live="roleFilter"
-            class="block w-auto rounded-md border-gray-300 text-sm shadow-xs focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:focus:border-indigo-600 dark:focus:ring-indigo-600"
+            class="block w-auto rounded-md border-sand bg-parchment text-sm text-charcoal shadow-xs focus:border-brand-green focus:ring-brand-green"
             aria-label="Filtrar por rol"
         >
             <option value="">Todos los roles</option>
@@ -61,39 +39,39 @@
             <button
                 type="button"
                 wire:click="$set('search', ''); $set('roleFilter', '')"
-                class="shrink-0 text-sm font-medium text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+                class="shrink-0 text-sm font-medium text-clay hover:text-terracotta"
             >
                 Limpiar filtros
             </button>
         @endif
     </div>
 
-    <div class="mt-4 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xs dark:border-gray-700 dark:bg-gray-800">
+    <div class="mt-4 overflow-hidden rounded-xl border border-sand bg-parchment shadow-xs">
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200 text-sm dark:divide-gray-700">
-                <thead class="bg-gray-50 dark:bg-gray-900/60">
-                    <tr class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                        <th scope="col" class="px-4 py-3 text-start">Nombre</th>
-                        <th scope="col" class="px-4 py-3 text-start">Correo</th>
-                        <th scope="col" class="px-4 py-3 text-start">Rol</th>
-                        <th scope="col" class="px-4 py-3 text-start">Estado</th>
-                        <th scope="col" class="px-4 py-3 text-end">Acciones</th>
+            <table class="min-w-full divide-y divide-sand text-sm">
+                <thead class="bg-cream">
+                    <tr class="text-xs font-semibold uppercase tracking-widest text-clay">
+                        <th scope="col" class="px-6 py-4 text-start">Nombre</th>
+                        <th scope="col" class="px-6 py-4 text-start">Correo</th>
+                        <th scope="col" class="px-6 py-4 text-start">Rol</th>
+                        <th scope="col" class="px-6 py-4 text-start">Estado</th>
+                        <th scope="col" class="px-6 py-4 text-end">Acciones</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-gray-100 dark:divide-gray-700/60">
+                <tbody class="divide-y divide-sand">
                     @forelse ($users as $user)
-                        <tr wire:key="user-{{ $user->id }}">
-                            <td class="px-4 py-3 font-medium text-gray-900 dark:text-white">{{ $user->name }}</td>
-                            <td class="px-4 py-3 text-gray-700 dark:text-gray-300">{{ $user->email }}</td>
-                            <td class="px-4 py-3">
+                        <tr wire:key="user-{{ $user->id }}" class="transition duration-150 ease-in-out hover:bg-cream/60">
+                            <td class="px-6 py-5 font-medium text-charcoal">{{ $user->name }}</td>
+                            <td class="px-6 py-5 text-clay">{{ $user->email }}</td>
+                            <td class="px-6 py-5">
                                 @foreach ($user->getRoleNames() as $roleName)
-                                    <span class="inline-flex items-center rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300">
+                                    <span class="inline-flex items-center rounded-full bg-cream px-2.5 py-1 text-xs font-medium text-brand-green ring-1 ring-gold/40">
                                         {{ ucfirst($roleName) }}
                                     </span>
                                 @endforeach
                             </td>
 
-                            <td class="px-4 py-3">
+                            <td class="px-6 py-5">
                                 <button
                                     type="button"
                                     role="switch"
@@ -103,35 +81,40 @@
                                 >
                                     <span @class([
                                         'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors',
-                                        'bg-emerald-500' => $user->is_active,
-                                        'bg-gray-300 dark:bg-gray-600' => ! $user->is_active,
+                                        'bg-brand-green' => $user->is_active,
+                                        'bg-sand' => ! $user->is_active,
                                     ])>
                                         <span @class([
-                                            'inline-block h-5 w-5 rounded-full bg-white shadow transition-transform',
+                                            'inline-block h-5 w-5 rounded-full bg-parchment shadow transition-transform',
                                             'translate-x-5' => $user->is_active,
                                             'translate-x-0.5' => ! $user->is_active,
                                         ])></span>
                                     </span>
-                                    <span class="text-gray-700 dark:text-gray-300">
+                                    <span class="text-charcoal">
                                         {{ $user->is_active ? 'Activo' : 'Inactivo' }}
                                     </span>
                                 </button>
                             </td>
 
-                            <td class="px-4 py-3 text-end">
-                                <div class="inline-flex items-center gap-3">
+                            <td class="px-6 py-5 text-end">
+                                <div class="inline-flex items-center gap-4">
                                     <button
                                         type="button"
                                         wire:click="edit({{ $user->id }})"
-                                        class="text-sm font-medium text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
+                                        class="text-sm font-medium text-brand-green hover:text-terracotta"
                                     >
                                         Editar
                                     </button>
 
                                     <button
                                         type="button"
-                                        x-on:click="confirm(@js('¿Reenviar el correo de definición de contraseña a «' . $user->email . '»?')) && $wire.resendInvitation({{ $user->id }})"
-                                        class="text-sm font-medium text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
+                                        x-on:click="$dispatch('ask-confirm', {
+                                            title: 'Reenviar invitación',
+                                            message: @js('Se enviará un correo a «' . $user->email . '» para que defina su contraseña.'),
+                                            confirmLabel: 'Enviar correo',
+                                            onConfirm: () => $wire.resendInvitation({{ $user->id }}),
+                                        })"
+                                        class="text-sm font-medium text-clay hover:text-terracotta"
                                     >
                                         Reenviar invitación
                                     </button>
@@ -140,14 +123,14 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="5" class="px-4 py-10 text-center text-sm text-gray-500 dark:text-gray-400">
+                            <td colspan="5" class="px-6 py-12 text-center text-sm text-clay">
                                 @if ($search !== '' || $roleFilter !== '')
                                     <p>No se encontraron usuarios que coincidan con los filtros.</p>
 
                                     <button
                                         type="button"
                                         wire:click="$set('search', ''); $set('roleFilter', '')"
-                                        class="mt-2 font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+                                        class="mt-2 font-medium text-terracotta hover:text-wood"
                                     >
                                         Limpiar filtros
                                     </button>
@@ -163,23 +146,23 @@
     </div>
 
     @if ($showForm)
-        <div class="fixed inset-0 z-40 bg-gray-900/50" wire:click="closeForm" aria-hidden="true"></div>
+        <div class="fixed inset-0 z-40 bg-charcoal/60" wire:click="closeForm" aria-hidden="true"></div>
 
         <aside
             role="dialog"
             aria-modal="true"
             aria-labelledby="user-form-title"
-            class="fixed inset-y-0 end-0 z-50 flex w-full max-w-md flex-col bg-white shadow-xl dark:border-s dark:border-gray-700 dark:bg-gray-800"
+            class="fixed inset-y-0 end-0 z-50 flex w-full max-w-md flex-col border-s border-wood/40 bg-parchment shadow-xl"
         >
-            <div class="flex items-center justify-between border-b border-gray-200 px-6 py-4 dark:border-gray-700">
-                <h2 id="user-form-title" class="text-lg font-semibold text-gray-900 dark:text-white">
+            <div class="flex items-center justify-between border-b border-sand px-6 py-4">
+                <h2 id="user-form-title" class="font-display text-xl font-semibold text-brand-green">
                     {{ $editingId !== null ? 'Editar usuario' : 'Nuevo usuario' }}
                 </h2>
 
                 <button
                     type="button"
                     wire:click="closeForm"
-                    class="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+                    class="rounded-md p-1 text-clay hover:bg-cream hover:text-terracotta"
                     aria-label="Cerrar formulario"
                 >
                     <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
@@ -218,7 +201,7 @@
                     <select
                         id="user-role"
                         wire:model="role"
-                        class="mt-1 block w-full rounded-md border-gray-300 text-sm shadow-xs focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:focus:border-indigo-600 dark:focus:ring-indigo-600"
+                        class="mt-1 block w-full rounded-md border-sand bg-parchment text-sm text-charcoal shadow-xs focus:border-brand-green focus:ring-brand-green"
                     >
                         <option value="">— Selecciona un rol —</option>
                         @foreach ($internalRoles as $roleName)
@@ -231,13 +214,13 @@
                 </div>
 
                 @if ($editingId === null)
-                    <p class="text-xs text-gray-500 dark:text-gray-400">
+                    <p class="text-xs text-clay">
                         Al crear, se enviará un correo para que el empleado defina su propia contraseña.
                     </p>
                 @endif
             </div>
 
-            <div class="flex justify-end gap-3 border-t border-gray-200 px-6 py-4 dark:border-gray-700">
+            <div class="flex flex-col-reverse gap-3 border-t border-sand px-6 py-4 sm:flex-row sm:justify-end">
                 <x-secondary-button type="button" wire:click="closeForm">
                     Cancelar
                 </x-secondary-button>

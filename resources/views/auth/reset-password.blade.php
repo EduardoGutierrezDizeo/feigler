@@ -1,5 +1,13 @@
 <x-guest-layout>
-    <form method="POST" action="{{ route('password.store') }}">
+    <h1 class="font-display text-2xl font-semibold text-brand-green">
+        {{ __('Reset Password') }}
+    </h1>
+
+    <p class="mt-1 text-sm text-clay">
+        Elige una contraseña nueva para tu cuenta
+    </p>
+
+    <form method="POST" action="{{ route('password.store') }}" class="mt-6">
         @csrf
 
         <!-- Password Reset Token -->
@@ -30,7 +38,7 @@
             <x-input-error :messages="$errors->get('password_confirmation')" class="mt-2" />
         </div>
 
-        <div class="flex items-center justify-end mt-4">
+        <div class="mt-6 flex justify-end">
             <x-primary-button>
                 {{ __('Reset Password') }}
             </x-primary-button>

@@ -7,15 +7,44 @@
  */
 @source "../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php";
 
-@keyframes row-flash {
-    0% {
-        background-color: rgb(129 140 248 / 0.3);
-    }
-    100% {
-        background-color: transparent;
+/*
+ * Feigler is a single fixed light theme: `dark:` utilities only react to an
+ * explicit `.dark` class, never to the operating system's color scheme.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+    /* Brand palette */
+    --color-brand-green: #2f4a38;
+    --color-cream: #f1e9d8;
+    --color-terracotta: #b25b34;
+    --color-wood: #5a3a24;
+    --color-charcoal: #1c1c1a;
+    --color-gold: #c6a15b;
+
+    /* Tints derived from cream for surfaces, dividers and muted text */
+    --color-parchment: #fbf7ee;
+    --color-sand: #e4d8c1;
+    --color-clay: #8c7a63;
+
+    /* Typography: characterful serif for headings, clean sans for body copy */
+    --font-display: "Playfair Display", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+    --font-sans: "Figtree", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif,
+        "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+}
+
+@layer base {
+    body {
+        @apply bg-cream text-charcoal;
     }
 }
 
-.flash-row {
-    animation: row-flash 700ms ease-out;
+/*
+ * Row reordering (FLIP): the row mover sets the transform and its transition
+ * inline, so this class only keeps the moving row above its neighbours and
+ * freezes the hover colour while the displacement is being animated.
+ */
+.row-is-moving {
+    position: relative;
+    z-index: 1;
 }

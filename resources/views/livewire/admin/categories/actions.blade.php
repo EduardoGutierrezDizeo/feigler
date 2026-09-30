@@ -4,38 +4,43 @@
     'isLast' => false,
 ])
 
-<div class="ms-auto flex items-center gap-3">
-    <button
-        type="button"
-        role="switch"
-        aria-checked="{{ $category->is_active ? 'true' : 'false' }}"
-        wire:click="toggleActive({{ $category->id }})"
-        class="inline-flex items-center gap-2 text-sm font-medium"
-    >
-        <span @class([
-            'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors',
-            'bg-emerald-500' => $category->is_active,
-            'bg-gray-300 dark:bg-gray-600' => ! $category->is_active,
-        ])>
+{{-- Renders the "Estado", "Orden" and "Acciones" cells of a category row. `contents`
+     makes those children participate directly in the row's grid. --}}
+<div class="contents">
+    <div class="flex items-center gap-2 text-sm font-medium">
+        <button
+            type="button"
+            role="switch"
+            aria-checked="{{ $category->is_active ? 'true' : 'false' }}"
+            wire:click="toggleActive({{ $category->id }})"
+            class="inline-flex items-center gap-2"
+        >
             <span @class([
-                'inline-block h-5 w-5 rounded-full bg-white shadow transition-transform',
-                'translate-x-5' => $category->is_active,
-                'translate-x-0.5' => ! $category->is_active,
-            ])></span>
-        </span>
-        <span class="text-gray-700 dark:text-gray-300">
-            {{ $category->is_active ? 'Activo' : 'Inactivo' }}
-        </span>
-    </button>
+                'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors',
+                'bg-brand-green' => $category->is_active,
+                'bg-sand' => ! $category->is_active,
+            ])>
+                <span @class([
+                    'inline-block h-5 w-5 rounded-full bg-parchment shadow transition-transform',
+                    'translate-x-5' => $category->is_active,
+                    'translate-x-0.5' => ! $category->is_active,
+                ])></span>
+            </span>
+            <span class="text-charcoal">
+                {{ $category->is_active ? 'Activo' : 'Inactivo' }}
+            </span>
+        </button>
+    </div>
 
-    <span class="inline-flex items-center gap-1">
+    <div class="flex items-center justify-start gap-2 md:justify-center">
         <button
             type="button"
             wire:click="moveUp({{ $category->id }})"
+            x-on:click="moveReorder.capture($el.closest('[data-flip-scope]'))"
             title="Mover hacia arriba"
             aria-label="Mover {{ $category->name }} hacia arriba"
             @disabled($isFirst)
-            class="inline-flex h-7 w-7 items-center justify-center rounded-md border border-gray-300 text-base font-semibold text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white dark:disabled:hover:bg-transparent"
+            class="inline-flex h-7 w-7 items-center justify-center rounded-md border border-sand bg-parchment text-base font-semibold text-clay transition duration-150 ease-in-out hover:border-terracotta hover:bg-cream hover:text-terracotta disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-parchment disabled:hover:text-clay"
         >
             ↑
         </button>
@@ -43,21 +48,22 @@
         <button
             type="button"
             wire:click="moveDown({{ $category->id }})"
+            x-on:click="moveReorder.capture($el.closest('[data-flip-scope]'))"
             title="Mover hacia abajo"
             aria-label="Mover {{ $category->name }} hacia abajo"
             @disabled($isLast)
-            class="inline-flex h-7 w-7 items-center justify-center rounded-md border border-gray-300 text-base font-semibold text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white dark:disabled:hover:bg-transparent"
+            class="inline-flex h-7 w-7 items-center justify-center rounded-md border border-sand bg-parchment text-base font-semibold text-clay transition duration-150 ease-in-out hover:border-terracotta hover:bg-cream hover:text-terracotta disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-parchment disabled:hover:text-clay"
         >
             ↓
         </button>
-    </span>
+    </div>
 
-    <span class="inline-flex items-center gap-3">
+    <div class="col-span-2 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm md:col-span-1 md:justify-end">
         @if ($category->parent_id === null)
             <button
                 type="button"
                 wire:click="createSubcategory({{ $category->id }})"
-                class="text-sm font-medium text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
+                class="font-medium text-clay transition hover:text-brand-green"
             >
                 Agregar subcategoría
             </button>
@@ -66,17 +72,23 @@
         <button
             type="button"
             wire:click="edit({{ $category->id }})"
-            class="text-sm font-medium text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
+            class="font-medium text-brand-green transition hover:text-terracotta"
         >
             Editar
         </button>
 
         <button
             type="button"
-            x-on:click="confirm(@js('¿Eliminar la categoría «' . $category->name . '»? Esta acción no se puede deshacer.')) && $wire.delete({{ $category->id }})"
-            class="text-sm font-medium text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+            x-on:click="$dispatch('ask-confirm', {
+                title: 'Eliminar categoría',
+                message: @js('Se eliminará «' . $category->name . '» de forma permanente.'),
+                confirmLabel: 'Eliminar',
+                destructive: true,
+                onConfirm: () => $wire.delete({{ $category->id }}),
+            })"
+            class="font-medium text-terracotta transition hover:text-wood"
         >
             Eliminar
         </button>
-    </span>
+    </div>
 </div>

@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Admin\Categories;
 
+use App\Livewire\Concerns\Notifies;
 use App\Models\Category;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -14,6 +15,8 @@ use Livewire\Component;
 #[Title('Categorías')]
 class Index extends Component
 {
+    use Notifies;
+
     public string $search = '';
 
     public bool $showForm = false;
@@ -24,16 +27,11 @@ class Index extends Component
 
     public ?int $parentId = null;
 
-    public ?string $notice = null;
-
-    public string $noticeType = 'success';
-
     /** @var list<int> */
     public array $expanded = [];
 
     public function create(): void
     {
-        $this->notice = null;
         $this->resetForm();
         $this->showForm = true;
     }
@@ -44,7 +42,6 @@ class Index extends Component
             return;
         }
 
-        $this->notice = null;
         $this->resetForm();
         $this->parentId = $category->id;
         $this->showForm = true;
@@ -52,7 +49,6 @@ class Index extends Component
 
     public function edit(Category $category): void
     {
-        $this->notice = null;
         $this->resetForm();
         $this->editingId = $category->id;
         $this->name = $category->name;
@@ -68,8 +64,6 @@ class Index extends Component
 
     public function save(): void
     {
-        $this->notice = null;
-
         $rootIds = Category::query()
             ->whereNull('parent_id')
             ->when($this->editingId !== null, fn ($query) => $query->whereKeyNot($this->editingId))
@@ -112,7 +106,7 @@ class Index extends Component
                 'parent_id' => $validated['parentId'],
             ]);
 
-            $this->notice = 'Categoría actualizada correctamente.';
+            $this->notifySuccess('Categoría actualizada correctamente.');
         } else {
             Category::create([
                 'name' => $name,
@@ -120,42 +114,34 @@ class Index extends Component
                 'parent_id' => $validated['parentId'],
             ]);
 
-            $this->notice = 'Categoría creada correctamente.';
+            $this->notifySuccess('Categoría creada correctamente.');
         }
 
-        $this->noticeType = 'success';
         $this->resetForm();
     }
 
     public function toggleActive(Category $category): void
     {
-        $this->notice = null;
-
         $category->update(['is_active' => ! $category->is_active]);
     }
 
     public function delete(Category $category): void
     {
-        $this->notice = null;
-
         if ($category->products()->exists()) {
-            $this->notice = "No se puede eliminar «{$category->name}» porque tiene productos asociados. Primero mueve esos productos a otra categoría o elimínalos.";
-            $this->noticeType = 'error';
+            $this->notifyError("No se puede eliminar «{$category->name}» porque tiene productos asociados. Primero mueve esos productos a otra categoría o elimínalos.");
 
             return;
         }
 
         if ($category->children()->exists()) {
-            $this->notice = "No se puede eliminar «{$category->name}» porque tiene subcategorías. Primero elimina sus subcategorías.";
-            $this->noticeType = 'error';
+            $this->notifyError("No se puede eliminar «{$category->name}» porque tiene subcategorías. Primero elimina sus subcategorías.");
 
             return;
         }
 
         $category->delete();
 
-        $this->notice = "Categoría «{$category->name}» eliminada correctamente.";
-        $this->noticeType = 'success';
+        $this->notifySuccess("Categoría «{$category->name}» eliminada correctamente.");
     }
 
     public function toggleExpanded(int $categoryId): void

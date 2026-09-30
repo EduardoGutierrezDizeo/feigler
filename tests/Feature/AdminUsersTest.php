@@ -47,7 +47,8 @@ test('creates a vendedor with a random password and sends the password reset ema
         ->call('save')
         ->assertHasNoErrors()
         ->assertSet('showForm', false)
-        ->assertSet('notice', 'Usuario creado correctamente. Se envió un correo para que defina su contraseña.');
+        ->assertSet('notice', 'Usuario creado correctamente. Se envió un correo para que defina su contraseña.')
+        ->assertDispatched('toast', tone: 'success', message: 'Usuario creado correctamente. Se envió un correo para que defina su contraseña.');
 
     $user = User::query()->where('email', 'ana@feigler.test')->sole();
 
@@ -139,7 +140,7 @@ test('blocks an admin from deactivating their own account', function () {
     Livewire::test(Index::class)
         ->call('toggleActive', $admin->id)
         ->assertSet('noticeType', 'error')
-        ->assertSee('No puedes desactivar tu propia cuenta de administrador.');
+        ->assertDispatched('toast', message: 'No puedes desactivar tu propia cuenta de administrador.', tone: 'error');
 
     expect($admin->refresh()->is_active)->toBeTrue();
 });
@@ -154,7 +155,11 @@ test('resends the password reset email for an existing user', function () {
     Livewire::test(Index::class)
         ->call('resendInvitation', $user->id)
         ->assertSet('noticeType', 'success')
-        ->assertSee('Se reenvió el correo de definición de contraseña');
+        ->assertDispatched('toast', function (string $name, array $params) {
+            return $name === 'toast'
+                && $params['tone'] === 'success'
+                && str_contains($params['message'], 'Se reenvió el correo de definición de contraseña');
+        });
 
     Notification::assertSentTo($user, ResetPassword::class);
 });
