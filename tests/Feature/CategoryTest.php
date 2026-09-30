@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Category;
+use App\Models\Product;
 use Illuminate\Database\QueryException;
 
 test('a category nests its subcategories one level deep', function () {
@@ -26,4 +27,14 @@ test('a category is active and parentless until it says otherwise', function () 
     expect($category->order)->toBe(0)
         ->and($category->is_active)->toBeTrue()
         ->and($category->parent_id)->toBeNull();
+});
+
+test('a category with a product cannot be deleted', function () {
+    $category = Category::factory()->create();
+    $product = Product::factory()->for($category)->create();
+
+    expect(fn () => $category->delete())->toThrow(QueryException::class);
+
+    expect($category->exists)->toBeTrue()
+        ->and($product->exists)->toBeTrue();
 });

@@ -6,3 +6,16 @@
  * explicitly listed the framework pagination views as content sources.
  */
 @source "../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php";
+
+@keyframes row-flash {
+    0% {
+        background-color: rgb(129 140 248 / 0.3);
+    }
+    100% {
+        background-color: transparent;
+    }
+}
+
+.flash-row {
+    animation: row-flash 700ms ease-out;
+}
