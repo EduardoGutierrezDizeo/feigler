@@ -18,104 +18,38 @@
 --}}
 <div
     x-cloak
-    x-show="open"
-    x-data="{
-        open: false,
-        title: '',
-        message: '',
-        confirmLabel: 'Confirmar',
-        destructive: false,
-        onConfirm: null,
-        ask(event) {
-            const options = event.detail ?? {}
-
-            this.title = options.title ?? '¿Confirmas la acción?'
-            this.message = options.message ?? ''
-            this.confirmLabel = options.confirmLabel ?? 'Confirmar'
-            this.destructive = Boolean(options.destructive)
-            this.onConfirm = typeof options.onConfirm === 'function' ? options.onConfirm : null
-            this.open = true
-        },
-        confirm() {
-            const action = this.onConfirm
-
-            this.reset()
-
-            if (action) {
-                action()
-            }
-        },
-        reset() {
-            this.open = false
-            this.title = ''
-            this.message = ''
-            this.confirmLabel = 'Confirmar'
-            this.destructive = false
-            this.onConfirm = null
-        },
-        focusables() {
-            const selector = 'a[href], button:not([disabled]), input:not([type=\"hidden\"]), select, textarea, [tabindex]:not([tabindex=\"-1\"])'
-
-            return [...$el.querySelectorAll(selector)].filter(
-                (el) => el.offsetParent !== null || el === document.activeElement,
-            )
-        },
-        trap(event) {
-            const focusables = this.focusables()
-
-            if (focusables.length === 0) {
-                event.preventDefault()
-
-                return
-            }
-
-            const first = focusables[0]
-            const last = focusables[focusables.length - 1]
-
-            if (event.shiftKey && document.activeElement === first) {
-                event.preventDefault()
-                last.focus()
-            } else if (! event.shiftKey && document.activeElement === last) {
-                event.preventDefault()
-                first.focus()
-            }
-        },
-    }"
-    x-init="$watch('open', (value) => {
-        if (value) {
-            document.body.classList.add('overflow-y-hidden')
-            $nextTick(() => this.focusables()[0]?.focus())
-        } else {
-            document.body.classList.remove('overflow-y-hidden')
-        }
-    })"
+    x-data="confirmDialog"
     x-on:ask-confirm.window="ask($event)"
-    x-on:keydown.escape.window="open && reset()"
+    x-on:keydown.escape.window="$data.open && reset()"
     x-on:keydown.tab="trap($event)"
-    class="fixed inset-0 z-[70] flex items-end justify-center p-4 sm:items-center"
+    class="pointer-events-none fixed inset-0 z-[70] flex items-end justify-center p-4 sm:items-center"
     role="dialog"
     aria-modal="true"
     aria-labelledby="confirm-dialog-title"
     aria-describedby="confirm-dialog-message"
 >
     <div
-        class="absolute inset-0 bg-charcoal/60"
+        x-cloak
+        x-show="$data.open"
+        class="pointer-events-auto absolute inset-0 bg-charcoal/40"
         x-on:click="reset()"
-        x-transition:enter="ease-out duration-200"
+        aria-hidden="true"
+        x-transition:enter="duration-[350ms] ease-out"
         x-transition:enter-start="opacity-0"
         x-transition:enter-end="opacity-100"
-        x-transition:leave="ease-in duration-150"
+        x-transition:leave="duration-[250ms] ease-in"
         x-transition:leave-start="opacity-100"
         x-transition:leave-end="opacity-0"
-        aria-hidden="true"
     ></div>
 
     <div
-        class="relative flex w-full max-w-md flex-col overflow-hidden rounded-xl border border-sand bg-parchment shadow-xl"
-        x-transition:enter="ease-out duration-200"
+        x-cloak
+        x-show="$data.open"
+        class="pointer-events-auto relative flex w-full max-w-md flex-col overflow-hidden rounded-xl border border-sand bg-cream shadow-lg"
+        x-transition:enter="duration-[350ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
         x-transition:enter-start="translate-y-4 opacity-0 sm:translate-y-0 sm:scale-95"
         x-transition:enter-end="translate-y-0 opacity-100 sm:scale-100"
-        x-transition:leave="ease-in duration-150"
+        x-transition:leave="duration-[250ms] ease-in"
         x-transition:leave-start="translate-y-0 opacity-100 sm:scale-100"
         x-transition:leave-end="translate-y-4 opacity-0 sm:translate-y-0 sm:scale-95"
     >
@@ -133,7 +67,7 @@
             <div class="min-w-0 flex-1">
                 <h2 id="confirm-dialog-title" class="font-display text-lg font-semibold text-brand-green" x-text="title"></h2>
 
-                <p id="confirm-dialog-message" class="mt-1 text-sm text-clay" x-show="message" x-text="message"></p>
+                <p id="confirm-dialog-message" class="mt-1 text-sm text-clay" x-show="$data.message" x-text="message"></p>
             </div>
         </div>
 
@@ -146,7 +80,7 @@
 
             <button
                 type="button"
-                class="inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-semibold text-parchment shadow-sm transition duration-150 ease-in-out focus:outline-hidden focus-visible:outline-2 focus-visible:outline-offset-2"
+                class="inline-flex items-center justify-center rounded-md px-5 py-2.5 text-sm font-semibold text-cream transition-colors duration-150 ease-in-out focus-visible:outline-2 focus-visible:outline-offset-2"
                 :class="destructive
                     ? 'bg-terracotta hover:bg-wood focus-visible:outline-terracotta'
                     : 'bg-brand-green hover:bg-wood focus-visible:outline-brand-green'"

@@ -5,25 +5,27 @@
         </h2>
     </x-slot>
 
+    {{-- Cada sección se separa por una línea divisoria fina en lugar de una
+         tarjeta con fondo propio: el crema sigue siendo la superficie única. --}}
     <div class="py-12">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
-            <div class="border border-sand bg-parchment p-4 shadow-sm sm:rounded-lg sm:p-8">
+        <div class="mx-auto max-w-3xl space-y-10 px-4 sm:px-6 lg:px-8">
+            <section class="border-t border-sand pt-8">
                 <div class="max-w-xl">
                     @include('profile.partials.update-profile-information-form')
                 </div>
-            </div>
+            </section>
 
-            <div class="border border-sand bg-parchment p-4 shadow-sm sm:rounded-lg sm:p-8">
+            <section class="border-t border-sand pt-8">
                 <div class="max-w-xl">
                     @include('profile.partials.update-password-form')
                 </div>
-            </div>
+            </section>
 
-            <div class="border border-sand bg-parchment p-4 shadow-sm sm:rounded-lg sm:p-8">
+            <section class="border-t border-sand pt-8">
                 <div class="max-w-xl">
                     @include('profile.partials.delete-user-form')
                 </div>
-            </div>
+            </section>
         </div>
     </div>
 </x-app-layout>

@@ -8,6 +8,7 @@
  */
 
 import { createRowMover } from './admin/row-mover.js';
+import './alpine/index.js';
 
 const TOAST_TONES = ['success', 'error'];
 const TOAST_DURATION = 5000;
@@ -89,7 +90,6 @@ window.addEventListener('toast', (event) => {
  * una tanda de inversión/reproducción en curso.
  */
 window.moveReorder = createRowMover({
-    duration: 280,
     onFinish: (el) => {
         el.classList.remove('row-is-moving')
     },

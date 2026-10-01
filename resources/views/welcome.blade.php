@@ -1,5 +1,8 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+{{-- `scroll-smooth` para que el ancla «Ver la colección» descienda en lugar de
+     saltar. El reset de `prefers-reduced-motion` de app.css lo devuelve a
+     `auto` para quien tenga la preferencia activada. --}}
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="scroll-smooth">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -13,13 +16,19 @@
 
         <!-- Styles / Scripts -->
         @vite(['resources/css/app.css', 'resources/js/app.js'])
+
+        {{-- Hides Alpine-powered elements until Alpine initializes them. --}}
+        <style>[x-cloak] { display: none !important; }</style>
     </head>
     <body class="bg-cream font-sans text-charcoal antialiased">
         <div class="flex min-h-screen flex-col bg-cream">
             <header class="border-b border-sand">
                 <div class="mx-auto flex h-20 max-w-6xl items-center justify-between gap-4 px-6 lg:px-8">
-                    <a href="/" class="flex shrink-0 items-center gap-3">
-                        <x-application-logo class="h-9 w-9 fill-current text-brand-green sm:h-10 sm:w-10" />
+                    <a href="/" class="flex shrink-0 items-center gap-3 rounded-md transition-opacity duration-150 ease-in-out hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-green">
+                        {{-- Tertiary wood tone: small badge, not a surface. --}}
+                        <span class="inline-flex shrink-0 items-center justify-center rounded-md bg-wood p-1.5">
+                            <x-application-logo class="h-7 w-7 fill-cream" />
+                        </span>
                         <span class="font-display text-xl font-semibold tracking-wide text-brand-green sm:text-2xl">
                             Feigler
                         </span>
@@ -30,14 +39,14 @@
                             @auth
                                 <a
                                     href="{{ url('/dashboard') }}"
-                                    class="inline-flex items-center whitespace-nowrap rounded-md border border-brand-green bg-brand-green px-4 py-2 text-sm font-medium text-cream transition duration-150 ease-in-out hover:bg-wood focus:outline-hidden focus:ring-2 focus:ring-gold focus:ring-offset-2 focus:ring-offset-cream"
+                                    class="inline-flex items-center whitespace-nowrap rounded-md bg-brand-green px-4 py-2 text-sm font-medium text-cream transition-[background-color,box-shadow] duration-150 ease-in-out hover:bg-wood hover:shadow-lift active:opacity-90 focus:outline-2 focus:outline-offset-2 focus:outline-brand-green"
                                 >
                                     Panel de control
                                 </a>
                             @else
                                 <a
                                     href="{{ route('login') }}"
-                                    class="hidden items-center whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium text-clay transition duration-150 ease-in-out hover:text-terracotta focus:outline-hidden sm:inline-flex"
+                                    class="hidden items-center whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium text-clay transition-colors duration-150 ease-in-out hover:text-brand-green focus:outline-2 focus:outline-offset-2 focus:outline-brand-green sm:inline-flex"
                                 >
                                     Iniciar sesión
                                 </a>
@@ -45,7 +54,7 @@
                                 @if (Route::has('register'))
                                     <a
                                         href="{{ route('register') }}"
-                                        class="inline-flex items-center whitespace-nowrap rounded-md border border-brand-green bg-brand-green px-4 py-2 text-sm font-medium text-cream transition duration-150 ease-in-out hover:bg-wood focus:outline-hidden focus:ring-2 focus:ring-gold focus:ring-offset-2 focus:ring-offset-cream"
+                                        class="inline-flex items-center whitespace-nowrap rounded-md bg-brand-green px-4 py-2 text-sm font-medium text-cream transition-[background-color,box-shadow] duration-150 ease-in-out hover:bg-wood hover:shadow-lift active:opacity-90 focus:outline-2 focus:outline-offset-2 focus:outline-brand-green"
                                     >
                                         Registrarse
                                     </a>
@@ -56,7 +65,14 @@
                 </div>
             </header>
 
-            <main class="flex-1">
+            {{-- La cabecera y el pie quedan fuera: solo el contenido de la
+                 página entra con animación. --}}
+            <main
+                x-cloak
+                x-data="pageEnter"
+                class="flex-1 transition-[opacity,transform] duration-300 ease-out"
+                :class="entered ? 'opacity-100' : 'translate-y-2 opacity-0'"
+            >
                 <!-- Hero -->
                 <section class="mx-auto max-w-6xl px-6 py-16 sm:py-20 lg:px-8 lg:py-28">
                     <div class="max-w-2xl">
@@ -77,14 +93,14 @@
                         <div class="mt-10 flex flex-col gap-4 sm:flex-row">
                             <a
                                 href="{{ Route::has('login') ? route('login') : '#' }}"
-                                class="inline-flex items-center justify-center rounded-md bg-brand-green px-6 py-3 text-sm font-semibold uppercase tracking-widest text-cream transition duration-150 ease-in-out hover:bg-wood focus:outline-hidden focus:ring-2 focus:ring-gold focus:ring-offset-2 focus:ring-offset-cream"
+                                class="inline-flex items-center justify-center rounded-md bg-brand-green px-6 py-3 text-sm font-semibold text-cream transition-[background-color,box-shadow] duration-150 ease-in-out hover:bg-wood hover:shadow-lift active:opacity-90 focus:outline-2 focus:outline-offset-2 focus:outline-brand-green"
                             >
                                 Entrar al panel
                             </a>
 
                             <a
                                 href="#coleccion"
-                                class="inline-flex items-center justify-center rounded-md border border-sand bg-parchment px-6 py-3 text-sm font-semibold uppercase tracking-widest text-charcoal transition duration-150 ease-in-out hover:border-terracotta hover:text-terracotta focus:outline-hidden focus:ring-2 focus:ring-gold focus:ring-offset-2 focus:ring-offset-cream"
+                                class="inline-flex items-center justify-center rounded-md border border-sand px-6 py-3 text-sm font-semibold text-brand-green transition-[background-color,border-color,box-shadow] duration-150 ease-in-out hover:border-brand-green/40 hover:bg-sand/40 hover:shadow-lift active:opacity-90 focus:outline-2 focus:outline-offset-2 focus:outline-brand-green"
                             >
                                 Ver la colección
                             </a>
@@ -93,14 +109,15 @@
                 </section>
 
                 <!-- Valores -->
-                <section id="coleccion" class="border-y border-sand bg-parchment">
-                    <div class="mx-auto grid max-w-6xl gap-10 px-6 py-16 lg:grid-cols-3 lg:px-8">
+                <section id="coleccion" class="border-y border-sand">
+                    <div class="mx-auto grid max-w-6xl gap-x-10 gap-y-12 px-6 py-16 lg:grid-cols-3 lg:px-8">
                         @foreach ([
                             ['Selección curada', 'Cada prenda pasa por una revisión minuciosa, como los buenos muebles de una tienda de barrio.'],
                             ['Cuidado lento', 'Telas nobles y cortes clásicos: piezas pensadas para durar muchas temporadas.'],
                             ['Atención cercana', 'Un local pequeño, recomendaciones honestas y sin prisa por vender.'],
                         ] as [$title, $description])
-                            <div class="border-l-2 border-gold/60 pl-6">
+                            {{-- Tertiary wood tone as a thin vertical rule, not a fill. --}}
+                            <div class="border-s-2 border-wood/60 ps-6">
                                 <h2 class="font-display text-xl font-semibold text-brand-green">
                                     {{ $title }}
                                 </h2>
@@ -114,16 +131,19 @@
                 </section>
             </main>
 
-            <footer class="bg-wood">
+<footer class="border-t border-sand">
                 <div class="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-12 sm:flex-row sm:items-center sm:justify-between lg:px-8">
                     <div class="flex items-center gap-3">
-                        <x-application-logo class="h-9 w-9 fill-current text-gold" />
-                        <span class="font-display text-xl font-semibold tracking-wide text-cream">
+                        {{-- Tertiary wood tone: small badge, not a surface. --}}
+                        <span class="inline-flex shrink-0 items-center justify-center rounded-md bg-wood p-1">
+                            <x-application-logo class="h-6 w-6 fill-cream" />
+                        </span>
+                        <span class="font-display text-xl font-semibold tracking-wide text-brand-green">
                             Feigler
                         </span>
                     </div>
 
-                    <p class="text-sm text-cream/70">
+                    <p class="text-sm text-clay">
                         Calidez y buen gusto desde el primer día.
                     </p>
                 </div>

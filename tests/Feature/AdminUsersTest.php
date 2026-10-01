@@ -20,6 +20,27 @@ test('renders the users page for users with the admin role', function () {
         ->assertSee('Nuevo usuario');
 });
 
+test('the user form uses the same full-viewport modal as the category form', function () {
+    $this->seed(RoleSeeder::class);
+
+    Livewire::test(Index::class)
+        ->assertSet('showForm', false)
+        // Mismo componente y, sobre todo, mismo contrato de visibilidad: el
+        // nodo se renderiza siempre y Alpine lo muestra y lo oculta, de modo que
+        // el modal de usuarios también cierra con transición.
+        ->assertSee('x-data="adminModal($wire)"', false)
+        ->assertSee('x-show="$data.open"', false)
+        ->assertSee('x-transition:leave="duration-[250ms] ease-in"', false)
+        ->assertSee('x-transition:leave-end="translate-y-3 scale-[0.96] opacity-0"', false)
+        ->assertSee('pointer-events-none fixed inset-0', false)
+        ->assertSee('max-h-[90vh]', false)
+        ->assertSee('min-h-0 flex-1', false)
+        ->assertSee('data-modal-autofocus', false)
+        ->call('create')
+        ->assertSet('showForm', true)
+        ->assertSet('editingId', null);
+});
+
 test('returns 403 for authenticated users without the admin role', function () {
     $this->seed(RoleSeeder::class);
 

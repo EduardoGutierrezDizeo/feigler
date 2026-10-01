@@ -1,4 +1,4 @@
-const DEFAULT_DURATION = 280;
+const DEFAULT_DURATION = 340;
 const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
 const GENERATION_ATTRIBUTE = 'data-flip-generation';
 

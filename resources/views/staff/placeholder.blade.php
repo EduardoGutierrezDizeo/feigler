@@ -6,21 +6,23 @@
     </x-slot>
 
     <div class="py-12">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-            <div class="overflow-hidden border border-sand bg-parchment shadow-xs sm:rounded-lg">
-                <div class="p-6 text-charcoal">
-                    <p class="text-lg">
-                        Tu módulo de <span class="font-semibold text-brand-green">{{ $module }}</span> estará disponible pronto.
-                    </p>
+        <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div class="max-w-2xl border-l-2 border-wood/70 pl-6">
+                <p class="font-display text-2xl font-semibold text-brand-green">
+                    Tu módulo de {{ $module }}
+                </p>
 
-                    <form method="POST" action="{{ route('logout') }}" class="mt-6">
-                        @csrf
+                <p class="mt-3 text-base text-clay">
+                    Estará disponible pronto.
+                </p>
 
-                        <x-secondary-button type="submit">
-                            {{ __('Log Out') }}
-                        </x-secondary-button>
-                    </form>
-                </div>
+                <form method="POST" action="{{ route('logout') }}" class="mt-8">
+                    @csrf
+
+                    <x-secondary-button type="submit">
+                        {{ __('Log Out') }}
+                    </x-secondary-button>
+                </form>
             </div>
         </div>
     </div>

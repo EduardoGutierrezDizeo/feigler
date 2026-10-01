@@ -1,11 +1,11 @@
 <div>
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-            <h1 class="font-display text-3xl font-semibold text-brand-green">
+            <h1 class="font-display text-3xl font-semibold text-brand-green sm:text-4xl">
                 Usuarios
             </h1>
 
-            <p class="mt-1 text-sm text-clay">
+            <p class="mt-2 text-sm text-clay">
                 Gestiona las cuentas internas del personal.
             </p>
         </div>
@@ -15,7 +15,7 @@
         </x-primary-button>
     </div>
 
-    <div class="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+    <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
         <x-text-input
             type="search"
             wire:model.live="search"
@@ -24,54 +24,63 @@
             aria-label="Buscar usuario"
         />
 
-        <select
+        <x-select-input
             wire:model.live="roleFilter"
-            class="block w-auto rounded-md border-sand bg-parchment text-sm text-charcoal shadow-xs focus:border-brand-green focus:ring-brand-green"
+            class="block w-auto"
             aria-label="Filtrar por rol"
         >
             <option value="">Todos los roles</option>
             @foreach ($internalRoles as $roleName)
                 <option value="{{ $roleName }}">{{ ucfirst($roleName) }}</option>
             @endforeach
-        </select>
+        </x-select-input>
 
         @if ($search !== '' || $roleFilter !== '')
             <button
                 type="button"
                 wire:click="$set('search', ''); $set('roleFilter', '')"
-                class="shrink-0 text-sm font-medium text-clay hover:text-terracotta"
+                class="shrink-0 text-sm font-medium text-clay transition-colors duration-150 ease-in-out hover:text-terracotta active:opacity-80"
             >
                 Limpiar filtros
             </button>
         @endif
     </div>
 
-    <div class="mt-4 overflow-hidden rounded-xl border border-sand bg-parchment shadow-xs">
+    <div class="mt-6 overflow-hidden rounded-xl border border-sand bg-parchment">
         <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-sand text-sm">
-                <thead class="bg-cream">
-                    <tr class="text-xs font-semibold uppercase tracking-widest text-clay">
+            {{-- Encabezado sin fondo propio: el borde inferior fino ya lo separa.
+
+                 `divide-y` va en el `tbody`, no en la tabla: los hijos directos de
+                 una tabla son `thead`/`tbody`/`tfoot`, así que en la tabla la
+                 utilidad no llegaba a las filas y duplicaba el borde de arriba.
+                 `w-full` + `min-w-full` reparten el sobrante entre las columnas
+                 en lugar de dejar la de acciones pegada al borde: la cabecera y
+                 cada celda comparten el ancho de columna, que es lo que mantiene
+                 la etiqueta «Estado» encima de su interruptor. --}}
+            <table class="w-full min-w-full text-sm">
+                <thead>
+                    <tr class="border-b border-sand text-xs font-semibold uppercase tracking-widest text-clay">
                         <th scope="col" class="px-6 py-4 text-start">Nombre</th>
-                        <th scope="col" class="px-6 py-4 text-start">Correo</th>
+                        <th scope="col" class="px-6 py-4 text-start">Correo electrónico</th>
                         <th scope="col" class="px-6 py-4 text-start">Rol</th>
-                        <th scope="col" class="px-6 py-4 text-start">Estado</th>
+                        <th scope="col" class="px-6 py-4 text-center">Estado</th>
                         <th scope="col" class="px-6 py-4 text-end">Acciones</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-sand">
                     @forelse ($users as $user)
-                        <tr wire:key="user-{{ $user->id }}" class="transition duration-150 ease-in-out hover:bg-cream/60">
+                        <tr wire:key="user-{{ $user->id }}" class="transition-colors duration-150 ease-in-out hover:bg-cream/60">
                             <td class="px-6 py-5 font-medium text-charcoal">{{ $user->name }}</td>
                             <td class="px-6 py-5 text-clay">{{ $user->email }}</td>
                             <td class="px-6 py-5">
                                 @foreach ($user->getRoleNames() as $roleName)
-                                    <span class="inline-flex items-center rounded-full bg-cream px-2.5 py-1 text-xs font-medium text-brand-green ring-1 ring-gold/40">
+                                    <span class="inline-flex items-center rounded-full bg-sand/60 px-2.5 py-1 text-xs font-medium text-brand-green">
                                         {{ ucfirst($roleName) }}
                                     </span>
                                 @endforeach
                             </td>
 
-                            <td class="px-6 py-5">
+                            <td class="px-6 py-5 text-center">
                                 <button
                                     type="button"
                                     role="switch"
@@ -80,12 +89,12 @@
                                     class="inline-flex items-center gap-2 text-sm font-medium"
                                 >
                                     <span @class([
-                                        'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors',
+                                        'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200 ease-in-out',
                                         'bg-brand-green' => $user->is_active,
                                         'bg-sand' => ! $user->is_active,
                                     ])>
                                         <span @class([
-                                            'inline-block h-5 w-5 rounded-full bg-parchment shadow transition-transform',
+                                            'inline-block h-5 w-5 rounded-full bg-cream transition-transform duration-200 ease-in-out',
                                             'translate-x-5' => $user->is_active,
                                             'translate-x-0.5' => ! $user->is_active,
                                         ])></span>
@@ -101,7 +110,7 @@
                                     <button
                                         type="button"
                                         wire:click="edit({{ $user->id }})"
-                                        class="text-sm font-medium text-brand-green hover:text-terracotta"
+                                        class="text-sm font-medium text-brand-green transition-colors duration-150 ease-in-out hover:text-wood active:opacity-80"
                                     >
                                         Editar
                                     </button>
@@ -114,7 +123,7 @@
                                             confirmLabel: 'Enviar correo',
                                             onConfirm: () => $wire.resendInvitation({{ $user->id }}),
                                         })"
-                                        class="text-sm font-medium text-clay hover:text-terracotta"
+                                        class="text-sm font-medium text-clay transition-colors duration-150 ease-in-out hover:text-brand-green active:opacity-80"
                                     >
                                         Reenviar invitación
                                     </button>
@@ -130,7 +139,7 @@
                                     <button
                                         type="button"
                                         wire:click="$set('search', ''); $set('roleFilter', '')"
-                                        class="mt-2 font-medium text-terracotta hover:text-wood"
+                                        class="mt-2 font-medium text-terracotta transition-colors duration-150 ease-in-out hover:text-wood active:opacity-80"
                                     >
                                         Limpiar filtros
                                     </button>
@@ -145,90 +154,66 @@
         </div>
     </div>
 
-    @if ($showForm)
-        <div class="fixed inset-0 z-40 bg-charcoal/60" wire:click="closeForm" aria-hidden="true"></div>
+    <x-admin-modal
+        :title="$editingId !== null ? 'Editar usuario' : 'Nuevo usuario'"
+        title-id="user-form-title"
+    >
+        <div>
+            <x-input-label for="user-name" value="Nombre" />
+            <x-text-input
+                id="user-name"
+                wire:model="name"
+                type="text"
+                class="mt-1 block w-full"
+                placeholder="Ej. Ana López"
+                data-modal-autofocus
+            />
+            <x-input-error :messages="$errors->get('name')" class="mt-2" />
+        </div>
 
-        <aside
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="user-form-title"
-            class="fixed inset-y-0 end-0 z-50 flex w-full max-w-md flex-col border-s border-wood/40 bg-parchment shadow-xl"
-        >
-            <div class="flex items-center justify-between border-b border-sand px-6 py-4">
-                <h2 id="user-form-title" class="font-display text-xl font-semibold text-brand-green">
-                    {{ $editingId !== null ? 'Editar usuario' : 'Nuevo usuario' }}
-                </h2>
+        <div>
+            <x-input-label for="user-email" value="Correo electrónico" />
+            <x-text-input
+                id="user-email"
+                wire:model="email"
+                type="email"
+                class="mt-1 block w-full"
+                placeholder="Ej. ana@feigler.com"
+            />
+            <x-input-error :messages="$errors->get('email')" class="mt-2" />
+        </div>
 
-                <button
-                    type="button"
-                    wire:click="closeForm"
-                    class="rounded-md p-1 text-clay hover:bg-cream hover:text-terracotta"
-                    aria-label="Cerrar formulario"
-                >
-                    <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
-                    </svg>
-                </button>
-            </div>
+        <div>
+            <x-input-label for="user-role" value="Rol" />
+            <x-select-input
+                id="user-role"
+                wire:model="role"
+                class="mt-1 block w-full"
+            >
+                <option value="">— Selecciona un rol —</option>
+                @foreach ($internalRoles as $roleName)
+                    <option value="{{ $roleName }}" @selected($role === $roleName)>
+                        {{ ucfirst($roleName) }}
+                    </option>
+                @endforeach
+            </x-select-input>
+            <x-input-error :messages="$errors->get('role')" class="mt-2" />
+        </div>
 
-            <div class="flex-1 space-y-5 overflow-y-auto px-6 py-6">
-                <div>
-                    <x-input-label for="user-name" value="Nombre" />
-                    <x-text-input
-                        id="user-name"
-                        wire:model="name"
-                        type="text"
-                        class="mt-1 block w-full"
-                        placeholder="Ej. Ana López"
-                    />
-                    <x-input-error :messages="$errors->get('name')" class="mt-2" />
-                </div>
+        @if ($editingId === null)
+            <p class="text-xs text-clay">
+                Al crear, se enviará un correo para que el empleado defina su propia contraseña.
+            </p>
+        @endif
 
-                <div>
-                    <x-input-label for="user-email" value="Correo electrónico" />
-                    <x-text-input
-                        id="user-email"
-                        wire:model="email"
-                        type="email"
-                        class="mt-1 block w-full"
-                        placeholder="Ej. ana@feigler.com"
-                    />
-                    <x-input-error :messages="$errors->get('email')" class="mt-2" />
-                </div>
+        <x-slot:footer>
+            <x-secondary-button type="button" wire:click="closeForm">
+                Cancelar
+            </x-secondary-button>
 
-                <div>
-                    <x-input-label for="user-role" value="Rol" />
-                    <select
-                        id="user-role"
-                        wire:model="role"
-                        class="mt-1 block w-full rounded-md border-sand bg-parchment text-sm text-charcoal shadow-xs focus:border-brand-green focus:ring-brand-green"
-                    >
-                        <option value="">— Selecciona un rol —</option>
-                        @foreach ($internalRoles as $roleName)
-                            <option value="{{ $roleName }}" @selected($role === $roleName)>
-                                {{ ucfirst($roleName) }}
-                            </option>
-                        @endforeach
-                    </select>
-                    <x-input-error :messages="$errors->get('role')" class="mt-2" />
-                </div>
-
-                @if ($editingId === null)
-                    <p class="text-xs text-clay">
-                        Al crear, se enviará un correo para que el empleado defina su propia contraseña.
-                    </p>
-                @endif
-            </div>
-
-            <div class="flex flex-col-reverse gap-3 border-t border-sand px-6 py-4 sm:flex-row sm:justify-end">
-                <x-secondary-button type="button" wire:click="closeForm">
-                    Cancelar
-                </x-secondary-button>
-
-                <x-primary-button type="button" wire:click="save" wire:loading.attr="disabled">
-                    {{ $editingId !== null ? 'Guardar cambios' : 'Crear usuario' }}
-                </x-primary-button>
-            </div>
-        </aside>
-    @endif
+            <x-primary-button type="button" wire:click="save" wire:loading.attr="disabled">
+                {{ $editingId !== null ? 'Guardar cambios' : 'Crear usuario' }}
+            </x-primary-button>
+        </x-slot:footer>
+    </x-admin-modal>
 </div>

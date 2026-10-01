@@ -1,5 +1,5 @@
 <x-guest-layout>
-    <h1 class="font-display text-2xl font-semibold text-brand-green">
+    <h1 class="font-display text-3xl font-semibold text-brand-green">
         {{ __('Register') }}
     </h1>
 
@@ -7,7 +7,7 @@
         Crea una cuenta para entrar al panel de Feigler
     </p>
 
-    <form method="POST" action="{{ route('register') }}" class="mt-6">
+    <form method="POST" action="{{ route('register') }}" class="mt-8">
         @csrf
 
         <!-- Name -->
@@ -47,12 +47,12 @@
             <x-input-error :messages="$errors->get('password_confirmation')" class="mt-2" />
         </div>
 
-        <div class="mt-6 flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <a class="rounded-md text-center text-sm text-clay underline underline-offset-4 hover:text-terracotta focus:outline-hidden focus:ring-2 focus:ring-gold focus:ring-offset-2 focus:ring-offset-cream sm:text-start" href="{{ route('login') }}">
+        <div class="mt-6 flex flex-col-reverse items-center gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <a class="w-full rounded-md py-2 text-center text-sm text-clay underline underline-offset-4 transition-colors duration-150 ease-in-out hover:text-brand-green focus:outline-2 focus:outline-offset-2 focus:outline-brand-green sm:w-auto sm:px-0 sm:py-0 sm:text-start" href="{{ route('login') }}">
                 {{ __('Already registered?') }}
             </a>
 
-            <x-primary-button class="sm:ms-auto">
+            <x-primary-button class="w-full sm:ms-auto sm:w-auto">
                 {{ __('Register') }}
             </x-primary-button>
         </div>

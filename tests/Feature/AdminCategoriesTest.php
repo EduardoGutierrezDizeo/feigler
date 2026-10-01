@@ -218,7 +218,42 @@ test('renders the categories page for users with the admin role', function () {
     $response
         ->assertOk()
         ->assertSee('Categorías')
-        ->assertSee('Nueva categoría');
+        ->assertSee('Nueva categoría')
+        ->assertDontSee("entered ? 'translate-y-0", false);
+});
+
+test('the category form is a full-viewport modal that stays mounted so it can animate its exit', function () {
+    $this->seed(RoleSeeder::class);
+
+    Livewire::test(Index::class)
+        ->assertSet('showForm', false)
+        // Con el formulario cerrado el modal sigue en el DOM. Su visibilidad la
+        // gobierna Alpine y no un `@if` de Blade: por eso el cierre tiene un
+        // estado real al que volver y se puede interpolar en vez de desaparecer
+        // el nodo en el mismo instante en que el servidor borra el formulario.
+        ->assertSee('x-data="adminModal($wire)"', false)
+        ->assertSee('x-show="$data.open"', false)
+        // La entrada y la salida viven en el overlay y en la tarjeta, que son
+        // los elementos con `x-show`: Alpine solo interpola la visibilidad de un
+        // elemento si él mismo declara la transición.
+        ->assertSee('x-transition:enter="duration-[350ms] ease-out"', false)
+        ->assertSee('x-transition:leave="duration-[250ms] ease-in"', false)
+        ->assertSee('x-transition:enter-start="opacity-0"', false)
+        ->assertSee('x-transition:leave-end="translate-y-3 scale-[0.96] opacity-0"', false)
+        // El contenedor no puede quedarse interceptando los clics de la página
+        // con el modal cerrado, de ahí el `pointer-events-none` permanente y el
+        // `pointer-events-auto` limitado al overlay y a la tarjeta.
+        ->assertSee('pointer-events-none fixed inset-0', false)
+        ->assertSee('pointer-events-auto absolute inset-0 bg-charcoal/40', false)
+        // Geometría: el overlay cubre el viewport entero y el scroll ocurre
+        // dentro de la tarjeta, no en la página de detrás.
+        ->assertSee('max-h-[90vh]', false)
+        ->assertSee('min-h-0 flex-1', false)
+        // El foco entra por el primer campo y no por el botón de cerrar.
+        ->assertSee('data-modal-autofocus', false)
+        ->call('create')
+        ->assertSet('showForm', true)
+        ->assertSet('editingId', null);
 });
 
 test('filters categories by name', function () {
@@ -284,26 +319,32 @@ test('auto-expands a root when the search matches one of its subcategories', fun
         ->assertDontSee('Pantalones');
 });
 
-test('moves a root category up by swapping order with its previous sibling', function () {
+test('moves a root category up above its previous sibling and reindexes the group', function () {
     $first = Category::factory()->create(['name' => 'Camisetas', 'order' => 1]);
     $second = Category::factory()->create(['name' => 'Pantalones', 'order' => 2]);
 
     Livewire::test(Index::class)
         ->call('moveUp', $second->id);
 
-    expect($first->fresh()->order)->toBe(2)
-        ->and($second->fresh()->order)->toBe(1);
+    // El grupo se reescribe a 0..n-1 en el orden mostrado, en vez de
+    // intercambiar los dos valores sueltos.
+    expect(Category::query()->orderBy('order')->pluck('name')->all())
+        ->toBe(['Pantalones', 'Camisetas'])
+        ->and($first->fresh()->order)->toBe(1)
+        ->and($second->fresh()->order)->toBe(0);
 });
 
-test('moves a root category down by swapping order with its next sibling', function () {
+test('moves a root category down below its next sibling and reindexes the group', function () {
     $first = Category::factory()->create(['name' => 'Camisetas', 'order' => 1]);
     $second = Category::factory()->create(['name' => 'Pantalones', 'order' => 2]);
 
     Livewire::test(Index::class)
         ->call('moveDown', $first->id);
 
-    expect($first->fresh()->order)->toBe(2)
-        ->and($second->fresh()->order)->toBe(1);
+    expect(Category::query()->orderBy('order')->pluck('name')->all())
+        ->toBe(['Pantalones', 'Camisetas'])
+        ->and($first->fresh()->order)->toBe(1)
+        ->and($second->fresh()->order)->toBe(0);
 });
 
 test('moves a subcategory up within its own parent', function () {
@@ -314,8 +355,8 @@ test('moves a subcategory up within its own parent', function () {
     Livewire::test(Index::class)
         ->call('moveUp', $second->id);
 
-    expect($first->fresh()->order)->toBe(2)
-        ->and($second->fresh()->order)->toBe(1)
+    expect($first->fresh()->order)->toBe(1)
+        ->and($second->fresh()->order)->toBe(0)
         ->and($root->fresh()->order)->toBe(0);
 });
 
@@ -331,8 +372,8 @@ test('reordering subcategories of a root does not affect another root ordering',
     Livewire::test(Index::class)
         ->call('moveUp', $aSecond->id);
 
-    expect($aFirst->fresh()->order)->toBe(2)
-        ->and($aSecond->fresh()->order)->toBe(1)
+    expect($aFirst->fresh()->order)->toBe(1)
+        ->and($aSecond->fresh()->order)->toBe(0)
         ->and($rootA->fresh()->order)->toBe(0)
         ->and($rootB->fresh()->order)->toBe(0)
         ->and($bFirst->fresh()->order)->toBe(1)
@@ -351,4 +392,52 @@ test('cannot move the first sibling up or the last sibling down', function () {
     expect($first->fresh()->order)->toBe(1)
         ->and($second->fresh()->order)->toBe(2)
         ->and($third->fresh()->order)->toBe(3);
+});
+
+test('moves a category down even when another sibling shares its order value', function () {
+    // Estado corrupto reproducido a propósito: dos raíces con order 0.
+    $first = Category::factory()->create(['name' => 'Camisetas', 'order' => 0]);
+    $second = Category::factory()->create(['name' => 'Gorras', 'order' => 0]);
+
+    Livewire::test(Index::class)
+        ->call('moveDown', $first->id);
+
+    expect(Category::query()->orderBy('order')->pluck('name')->all())
+        ->toBe(['Gorras', 'Camisetas'])
+        ->and($first->fresh()->order)->toBe(1)
+        ->and($second->fresh()->order)->toBe(0);
+});
+
+test('moves a category up even when another sibling shares its order value', function () {
+    $first = Category::factory()->create(['name' => 'Camisetas', 'order' => 0]);
+    $second = Category::factory()->create(['name' => 'Gorras', 'order' => 0]);
+
+    Livewire::test(Index::class)
+        ->call('moveUp', $second->id);
+
+    expect(Category::query()->orderBy('order')->pluck('name')->all())
+        ->toBe(['Gorras', 'Camisetas'])
+        ->and($first->fresh()->order)->toBe(1)
+        ->and($second->fresh()->order)->toBe(0);
+});
+
+test('assigns consecutive order values when creating categories in sequence', function () {
+    $this->seed(RoleSeeder::class);
+    $admin = User::factory()->create();
+    $admin->assignRole('admin');
+
+    Livewire::actingAs($admin)
+        ->test(Index::class)
+        ->call('create')
+        ->set('name', 'Camisetas')
+        ->call('save')
+        ->call('create')
+        ->set('name', 'Pantalones')
+        ->call('save')
+        ->call('create')
+        ->set('name', 'Gorras')
+        ->call('save');
+
+    $orders = Category::query()->orderBy('id')->pluck('order')->all();
+    expect($orders)->toBe([0, 1, 2]);
 });

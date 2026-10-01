@@ -1,5 +1,5 @@
 <x-guest-layout>
-    <h1 class="font-display text-2xl font-semibold text-brand-green">
+    <h1 class="font-display text-3xl font-semibold text-brand-green">
         {{ __('Verify Email') }}
     </h1>
 
@@ -14,20 +14,18 @@
     @endif
 
     <div class="mt-6 flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <form method="POST" action="{{ route('verification.send') }}">
+        <form method="POST" action="{{ route('verification.send') }}" class="w-full sm:w-auto">
             @csrf
 
-            <div>
-                <x-primary-button>
-                    {{ __('Resend Verification Email') }}
-                </x-primary-button>
-            </div>
+            <x-primary-button class="w-full justify-center">
+                {{ __('Resend Verification Email') }}
+            </x-primary-button>
         </form>
 
         <form method="POST" action="{{ route('logout') }}">
             @csrf
 
-            <button type="submit" class="rounded-md text-center text-sm text-clay underline underline-offset-4 hover:text-terracotta focus:outline-hidden focus:ring-2 focus:ring-gold focus:ring-offset-2 focus:ring-offset-cream sm:text-start">
+            <button type="submit" class="w-full rounded-md py-2 text-center text-sm text-clay underline underline-offset-4 transition-colors duration-150 ease-in-out hover:text-brand-green focus:outline-2 focus:outline-offset-2 focus:outline-brand-green sm:w-auto sm:px-0 sm:py-0 sm:text-start">
                 {{ __('Log Out') }}
             </button>
         </form>

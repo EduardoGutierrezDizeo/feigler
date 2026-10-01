@@ -16,7 +16,7 @@
 @theme {
     /* Brand palette */
     --color-brand-green: #2f4a38;
-    --color-cream: #f1e9d8;
+    --color-cream: #f4eedb;
     --color-terracotta: #b25b34;
     --color-wood: #5a3a24;
     --color-charcoal: #1c1c1a;
@@ -27,6 +27,14 @@
     --color-sand: #e4d8c1;
     --color-clay: #8c7a63;
 
+    /*
+     * Motion: a single elevation shadow, tinted with charcoal instead of pure
+     * black so it stays in the same warm family as the rest of the palette.
+     * It is the only depth cue the interface uses, and it only ever appears on
+     * hover, so it never competes with the surfaces.
+     */
+    --shadow-lift: 0 2px 8px -3px rgb(28 28 26 / 0.22);
+
     /* Typography: characterful serif for headings, clean sans for body copy */
     --font-display: "Playfair Display", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
     --font-sans: "Figtree", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif,
@@ -36,6 +44,29 @@
 @layer base {
     body {
         @apply bg-cream text-charcoal;
+    }
+
+    /*
+     * `prefers-reduced-motion`: collapses every transition and animation to a
+     * single instant. The reset needs `!important` because Tailwind's
+     * `duration-*` utilities live in the later `utilities` layer and would
+     * otherwise win the cascade.
+     *
+     * This also covers the animations Alpine drives through `x-transition`
+     * (dialog, toasts, dropdown, modal), whose durations are passed as classes
+     * that cannot be gated by a variant. The two motions implemented in
+     * JavaScript — the page entrance and the FLIP row reorder — read the same
+     * preference through `matchMedia` instead of relying on this rule.
+     */
+    @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
+            scroll-behavior: auto !important;
+        }
     }
 }
 

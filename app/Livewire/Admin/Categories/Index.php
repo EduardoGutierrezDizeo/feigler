@@ -4,7 +4,6 @@ namespace App\Livewire\Admin\Categories;
 
 use App\Livewire\Concerns\Notifies;
 use App\Models\Category;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
@@ -62,6 +61,11 @@ class Index extends Component
         $this->resetValidation();
     }
 
+    public function mount(): void
+    {
+        $this->resetForm();
+    }
+
     public function save(): void
     {
         $rootIds = Category::query()
@@ -112,6 +116,7 @@ class Index extends Component
                 'name' => $name,
                 'slug' => $slug,
                 'parent_id' => $validated['parentId'],
+                'order' => Category::nextOrderFor($validated['parentId']),
             ]);
 
             $this->notifySuccess('Categoría creada correctamente.');
@@ -168,7 +173,7 @@ class Index extends Component
             ->first();
 
         if ($previous !== null) {
-            $this->swapOrder($category, $previous);
+            Category::moveWithinSiblings($category, -1);
             $this->dispatch('category-moved', id: $category->id);
         }
     }
@@ -190,19 +195,9 @@ class Index extends Component
             ->first();
 
         if ($next !== null) {
-            $this->swapOrder($category, $next);
+            Category::moveWithinSiblings($category, 1);
             $this->dispatch('category-moved', id: $category->id);
         }
-    }
-
-    private function swapOrder(Category $category, Category $sibling): void
-    {
-        $categoryOrder = $category->order;
-
-        DB::transaction(function () use ($category, $sibling, $categoryOrder) {
-            $category->update(['order' => $sibling->order]);
-            $sibling->update(['order' => $categoryOrder]);
-        });
     }
 
     public function render()

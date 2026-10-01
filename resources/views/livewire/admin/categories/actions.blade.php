@@ -5,9 +5,13 @@
 ])
 
 {{-- Renders the "Estado", "Orden" and "Acciones" cells of a category row. `contents`
-     makes those children participate directly in the row's grid. --}}
+     makes those children participate directly in the row's grid.
+
+     The alignment of each cell mirrors its column header: Estado and Orden are
+     centred from `md` up (that is when the header row appears), and Acciones are
+     pushed to the end. --}}
 <div class="contents">
-    <div class="flex items-center gap-2 text-sm font-medium">
+    <div class="flex items-center justify-start gap-2 text-sm font-medium md:justify-center">
         <button
             type="button"
             role="switch"
@@ -15,13 +19,15 @@
             wire:click="toggleActive({{ $category->id }})"
             class="inline-flex items-center gap-2"
         >
+            {{-- El estado del interruptor se funde en lugar de saltar: la pista
+                 cambia de color y el disco se desliza. --}}
             <span @class([
-                'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors',
+                'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors duration-200 ease-in-out',
                 'bg-brand-green' => $category->is_active,
                 'bg-sand' => ! $category->is_active,
             ])>
                 <span @class([
-                    'inline-block h-5 w-5 rounded-full bg-parchment shadow transition-transform',
+                    'inline-block h-5 w-5 rounded-full bg-cream transition-transform duration-200 ease-in-out',
                     'translate-x-5' => $category->is_active,
                     'translate-x-0.5' => ! $category->is_active,
                 ])></span>
@@ -40,7 +46,7 @@
             title="Mover hacia arriba"
             aria-label="Mover {{ $category->name }} hacia arriba"
             @disabled($isFirst)
-            class="inline-flex h-7 w-7 items-center justify-center rounded-md border border-sand bg-parchment text-base font-semibold text-clay transition duration-150 ease-in-out hover:border-terracotta hover:bg-cream hover:text-terracotta disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-parchment disabled:hover:text-clay"
+            class="inline-flex h-7 w-7 items-center justify-center rounded-md text-base font-semibold text-clay transition-colors duration-150 ease-in-out hover:bg-sand/50 hover:text-brand-green disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-clay"
         >
             ↑
         </button>
@@ -52,27 +58,28 @@
             title="Mover hacia abajo"
             aria-label="Mover {{ $category->name }} hacia abajo"
             @disabled($isLast)
-            class="inline-flex h-7 w-7 items-center justify-center rounded-md border border-sand bg-parchment text-base font-semibold text-clay transition duration-150 ease-in-out hover:border-terracotta hover:bg-cream hover:text-terracotta disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-parchment disabled:hover:text-clay"
+            class="inline-flex h-7 w-7 items-center justify-center rounded-md text-base font-semibold text-clay transition-colors duration-150 ease-in-out hover:bg-sand/50 hover:text-brand-green disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-clay"
         >
             ↓
         </button>
     </div>
 
-    <div class="col-span-2 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm md:col-span-1 md:justify-end">
+    <div class="col-span-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm sm:gap-x-4 md:col-span-1 md:justify-end">
         @if ($category->parent_id === null)
             <button
                 type="button"
                 wire:click="createSubcategory({{ $category->id }})"
-                class="font-medium text-clay transition hover:text-brand-green"
+                class="whitespace-nowrap font-medium text-clay transition-colors duration-150 ease-in-out hover:text-brand-green active:opacity-80"
             >
-                Agregar subcategoría
+                <span class="sm:hidden">+ Subcategoría</span>
+                <span class="hidden sm:inline">Agregar subcategoría</span>
             </button>
         @endif
 
         <button
             type="button"
             wire:click="edit({{ $category->id }})"
-            class="font-medium text-brand-green transition hover:text-terracotta"
+            class="whitespace-nowrap font-medium text-brand-green transition-colors duration-150 ease-in-out hover:text-wood active:opacity-80"
         >
             Editar
         </button>
@@ -86,7 +93,7 @@
                 destructive: true,
                 onConfirm: () => $wire.delete({{ $category->id }}),
             })"
-            class="font-medium text-terracotta transition hover:text-wood"
+            class="whitespace-nowrap font-medium text-terracotta transition-colors duration-150 ease-in-out hover:text-wood active:opacity-80"
         >
             Eliminar
         </button>

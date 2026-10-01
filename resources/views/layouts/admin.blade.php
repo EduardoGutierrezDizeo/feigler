@@ -28,8 +28,11 @@
             class="min-h-screen bg-cream"
             x-data="{ sidebarOpen: false }"
         >
-            <!-- Sidebar (desktop) -->
-            <aside class="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-e border-wood/40 bg-wood lg:flex">
+            {{-- Parchment, not a solid dark block: the top bar keeps cream
+                 dominant and only separates content with a thin border. --}}
+            <!-- Sidebar (desktop): cream surface, separated by a thin border
+                 instead of a block of colour. -->
+            <aside class="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-e border-sand bg-cream lg:flex">
                 @include('layouts.admin.sidebar')
             </aside>
 
@@ -38,25 +41,48 @@
                 x-cloak
                 x-show="sidebarOpen"
                 @click="sidebarOpen = false"
-                class="fixed inset-0 z-40 bg-charcoal/60 lg:hidden"
+                x-transition:enter="ease-out duration-200"
+                x-transition:enter-start="opacity-0"
+                x-transition:enter-end="opacity-100"
+                x-transition:leave="ease-in duration-150"
+                x-transition:leave-start="opacity-100"
+                x-transition:leave-end="opacity-0"
+                class="fixed inset-0 z-40 bg-charcoal/40 lg:hidden"
             ></div>
 
-            <!-- Sidebar (mobile) -->
+            <!-- Sidebar (mobile): entra deslizándose desde el borde, con el
+                 mismo par de duraciones que el diálogo de confirmación. -->
             <aside
                 x-cloak
                 x-show="sidebarOpen"
-                class="fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-e border-wood/40 bg-wood lg:hidden"
+                x-transition:enter="ease-out duration-200"
+                x-transition:enter-start="-translate-x-full opacity-0"
+                x-transition:enter-end="translate-x-0 opacity-100"
+                x-transition:leave="ease-in duration-150"
+                x-transition:leave-start="translate-x-0 opacity-100"
+                x-transition:leave-end="-translate-x-full opacity-0"
+                class="fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-e border-sand bg-cream lg:hidden"
             >
                 @include('layouts.admin.sidebar')
             </aside>
 
             <!-- Content -->
-            <div class="lg:ps-64">
-                <header class="flex h-16 items-center justify-between border-b border-sand bg-parchment px-4 sm:px-6">
+            <div class="min-w-0 lg:ps-64">
+                {{-- La barra superior es solo móvil y tablet: en escritorio el
+                     sidebar fijo ya ocupa la columna izquierda y la marca se
+                     repite en su propio encabezado, de modo que el header solo
+                     servía para dejar una franja vacía sobre el contenido.
+
+                     Ocultarla con `lg` (y no antes) es obligatorio: el botón de
+                     este mismo header es el que abre el sidebar colapsable, y ese
+                     sidebar no existe por debajo de `lg`. El padding superior de
+                     `<main>` (`lg:py-10`) queda como único aire sobre el
+                     contenido, así que no sobra ningún espacio. --}}
+                <header class="flex h-16 items-center justify-between gap-3 border-b border-sand bg-parchment px-4 sm:px-6 lg:hidden">
                     <button
                         type="button"
                         @click="sidebarOpen = ! sidebarOpen"
-                        class="-ms-2 inline-flex items-center justify-center rounded-md p-2 text-clay transition duration-150 ease-in-out hover:bg-cream hover:text-brand-green focus:outline-hidden focus:bg-cream focus:text-brand-green lg:hidden"
+                        class="-ms-2 inline-flex shrink-0 items-center justify-center rounded-md p-2 text-brand-green transition-colors duration-150 ease-in-out hover:bg-sand/50 focus:outline-2 focus:outline-offset-2 focus:outline-brand-green"
                     >
                         <span class="sr-only">Abrir menú lateral</span>
                         <svg class="h-6 w-6" stroke="currentColor" fill="none" viewBox="0 0 24 24">
@@ -64,12 +90,28 @@
                         </svg>
                     </button>
 
-                    <div class="font-display text-base font-medium text-brand-green">
+                    <div class="min-w-0 truncate text-sm font-medium text-clay">
                         {{ Auth::user()->name }}
                     </div>
                 </header>
 
-                <main class="p-4 sm:p-6 lg:p-8">
+                {{-- Solo el contenido que cambia entre páginas entra con una
+                     animación: el sidebar y la cabecera permanecen fijos.
+
+                     OJO: el estado final NO lleva `translate-y-0`. Un `transform`
+                     distinto de `none` convierte a `<main>` en bloque contenedor
+                     de los descendientes `position: fixed` y en un contexto de
+                     apilamiento. Los modales de Livewire viven dentro de
+                     `$slot`, así que su `fixed inset-0` se resolvería contra
+                     esta caja en vez de contra el viewport: el overlay no
+                     taparía la cabecera y su alto seguiría al del contenido.
+                     Sin transform, `fixed` vuelve a significar "la pantalla". --}}
+                <main
+                    x-cloak
+                    x-data="pageEnter"
+                    class="px-4 py-6 transition-[opacity,transform] duration-300 ease-out sm:px-6 sm:py-8 lg:px-10 lg:py-10"
+                    :class="entered ? 'opacity-100' : 'translate-y-2 opacity-0'"
+                >
                     {{ $slot }}
                 </main>
             </div>

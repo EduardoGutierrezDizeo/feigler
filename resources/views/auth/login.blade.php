@@ -1,16 +1,16 @@
 <x-guest-layout>
-    <h1 class="font-display text-2xl font-semibold text-brand-green">
+    <h1 class="font-display text-3xl font-semibold text-brand-green">
         {{ __('Log In') }}
     </h1>
 
-    <p class="mt-1 text-sm text-clay">
+    <p class="mt-2 text-sm text-clay">
         Acceso al panel de Feigler
     </p>
 
     <!-- Session Status -->
     <x-auth-session-status class="mb-4" :status="session('status')" />
 
-    <form method="POST" action="{{ route('login') }}" class="mt-6">
+    <form method="POST" action="{{ route('login') }}" class="mt-8">
         @csrf
 
         <!-- Email Address -->
@@ -35,19 +35,19 @@
         <!-- Remember Me -->
         <div class="block mt-4">
             <label for="remember_me" class="inline-flex items-center">
-                <input id="remember_me" type="checkbox" class="rounded border-sand bg-parchment text-brand-green shadow-xs focus:ring-brand-green" name="remember">
+                <input id="remember_me" type="checkbox" class="rounded border-sand bg-cream text-brand-green transition-[border-color,box-shadow] duration-150 ease-in-out focus:ring-2 focus:ring-brand-green/25" name="remember">
                 <span class="ms-2 text-sm text-charcoal">{{ __('Remember me') }}</span>
             </label>
         </div>
 
-        <div class="mt-6 flex flex-col-reverse items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div class="mt-6 flex flex-col-reverse items-center gap-3 sm:flex-row sm:items-center sm:justify-between">
             @if (Route::has('password.request'))
-                <a class="rounded-md text-center text-sm text-clay underline underline-offset-4 hover:text-terracotta focus:outline-hidden focus:ring-2 focus:ring-gold focus:ring-offset-2 focus:ring-offset-cream sm:text-start" href="{{ route('password.request') }}">
+                <a class="w-full rounded-md py-2 text-center text-sm text-clay underline underline-offset-4 transition-colors duration-150 ease-in-out hover:text-brand-green focus:outline-2 focus:outline-offset-2 focus:outline-brand-green sm:w-auto sm:px-0 sm:py-0 sm:text-start" href="{{ route('password.request') }}">
                     {{ __('Forgot your password?') }}
                 </a>
             @endif
 
-            <x-primary-button class="sm:ms-auto">
+            <x-primary-button class="w-full sm:ms-auto sm:w-auto">
                 {{ __('Log in') }}
             </x-primary-button>
         </div>

@@ -1,5 +1,5 @@
 <x-guest-layout>
-    <h1 class="font-display text-2xl font-semibold text-brand-green">
+    <h1 class="font-display text-3xl font-semibold text-brand-green">
         {{ __('Forgot your password?') }}
     </h1>
 
@@ -10,7 +10,7 @@
     <!-- Session Status -->
     <x-auth-session-status class="mb-4" :status="session('status')" />
 
-    <form method="POST" action="{{ route('password.email') }}" class="mt-6">
+    <form method="POST" action="{{ route('password.email') }}" class="mt-8">
         @csrf
 
         <!-- Email Address -->
@@ -20,8 +20,8 @@
             <x-input-error :messages="$errors->get('email')" class="mt-2" />
         </div>
 
-        <div class="mt-6 flex justify-end">
-            <x-primary-button>
+        <div class="mt-8">
+            <x-primary-button class="w-full justify-center">
                 {{ __('Email Password Reset Link') }}
             </x-primary-button>
         </div>

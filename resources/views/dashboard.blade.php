@@ -6,12 +6,10 @@
     </x-slot>
 
     <div class="py-12">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-            <div class="overflow-hidden border border-sand bg-parchment shadow-xs sm:rounded-lg">
-                <div class="p-6 text-charcoal">
-                    {{ __("You're logged in!") }}
-                </div>
-            </div>
+        <div class="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+            <p class="border-s-2 border-wood/60 ps-6 text-lg text-charcoal">
+                {{ __("You're logged in!") }}
+            </p>
         </div>
     </div>
 </x-app-layout>

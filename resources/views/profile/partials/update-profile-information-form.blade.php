@@ -33,7 +33,7 @@
                     <p class="mt-2 text-sm text-charcoal">
                         {{ __('Your email address is unverified.') }}
 
-                        <button form="send-verification" class="rounded-md text-sm text-clay underline underline-offset-4 hover:text-terracotta focus:outline-hidden focus:ring-2 focus:ring-gold focus:ring-offset-2 focus:ring-offset-cream">
+                        <button form="send-verification" class="rounded-md text-sm text-clay underline underline-offset-4 transition-colors duration-150 ease-in-out hover:text-brand-green focus:outline-2 focus:outline-offset-2 focus:outline-brand-green">
                             {{ __('Click here to re-send the verification email.') }}
                         </button>
                     </p>
@@ -47,7 +47,7 @@
             @endif
         </div>
 
-        <div class="flex items-center gap-4">
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
             <x-primary-button>{{ __('Save') }}</x-primary-button>
 
             @if (session('status') === 'profile-updated')

@@ -56,6 +56,16 @@ class Index extends Component
         $this->resetValidation();
     }
 
+    public function mount(): void
+    {
+        $this->showForm = false;
+        $this->editingId = null;
+        $this->name = '';
+        $this->email = '';
+        $this->role = '';
+        $this->resetValidation();
+    }
+
     public function save(): void
     {
         if ($this->editingId !== null) {
