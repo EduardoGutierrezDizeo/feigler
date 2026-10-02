@@ -99,12 +99,35 @@
                         <tr wire:key="product-{{ $product->id }}" class="transition-colors duration-150 ease-in-out hover:bg-hueso/50">
                             <td class="px-6 py-4">
                                 <div class="flex items-center gap-3">
-                                    {{-- Miniatura de sustitución: las imágenes llegan con el módulo de
-                                         imágenes por color, así que por ahora solo marca el hueco. --}}
-                                    <span
-                                        class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-hueso to-arena"
-                                        aria-hidden="true"
-                                    ></span>
+                                    @php
+                                        // La portada de la fila: la principal del color elegido como
+                                        // portada, o la principal de cualquier color si no hay color
+                                        // elegido. `cover_image` lee la relación `images` ya cargada, así
+                                        // que ninguna fila cuesta una consulta.
+                                        $portada = $product->cover_image;
+                                    @endphp
+
+                                    @if ($portada)
+                                        <img
+                                            wire:key="portada-{{ $product->id }}"
+                                            src="{{ $portada->thumbnailUrl() }}"
+                                            alt="{{ $product->name }}"
+                                            loading="lazy"
+                                            class="h-11 w-11 shrink-0 rounded-lg border border-arena object-cover"
+                                        />
+                                    @else
+                                        {{-- El mismo hueco que antes, ahora con un icono dentro: el
+                                             producto existe pero todavía no tiene ninguna foto. --}}
+                                        <span
+                                            wire:key="portada-{{ $product->id }}"
+                                            class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-arena bg-linear-to-br from-hueso to-arena text-gris-calido"
+                                            aria-hidden="true"
+                                        >
+                                            <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Z" />
+                                            </svg>
+                                        </span>
+                                    @endif
                                     <span class="min-w-0">
                                         <span class="block text-xs text-gris-calido">{{ $product->reference }}</span>
                                         <span class="block font-medium text-tinta">{{ $product->name }}</span>

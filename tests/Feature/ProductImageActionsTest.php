@@ -347,7 +347,7 @@ test('the cover of a product is the main picture of its cover color', function (
 
     $azulPrincipal = (new SetPrimaryProductImage)($product, $azules->last()->getKey());
 
-    $product->load('images');
+    $product->refresh()->load('images');
 
     expect($product->coverImage->is($azulPrincipal))->toBeTrue()
         ->and($azulPrincipal->url)->toBe(Storage::disk('public')->url($azulPrincipal->path))

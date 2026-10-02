@@ -28,6 +28,7 @@ class ProductImage extends Model
         'product_id',
         'color_id',
         'path',
+        'thumbnail_path',
         'order',
         'is_primary',
     ];
@@ -75,5 +76,23 @@ class ProductImage extends Model
     protected function url(): Attribute
     {
         return Attribute::get(fn (): string => Storage::disk(self::DISK)->url($this->path));
+    }
+
+    /**
+     * The address the small copy of the picture is served from, which is what
+     * the listing and the gallery show.
+     *
+     * It falls back to the original when there is no thumbnail, and it is asked
+     * of the column instead of of the disk on purpose: a listing of fifteen
+     * products would otherwise send a request to the storage for every picture
+     * it paints, and an image whose thumbnail is missing on disk is a broken
+     * picture whether the address is asked about it or not. `products:generate-thumbnails`
+     * is what fills the column in.
+     *
+     * @return string The address of the thumbnail, or that of the original when there is none.
+     */
+    public function thumbnailUrl(): string
+    {
+        return Storage::disk(self::DISK)->url($this->thumbnail_path ?? $this->path);
     }
 }

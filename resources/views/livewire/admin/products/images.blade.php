@@ -164,33 +164,36 @@
                     @else
                         <ul class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
                             @foreach ($galeria as $imagen)
-                                <li wire:key="imagen-{{ $imagen->id }}" class="tarjeta overflow-hidden">
+                                <li wire:key="imagen-{{ $imagen->id }}" class="tarjeta relative overflow-hidden">
                                     <img
-                                        src="{{ $imagen->url }}"
+                                        src="{{ $imagen->thumbnailUrl() }}"
                                         alt="Imagen de {{ $color->name }}"
                                         class="aspect-square w-full object-cover"
                                         loading="lazy"
                                     />
 
-                                    <div class="flex items-center justify-between gap-2 p-2">
-                                        {{-- La principal de su color es la primera que ve el
-                                             catálogo; solo puede haber una, así que la que ya
-                                             lo es se muestra marcada y no se puede volver a
-                                             marcar. --}}
-                                        <button
-                                            type="button"
-                                            wire:click="makePrimary({{ $imagen->id }})"
-                                            @disabled($imagen->is_primary)
-                                            aria-pressed="{{ $imagen->is_primary ? 'true' : 'false' }}"
-                                            aria-label="Marcar esta imagen como principal de {{ $color->name }}"
-                                            title="{{ $imagen->is_primary ? 'Ya es la principal' : 'Marcar como principal' }}"
-                                            class="rounded-full p-1.5 transition-colors duration-150 ease-in-out focus:outline-2 focus:outline-offset-2 focus:outline-verde {{ $imagen->is_primary ? 'text-laton' : 'text-gris-calido hover:text-laton' }} disabled:cursor-default"
-                                        >
-                                            <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" @class(['fill-current' => $imagen->is_primary, 'fill-none' => ! $imagen->is_primary]) stroke-width="1.5" stroke="currentColor" aria-hidden="true">
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.5a.56.56 0 0 1 1.04 0l2.13 5.11a.56.56 0 0 0 .47.35l5.31.53a.56.56 0 0 1 .33.95l-4 3.6a.56.56 0 0 0-.18.55l1.13 5.33a.56.56 0 0 1-.84.6L12 17.3a.56.56 0 0 0-.52 0l-4.84 2.74a.56.56 0 0 1-.84-.6l1.13-5.33a.56.56 0 0 0-.18-.55l-4-3.6a.56.56 0 0 1 .33-.95l5.31-.53a.56.56 0 0 0 .47-.35l2.13-5.11Z" />
-                                            </svg>
-                                        </button>
+                                    {{-- La estrella va ENCIMA de la foto, no debajo: un botón claro sobre
+                                         una foto clara se pierde, y una foto oscura se come un icono
+                                         también oscuro. En reposo el disco es tinta translúcida con la
+                                         estrella blanca de contorno; al ser la principal, disco crema y
+                                         estrella verde rellena, que es el estado que el catálogo lee. --}}
+                                    <button
+                                        type="button"
+                                        wire:click="makePrimary({{ $imagen->id }})"
+                                        @disabled($imagen->is_primary)
+                                        aria-pressed="{{ $imagen->is_primary ? 'true' : 'false' }}"
+                                        aria-label="{{ $imagen->is_primary ? 'Imagen principal de '.$color->name : 'Marcar como imagen principal de '.$color->name }}"
+                                        title="{{ $imagen->is_primary ? 'Ya es la imagen principal' : 'Marcar como imagen principal' }}"
+                                        class="absolute right-2 top-2 inline-flex h-10 w-10 items-center justify-center rounded-full shadow-lift transition-colors duration-150 ease-in-out focus:outline-2 focus:outline-offset-2 focus:outline-verde disabled:cursor-default {{ $imagen->is_primary ? 'bg-crema text-verde' : 'bg-tinta/60 text-white hover:bg-tinta/80' }}"
+                                    >
+                                        <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" @class(['fill-current' => $imagen->is_primary, 'fill-none' => ! $imagen->is_primary]) stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.5a.56.56 0 0 1 1.04 0l2.13 5.11a.56.56 0 0 0 .47.35l5.31.53a.56.56 0 0 1 .33.95l-4 3.6a.56.56 0 0 0-.18.55l1.13 5.33a.56.56 0 0 1-.84.6L12 17.3a.56.56 0 0 0-.52 0l-4.84 2.74a.56.56 0 0 1-.84-.6l1.13-5.33a.56.56 0 0 0-.18-.55l-4-3.6a.56.56 0 0 1 .33-.95l5.31-.53a.56.56 0 0 0 .47-.35l2.13-5.11Z" />
+                                        </svg>
+                                    </button>
 
+                                    <div class="flex items-center justify-end gap-2 p-2">
+                                        {{-- Borrar sí se queda en la ficha: es una acción sobre el archivo,
+                                             no un estado de la foto que haya que leer encima de ella. --}}
                                         <button
                                             type="button"
                                             x-on:click="$dispatch('ask-confirm', {

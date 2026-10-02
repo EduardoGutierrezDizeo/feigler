@@ -39,6 +39,10 @@ class Product extends Model
     /**
      * The image files to erase once the row of the product is gone.
      *
+     * It holds the originals and the thumbnails alike: a small copy that outlives
+     * the picture it stands for is a file nobody will ever clean up, because
+     * nothing but the row of the product remembers that it was there.
+     *
      * @var list<string>
      */
     private array $imagePathsToDelete = [];
@@ -79,8 +83,9 @@ class Product extends Model
 
         static::deleting(function (self $product): void {
             $product->imagePathsToDelete = $product->images()
-                ->pluck('path')
-                ->map(fn (mixed $path): string => (string) $path)
+                ->get(['path', 'thumbnail_path'])
+                ->flatMap(fn (ProductImage $image): array => array_filter([$image->path, $image->thumbnail_path]))
+                ->values()
                 ->all();
         });
 
@@ -114,11 +119,20 @@ class Product extends Model
     /**
      * The images attached to the product as a whole.
      *
+     * They come in the order the gallery shows them, which is the order they
+     * were uploaded in, and the id breaks the ties of images that share one, so
+     * that two reads of the same product never swap two pictures between them.
+     * That matters beyond the gallery: `cover_image` picks out of this relation
+     * the main image of the cover color, and without the order the catalog
+     * could show two different pictures of the same product on two visits.
+     *
      * @return HasMany<ProductImage>
      */
     public function images(): HasMany
     {
-        return $this->hasMany(ProductImage::class);
+        return $this->hasMany(ProductImage::class)
+            ->orderBy('order')
+            ->orderBy('id');
     }
 
     /**

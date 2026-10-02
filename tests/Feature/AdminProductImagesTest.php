@@ -223,6 +223,44 @@ test('uploads several pictures of a color in one go', function () {
     }
 });
 
+test('the gallery paints the small copy of every picture and not the original', function () {
+    $this->seed(RoleSeeder::class);
+    Storage::fake('public');
+
+    $producto = productoVendidoEn();
+    $color = $producto->colors()->first();
+
+    panelDeImagenes($producto)
+        ->set('uploads.'.$color->id, [foto('una.jpg')])
+        ->call('uploadImages', $color->id);
+
+    $imagen = $producto->images()->sole();
+
+    expect($imagen->thumbnail_path)->toEndWith('.webp');
+
+    panelDeImagenes($producto)
+        ->assertSeeHtml('src="'.$imagen->thumbnailUrl().'"')
+        ->assertDontSeeHtml('src="'.$imagen->url.'"');
+});
+
+test('a picture left without a thumbnail is painted with the original it does have', function () {
+    $this->seed(RoleSeeder::class);
+    Storage::fake('public');
+
+    $producto = productoVendidoEn();
+    $color = $producto->colors()->first();
+
+    panelDeImagenes($producto)
+        ->set('uploads.'.$color->id, [foto('una.jpg')])
+        ->call('uploadImages', $color->id);
+
+    $imagen = $producto->images()->sole();
+    $imagen->update(['thumbnail_path' => null]);
+
+    panelDeImagenes($producto)
+        ->assertSeeHtml('src="'.$imagen->url.'"');
+});
+
 test('the pictures of a color show up in the panel in the order they were uploaded', function () {
     $this->seed(RoleSeeder::class);
     Storage::fake('public');
@@ -237,10 +275,10 @@ test('the pictures of a color show up in the panel in the order they were upload
 
     $panel->set('uploads.'.$color->id, [foto('dos.jpg')])->call('uploadImages', $color->id);
 
-    $segunda = $producto->images()->orderByDesc('id')->first();
+    $segunda = $producto->images()->get()->last();
 
     $panel
-        ->assertSeeHtmlInOrder([$primera->url, $segunda->url])
+        ->assertSeeHtmlInOrder([$primera->thumbnailUrl(), $segunda->thumbnailUrl()])
         ->assertSeeHtml('wire:key="imagen-'.$primera->getKey().'"')
         ->assertSeeHtml('wire:key="imagen-'.$segunda->getKey().'"');
 });
@@ -320,7 +358,7 @@ test('marks a picture as the main one of its color', function () {
     $panel = panelDeImagenes($producto);
     $panel->set('uploads.'.$color->id, [foto('una.jpg'), foto('dos.jpg')])->call('uploadImages', $color->id);
 
-    $segunda = $producto->images()->orderByDesc('id')->first();
+    $segunda = $producto->images()->get()->last();
 
     $panel
         ->call('makePrimary', $segunda->getKey())
@@ -329,6 +367,64 @@ test('marks a picture as the main one of its color', function () {
 
     expect($segunda->refresh()->is_primary)->toBeTrue()
         ->and($producto->imagesForColor($color)->where('is_primary', true)->count())->toBe(1);
+});
+
+/**
+ * The tag of the star button of one picture, taken from the HTML of the panel.
+ *
+ * The button is looked up by its own `wire:click` and read up to the next star, so
+ * that `aria-pressed` is checked on the picture it belongs to and not on the panel.
+ */
+function botonDeLaEstrella(string $html, int $imagenId): string
+{
+    $marca = 'wire:click="makePrimary('.$imagenId.')"';
+    $inicio = strpos($html, $marca);
+
+    expect($inicio)->not->toBeFalse();
+
+    $siguiente = strpos($html, 'wire:click="makePrimary(', $inicio + strlen($marca));
+
+    return substr($html, $inicio, ($siguiente === false ? strlen($html) : $siguiente) - $inicio);
+}
+
+test('exactly one star of the gallery is pressed, and it moves to the picture the admin picks', function () {
+    $this->seed(RoleSeeder::class);
+    Storage::fake('public');
+
+    $producto = productoVendidoEn();
+    $color = $producto->colors()->first();
+
+    $panel = panelDeImagenes($producto);
+    $panel->set('uploads.'.$color->id, [foto('una.jpg'), foto('dos.jpg'), foto('tres.jpg')])
+        ->call('uploadImages', $color->id);
+
+    $imagenes = $producto->imagesForColor($color)->get();
+    $principal = $imagenes->firstWhere('is_primary', true);
+    $otra = $imagenes->firstWhere('is_primary', false);
+
+    expect($imagenes)->toHaveCount(3);
+
+    $html = $panel->html();
+
+    // Una sola estrella pulsada, y las otras dos sueltas.
+    expect(substr_count($html, 'aria-pressed="true"'))->toBe(1)
+        ->and(substr_count($html, 'aria-pressed="false"'))->toBe(2)
+        ->and(botonDeLaEstrella($html, $principal->getKey()))->toContain('aria-pressed="true"')
+        ->and(botonDeLaEstrella($html, $otra->getKey()))->toContain('aria-pressed="false"');
+
+    // La estrella de la principal lleva el estado seleccionado en disco crema y
+    // estrella verde rellena; la otra, disco de tinta y solo el contorno.
+    expect(botonDeLaEstrella($html, $principal->getKey()))->toContain('bg-crema text-verde')
+        ->and(botonDeLaEstrella($html, $otra->getKey()))->toContain('bg-tinta/60 text-white');
+
+    $panel->call('makePrimary', $otra->getKey());
+
+    $html = $panel->html();
+
+    expect(substr_count($html, 'aria-pressed="true"'))->toBe(1)
+        ->and(botonDeLaEstrella($html, $otra->getKey()))->toContain('aria-pressed="true"')
+        ->and(botonDeLaEstrella($html, $principal->getKey()))->toContain('aria-pressed="false"')
+        ->and(botonDeLaEstrella($html, $otra->getKey()))->toContain('aria-label="Imagen principal de '.$color->name.'"');
 });
 
 test('deletes a picture and its file', function () {
@@ -341,7 +437,7 @@ test('deletes a picture and its file', function () {
     $panel = panelDeImagenes($producto);
     $panel->set('uploads.'.$color->id, [foto('una.jpg'), foto('dos.jpg')])->call('uploadImages', $color->id);
 
-    $segunda = $producto->images()->orderByDesc('id')->first();
+    $segunda = $producto->images()->get()->last();
 
     $panel
         ->call('delete', $segunda->getKey())
@@ -364,8 +460,8 @@ test('deleting the main picture hands the place to the next one', function () {
     $panel = panelDeImagenes($producto);
     $panel->set('uploads.'.$color->id, [foto('una.jpg'), foto('dos.jpg')])->call('uploadImages', $color->id);
 
-    $primera = $producto->images()->orderBy('id')->first();
-    $segunda = $producto->images()->orderByDesc('id')->first();
+    $primera = $producto->images()->first();
+    $segunda = $producto->images()->get()->last();
 
     $panel->call('delete', $primera->getKey());
 

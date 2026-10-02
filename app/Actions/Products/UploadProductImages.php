@@ -7,6 +7,7 @@ use App\Exceptions\ProductImageColorNotInProductException;
 use App\Models\Color;
 use App\Models\Product;
 use App\Models\ProductImage;
+use App\Services\ProductImageThumbnailer;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -34,6 +35,15 @@ class UploadProductImages
      * transaction: a row that points at a file that was never stored is an image
      * nobody can see, whereas a file left behind by a transaction that failed is
      * a picture with no row, which this action undoes on the way out.
+     *
+     * The thumbnail of every picture is made here as well, between storing the
+     * originals and opening the transaction, and that order is the point: decoding
+     * a picture is the slowest part of an upload by far, and it must not happen
+     * while the lock on the product is held, or two admins uploading at the same
+     * time would wait on each other's photos. A thumbnail that cannot be made does
+     * not stop the upload: the row is stored without it, the reason is in the log
+     * and the catalog shows the original until `products:generate-thumbnails` gets
+     * to it.
      *
      * The name of a file is a hash and the folder is the product and the color, so
      * two uploads of the same photo of two products never collide, and the folder
@@ -63,8 +73,10 @@ class UploadProductImages
 
         $paths = $this->storeFiles($product, $color, $files);
 
+        $thumbnails = $this->makeThumbnails($product, $color, $paths);
+
         try {
-            return DB::transaction(function () use ($product, $color, $paths): Collection {
+            return DB::transaction(function () use ($product, $color, $paths, $thumbnails): Collection {
                 $fresh = $product->newQuery()->lockForUpdate()->findOrFail($product->getKey());
 
                 // Read inside the lock: whether this color already has a picture and
@@ -81,6 +93,7 @@ class UploadProductImages
                     $images->push($fresh->images()->create([
                         'color_id' => $color->getKey(),
                         'path' => $path,
+                        'thumbnail_path' => $thumbnails[$position] ?? null,
                         'order' => $nextOrder + $position,
                         'is_primary' => $isFirstOfItsColor && $position === 0,
                     ]));
@@ -93,7 +106,7 @@ class UploadProductImages
                 return $images;
             });
         } catch (Throwable $exception) {
-            $this->discardFiles($paths);
+            $this->discardFiles($paths, $thumbnails);
 
             throw $exception;
         }
@@ -151,15 +164,41 @@ class UploadProductImages
     }
 
     /**
-     * Erase the files of an upload whose rows never made it into the database.
+     * Make the thumbnail of every stored picture, in the order they were stored.
+     *
+     * The thumbnailer is asked of the container and not injected in the
+     * constructor so that this action keeps being usable as a plain `new`: it is
+     * built by hand in the tab of the product and in every test of it. Binding
+     * another instance in the container is still enough to change how the
+     * thumbnails are made, which is what a test of the pixel ceiling does.
      *
      * @param  list<string>  $paths
+     * @return array<int, string|null> Null for the pictures left without a thumbnail.
      */
-    private function discardFiles(array $paths): void
+    private function makeThumbnails(Product $product, Color $color, array $paths): array
+    {
+        $thumbnailer = app(ProductImageThumbnailer::class);
+
+        return array_map(
+            fn (string $path): ?string => $thumbnailer($path, $product->getKey(), $color->getKey()),
+            $paths,
+        );
+    }
+
+    /**
+     * Erase the files of an upload whose rows never made it into the database.
+     *
+     * The thumbnails go with the originals: they are files of the same upload, so
+     * an upload that rolled back must not leave half of itself on the disk.
+     *
+     * @param  list<string>  $paths
+     * @param  array<int, string|null>  $thumbnails
+     */
+    private function discardFiles(array $paths, array $thumbnails = []): void
     {
         $disk = Storage::disk(ProductImage::DISK);
 
-        foreach ($paths as $path) {
+        foreach ([...$paths, ...array_filter($thumbnails)] as $path) {
             $disk->delete($path);
         }
     }

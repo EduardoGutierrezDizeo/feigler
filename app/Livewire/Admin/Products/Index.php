@@ -259,8 +259,11 @@ class Index extends Component
 
         // `variants` is eager loaded because `stock_total` and `display_status` read
         // it, and both read it from the loaded relation instead of querying per row.
+        // `images` is there for the same reason: `cover_image` reads the loaded
+        // relation, and eager loading it is one query for the whole page instead of
+        // one per product. Only the images of the products on this page are read.
         $products = $query
-            ->with(['category', 'variants'])
+            ->with(['category', 'variants', 'images'])
             ->orderBy('reference')
             ->orderBy('id')
             ->limit($this->perPage)

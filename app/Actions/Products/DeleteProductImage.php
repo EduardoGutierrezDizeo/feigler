@@ -20,9 +20,11 @@ class DeleteProductImage
      * color with no picture behind it and `cover_image` is free to fall back to
      * another color.
      *
-     * The file is erased once the transaction is confirmed, and not before: the
-     * delete of the row is what decides whether the picture goes away for good, and
-     * a transaction that rolls back has to leave the file exactly where it was.
+     * The original and the thumbnail are erased once the transaction is
+     * confirmed, and not before: the delete of the row is what decides whether
+     * the picture goes away for good, and a transaction that rolls back has to
+     * leave both files exactly where they were. A picture with no thumbnail
+     * stored deletes nothing more than its original.
      *
      * The row of the product is locked for the whole transaction because two rows
      * are read and written here, the image and the cover color, and both answers
@@ -30,7 +32,7 @@ class DeleteProductImage
      */
     public function __invoke(Product $product, int $imageId): void
     {
-        $path = DB::transaction(function () use ($product, $imageId): string {
+        $paths = DB::transaction(function () use ($product, $imageId): array {
             $fresh = $product->newQuery()->lockForUpdate()->findOrFail($product->getKey());
 
             $image = $fresh->images()->findOrFail($imageId);
@@ -45,6 +47,8 @@ class DeleteProductImage
                 ->orderBy('id')
                 ->get();
 
+            $paths = array_filter([$image->path, $image->thumbnail_path]);
+
             $image->delete();
 
             if ($wasPrimary) {
@@ -55,9 +59,13 @@ class DeleteProductImage
                 $fresh->update(['cover_color_id' => null]);
             }
 
-            return $image->path;
+            return $paths;
         });
 
-        Storage::disk(ProductImage::DISK)->delete($path);
+        $disk = Storage::disk(ProductImage::DISK);
+
+        foreach ($paths as $path) {
+            $disk->delete($path);
+        }
     }
 }
