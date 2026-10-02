@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class Product extends Model
 {
@@ -32,7 +33,15 @@ class Product extends Model
         'material',
         'base_price',
         'status',
+        'cover_color_id',
     ];
+
+    /**
+     * The image files to erase once the row of the product is gone.
+     *
+     * @var list<string>
+     */
+    private array $imagePathsToDelete = [];
 
     /**
      * Get the attributes that should be cast.
@@ -51,6 +60,12 @@ class Product extends Model
      *
      * It only happens on insert: a product that already has a reference keeps it
      * even if it is moved to another category, because its SKUs were built from it.
+     *
+     * A product that goes away takes its image files with it. The paths are read
+     * before the delete and the files are erased after it: the rows of the images
+     * are removed by the foreign key, so afterwards there is nothing left to ask
+     * for their paths, and a delete that ends up rolled back has not yet taken the
+     * pictures off the disk when the row is still there.
      */
     protected static function booted(): void
     {
@@ -60,6 +75,21 @@ class Product extends Model
             }
 
             $product->reference = static::nextReferenceFor($product->category);
+        });
+
+        static::deleting(function (self $product): void {
+            $product->imagePathsToDelete = $product->images()
+                ->pluck('path')
+                ->map(fn (mixed $path): string => (string) $path)
+                ->all();
+        });
+
+        static::deleted(function (self $product): void {
+            foreach ($product->imagePathsToDelete as $path) {
+                Storage::disk(ProductImage::DISK)->delete($path);
+            }
+
+            $product->imagePathsToDelete = [];
         });
     }
 
@@ -89,6 +119,19 @@ class Product extends Model
     public function images(): HasMany
     {
         return $this->hasMany(ProductImage::class);
+    }
+
+    /**
+     * The color whose main image is the picture of the product.
+     *
+     * It is the color the catalog shows first, so it is a choice of the store and
+     * not something the images decide on their own. It is nullable because a
+     * product may have no color chosen yet, and `cover_image` falls back to the
+     * main image of any other color while that is the case.
+     */
+    public function coverColor(): BelongsTo
+    {
+        return $this->belongsTo(Color::class, 'cover_color_id');
     }
 
     /**
@@ -214,13 +257,44 @@ class Product extends Model
     /**
      * The images taken in this color.
      *
+     * The `order` of an image is the place it was uploaded in, and the id breaks
+     * the ties of images that share one, so the same gallery never changes its
+     * order between two reads.
+     *
      * @return HasMany<ProductImage>
      */
     public function imagesForColor(Color $color): HasMany
     {
         return $this->images()
             ->where('color_id', $color->getKey())
-            ->orderBy('order');
+            ->orderBy('order')
+            ->orderBy('id');
+    }
+
+    /**
+     * The image that stands for the product: the main one of its cover color, or
+     * the main one of whatever color has images, or nothing at all.
+     *
+     * The `images` relation is read from memory whenever it is already loaded, so
+     * a listing eager-loading it to show the cover of every row does not end up
+     * with a query per product. Only the products whose images were never loaded
+     * ask the database, and they do it once.
+     */
+    protected function coverImage(): Attribute
+    {
+        return Attribute::get(function (): ?ProductImage {
+            $images = $this->relationLoaded('images')
+                ? $this->images
+                : $this->images()->get();
+
+            $primaries = $images->where('is_primary', true);
+
+            if ($this->cover_color_id === null) {
+                return $primaries->first();
+            }
+
+            return $primaries->firstWhere('color_id', $this->cover_color_id) ?? $primaries->first();
+        });
     }
 
     /**

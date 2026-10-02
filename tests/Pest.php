@@ -1,5 +1,8 @@
 <?php
 
+use App\Enums\StoreSection;
+use App\Models\Category;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -38,8 +41,8 @@ expect()->extend('toBeOne', function () {
 | Functions
 |--------------------------------------------------------------------------
 |
-| While Pest is very powerful out-of-the-box, you may have some testing code specific to your
-| project that you don't want to repeat in every file. Here you can also expose helpers as
+| While Pest is very powerful out-of-the-box, you may have some testing code specific to
+| your project that you don't want to repeat in every file. Here you can also expose helpers as
 | global functions to help you to reduce the number of lines of code in your test files.
 |
 */
@@ -47,4 +50,29 @@ expect()->extend('toBeOne', function () {
 function something()
 {
     // ..
+}
+
+/**
+ * A category whose prefix is counted, so a second one in the same test does not
+ * trip the unique index on `sku_prefix`.
+ *
+ * It lives here and not in a test file because the products panel and the variants
+ * tab share it: a helper defined in a test file is only loaded when that whole
+ * file is, so the other file could not be run on its own.
+ */
+function numberedCategory(string $prefix = 'PL', string $name = 'Prenda', StoreSection $section = StoreSection::Hombre): Category
+{
+    return Category::factory()->section($section)->create(['sku_prefix' => $prefix, 'name' => $name]);
+}
+
+/**
+ * An administrator for the panels that ask for one. The roles are expected to be
+ * there already, so the tests that need them seed `RoleSeeder` first.
+ */
+function adminForPanel(): User
+{
+    $admin = User::factory()->create();
+    $admin->assignRole('admin');
+
+    return $admin;
 }

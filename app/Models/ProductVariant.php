@@ -106,7 +106,8 @@ class ProductVariant extends Model
     {
         return $this->product->images()
             ->where('color_id', $this->color_id)
-            ->orderBy('order');
+            ->orderBy('order')
+            ->orderBy('id');
     }
 
     /**

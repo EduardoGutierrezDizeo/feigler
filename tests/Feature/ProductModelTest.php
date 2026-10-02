@@ -255,17 +255,18 @@ test('every size of a color shares the same gallery', function () {
 
     $primera = ProductImage::factory()->for($product)->for($azul, 'color')->create(['order' => 1]);
     $segunda = ProductImage::factory()->for($product)->for($azul, 'color')->create(['order' => 0]);
-    ProductImage::factory()->for($product)->for($rojo, 'color')->create();
-    ProductImage::factory()->for($product)->create();
+    $primeraRoja = ProductImage::factory()->for($product)->for($rojo, 'color')->create(['order' => 1]);
+    $segundaRoja = ProductImage::factory()->for($product)->for($rojo, 'color')->create(['order' => 0]);
 
     $gallery = $mediana->gallery()->get();
 
     expect($gallery->pluck('id')->all())->toBe([$segunda->id, $primera->id])
         ->and($grande->gallery()->pluck('id')->all())->toBe([$segunda->id, $primera->id])
-        ->and($medianaRoja->gallery()->count())->toBe(1)
+        ->and($medianaRoja->gallery()->pluck('id')->all())->toBe([$segundaRoja->id, $primeraRoja->id])
         ->and($mediana->gallery()->count())->toBe(2)
         ->and($product->images()->count())->toBe(4)
-        ->and($product->imagesForColor($azul)->count())->toBe(2);
+        ->and($product->imagesForColor($azul)->count())->toBe(2)
+        ->and($product->imagesForColor($rojo)->count())->toBe(2);
 });
 
 test('a product lists each of its colors once', function () {
