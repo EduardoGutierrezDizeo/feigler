@@ -2,7 +2,7 @@
 
 namespace App\Models;
 
-use App\Exceptions\MissingSkuPrefixException;
+use App\Enums\StoreSection;
 use Database\Factories\ProductFactory;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Collection;
@@ -92,44 +92,50 @@ class Product extends Model
     }
 
     /**
-     * The next free reference for the products of this category: its root prefix
-     * plus a counter of at least three digits, e.g. `PL-001`, `PL-002`.
+     * The store section the product belongs to, inherited from its category.
      *
-     * Subcategories share the prefix of the category they hang from, so every
-     * product under `Polos` is numbered in the same `PL-` series.
+     * It is never stored on the product: the catalog is divided into sections by
+     * the categories, and a product is in a section for as long as it sits in a
+     * category of that section.
+     */
+    protected function section(): Attribute
+    {
+        return Attribute::get(fn (): ?StoreSection => $this->category?->section);
+    }
+
+    /**
+     * The next free reference for the products of this category: its SKU prefix
+     * plus a counter of at least three digits, e.g. `PLH-001`, `PLH-002`.
+     *
+     * The prefix belongs to the category and to nobody else, which is what makes
+     * the series independent: `PL-001` (a category of the old catalog) is left
+     * out of the count of `PLH`, because the match demands the prefix followed by
+     * a dash and nothing else.
      *
      * The counter is the highest number already used under that prefix plus one,
      * read and compared as a number instead of as text. Ordering references as text
-     * breaks at the fourth digit, where `PL-1000` sorts before `PL-999` and the next
-     * product would be numbered `PL-001` all over again. References that are not
+     * breaks at the fourth digit, where `PLH-1000` sorts before `PLH-999` and the next
+     * product would be numbered `PLH-001` all over again. References that are not
      * `PREFIX-` followed by digits are left out of the count.
      *
-     * The root category row is locked for the whole transaction. Locking only the
+     * The category row is locked for the whole transaction. Locking only the
      * last product would not be enough: with no product yet there is no row to
      * lock, so two products created at the same time would both read "none" and
-     * both claim `PL-001`. The category row always exists, and every product that
-     * wants a `PL-` reference queues behind it.
+     * both claim `PLH-001`. The category row always exists, and every product that
+     * wants a `PLH-` reference queues behind it.
      *
      * Callers creating a product must do it inside `DB::transaction()`. The lock
      * lives no longer than the outermost transaction, and the read of the counter
      * is only useful while it is held: without an outer transaction the lock is
      * released as soon as this method returns, and the INSERT that follows lands
      * outside of it, which is exactly the race the lock was there to prevent.
-     *
-     * @throws MissingSkuPrefixException when the root category has no prefix
      */
     public static function nextReferenceFor(Category $category): string
     {
-        $root = $category->parent_id !== null ? $category->parent : $category;
+        $prefix = $category->sku_prefix;
 
-        if (blank($root?->sku_prefix)) {
-            throw MissingSkuPrefixException::forCategory($root ?? $category);
-        }
-
-        $prefix = $root->sku_prefix;
-
-        return DB::transaction(function () use ($root, $prefix) {
-            $root->newQuery()->lockForUpdate()->findOrFail($root->getKey());
+        return DB::transaction(function () use ($category, $prefix) {
+            $category->newQuery()->lockForUpdate()->findOrFail($category->getKey());
 
             $highest = 0;
 

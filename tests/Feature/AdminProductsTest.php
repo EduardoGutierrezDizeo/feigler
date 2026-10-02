@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\StoreSection;
 use App\Livewire\Admin\Products\Index;
 use App\Models\Category;
 use App\Models\Product;
@@ -9,9 +10,9 @@ use Database\Seeders\RoleSeeder;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 
-function numberedCategory(string $prefix = 'PL', string $name = 'Prenda'): Category
+function numberedCategory(string $prefix = 'PL', string $name = 'Prenda', StoreSection $section = StoreSection::Hombre): Category
 {
-    return Category::factory()->create(['sku_prefix' => $prefix, 'name' => $name]);
+    return Category::factory()->section($section)->create(['sku_prefix' => $prefix, 'name' => $name]);
 }
 
 function adminForPanel(): User
@@ -157,30 +158,58 @@ test('searches products by name or reference regardless of case', function () {
         ->assertDontSee('Pantalón sastre');
 });
 
-test('filters products by root category including its subcategories', function () {
+test('filters products by category', function () {
     $this->seed(RoleSeeder::class);
 
     $polos = numberedCategory('PL', 'Polos');
-    $hija = Category::factory()->for($polos, 'parent')->create(['name' => 'Manga corta']);
-
     $camisetas = numberedCategory('CM', 'Camisetas');
 
-    Product::factory()->for($polos)->create(['name' => 'Polo de la raíz']);
-    Product::factory()->for($hija)->create(['name' => 'Polo de la hija']);
-    Product::factory()->for($camisetas)->create(['name' => 'Camiseta de la otra']);
+    $polo = Product::factory()->for($polos)->create(['name' => 'Polo de la raíz']);
+    $camiseta = Product::factory()->for($camisetas)->create(['name' => 'Camiseta de la otra']);
 
     Livewire::actingAs(adminForPanel())
         ->test(Index::class)
         ->set('categoryFilter', (string) $polos->id)
-        ->assertSee('Polo de la raíz')
-        ->assertSee('Polo de la hija')
-        ->assertDontSee('Camiseta de la otra');
+        ->assertSeeHtml('wire:key="product-'.$polo->id.'"')
+        ->assertDontSeeHtml('wire:key="product-'.$camiseta->id.'"')
+        ->assertSee('Polo de la raíz');
 
     Livewire::actingAs(adminForPanel())
         ->test(Index::class)
-        ->set('categoryFilter', (string) $hija->id)
-        ->assertSee('Polo de la hija')
-        ->assertDontSee('Polo de la raíz');
+        ->set('categoryFilter', (string) $camisetas->id)
+        ->assertSeeHtml('wire:key="product-'.$camiseta->id.'"')
+        ->assertDontSeeHtml('wire:key="product-'.$polo->id.'"');
+});
+
+test('lists only the products of the active section', function () {
+    $this->seed(RoleSeeder::class);
+
+    $hombre = numberedCategory('PL', 'Polos');
+    $mujer = numberedCategory('VM', 'Vestidos', StoreSection::Mujer);
+
+    $productoHombre = Product::factory()->for($hombre)->create(['name' => 'Polo de hombre']);
+    $productoMujer = Product::factory()->for($mujer)->create(['name' => 'Vestido de mujer']);
+
+    Livewire::actingAs(adminForPanel())
+        ->test(Index::class)
+        ->assertSet('section', StoreSection::Hombre->value)
+        ->assertSeeHtml('wire:key="product-'.$productoHombre->id.'"')
+        ->assertDontSeeHtml('wire:key="product-'.$productoMujer->id.'"')
+        ->call('setSection', StoreSection::Mujer->value)
+        ->assertSeeHtml('wire:key="product-'.$productoMujer->id.'"')
+        ->assertDontSeeHtml('wire:key="product-'.$productoHombre->id.'"');
+});
+
+test('a category filter from another section matches nothing', function () {
+    $this->seed(RoleSeeder::class);
+
+    $mujer = numberedCategory('VM', 'Vestidos', StoreSection::Mujer);
+    $producto = Product::factory()->for($mujer)->create(['name' => 'Vestido de mujer']);
+
+    Livewire::actingAs(adminForPanel())
+        ->test(Index::class)
+        ->set('categoryFilter', (string) $mujer->id)
+        ->assertDontSeeHtml('wire:key="product-'.$producto->id.'"');
 });
 
 test('filters products by every computed status', function () {
@@ -293,20 +322,23 @@ test('a duplicate slug gets a numeric suffix', function () {
         ->and(Product::query()->where('slug', 'polo-basico')->count())->toBe(1);
 });
 
-test('creating in a category without a sku prefix fails and stores nothing', function () {
+test('creating in a category of another section fails and stores nothing', function () {
     $this->seed(RoleSeeder::class);
 
-    $sinPrefijo = Category::factory()->create(['name' => 'Sin prefijo', 'sku_prefix' => null]);
+    // El prefijo de SKU ya no puede faltar: es `NOT NULL` y único en toda la
+    // tienda. Lo que sigue vedado es cambiar de sección, y la garantía pasa a
+    // ser que la categoría elegida tiene que pertenecer a la sección abierta.
+    $mujer = numberedCategory('VM', 'Vestidos', StoreSection::Mujer);
 
     Livewire::actingAs(adminForPanel())
         ->test(Index::class)
         ->call('create')
-        ->set('name', 'Producto huérfano')
-        ->set('categoryId', $sinPrefijo->id)
+        ->set('name', 'Producto de otra sección')
+        ->set('categoryId', $mujer->id)
         ->set('basePrice', '19900')
         ->call('save')
         ->assertHasErrors(['categoryId'])
-        ->assertSee('La categoría «Sin prefijo» no tiene prefijo de SKU. Asígnalo en Categorías antes de crear productos.')
+        ->assertSee('La categoría seleccionada no existe en esta sección.')
         ->assertSet('showForm', true);
 
     expect(Product::query()->count())->toBe(0);
@@ -351,7 +383,7 @@ test('validates the general data of a product', function () {
         ->set('basePrice', '19900')
         ->call('save')
         ->assertHasErrors(['categoryId'])
-        ->assertSee('La categoría seleccionada no existe.');
+        ->assertSee('La categoría seleccionada no existe en esta sección.');
 
     // «Agotado» es un estado calculado: nunca se escribe, y menos aún desde el formulario.
     Livewire::actingAs(adminForPanel())
@@ -403,25 +435,54 @@ test('editing keeps the slug and the reference even when the name or category ch
         ->and($producto->base_price)->toBe('74900.00');
 });
 
-test('editing into a category without a sku prefix fails and keeps the product where it was', function () {
+test('editing into a category of another section fails and keeps the product where it was', function () {
     $this->seed(RoleSeeder::class);
 
     $polos = numberedCategory('PL', 'Polos');
-    $sinPrefijo = Category::factory()->create(['name' => 'Sin prefijo', 'sku_prefix' => null]);
+    $vestidos = numberedCategory('VM', 'Vestidos', StoreSection::Mujer);
 
     $producto = Product::factory()->for($polos)->create([
         'name' => 'Polo clásico',
         'reference' => 'PL-001',
     ]);
 
+    // El formulario se abre en la sección del producto, no en la pestaña que
+    // esté activa, así que moverlo a otra sección es rechazado por validación.
     Livewire::actingAs(adminForPanel())
         ->test(Index::class)
         ->call('edit', $producto->id)
-        ->set('categoryId', $sinPrefijo->id)
+        ->set('categoryId', $vestidos->id)
         ->call('save')
-        ->assertHasErrors(['categoryId']);
+        ->assertHasErrors(['categoryId'])
+        ->assertSee('La categoría seleccionada no existe en esta sección.');
 
-    expect($producto->refresh()->category_id)->toBe($polos->id);
+    expect($producto->refresh()->category_id)->toBe($polos->id)
+        ->and($producto->section)->toBe(StoreSection::Hombre);
+});
+
+test('editing a product keeps it inside the section of its own category', function () {
+    $this->seed(RoleSeeder::class);
+
+    $mujer = numberedCategory('VM', 'Vestidos', StoreSection::Mujer);
+    $falda = numberedCategory('FD', 'Faldas', StoreSection::Mujer);
+
+    $producto = Product::factory()->for($mujer)->create([
+        'name' => 'Vestido de fiesta',
+        'reference' => 'VM-001',
+    ]);
+
+    // Aunque la pestaña activa sea la de hombre, el formulario de este producto
+    // solo ofrece las categorías de mujer.
+    Livewire::actingAs(adminForPanel())
+        ->test(Index::class)
+        ->call('edit', $producto->id)
+        ->assertSee('Mujer')
+        ->set('categoryId', $falda->id)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect($producto->refresh()->category_id)->toBe($falda->id)
+        ->and($producto->section)->toBe(StoreSection::Mujer);
 });
 
 test('the status toggle alternates active and inactive and notifies', function () {

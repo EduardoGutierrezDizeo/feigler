@@ -12,7 +12,7 @@
             </h1>
 
             <p class="mt-2 text-sm text-gris-calido">
-                Organiza el catálogo en categorías y subcategorías.
+                Organiza el catálogo por secciones y define el prefijo de cada categoría.
             </p>
         </div>
 
@@ -20,6 +20,8 @@
             <span aria-hidden="true">+</span> Nueva categoría
         </x-primary-button>
     </div>
+
+    <x-admin-section-tabs :current="$activeSection->value" />
 
     <div class="mt-8 flex items-center gap-3">
         <x-text-input
@@ -54,114 +56,29 @@
 
         {{-- Filas reordenables. `data-flip-scope` marca las que participan en la animación FLIP. --}}
         <div class="divide-y divide-arena" data-flip-scope>
-            @forelse ($nodes as $node)
-                @php($root = $node['category'])
-                @php($hasChildren = $node['children']->isNotEmpty())
+            @forelse ($rows as $row)
+                @php($category = $row['category'])
 
                 <div
-                    wire:key="root-{{ $root->id }}"
+                    wire:key="category-{{ $category->id }}"
                     data-flip-row
                     class="px-6 py-5 transition-colors duration-150 ease-in-out hover:bg-hueso/50"
-                    x-data="{
-                        expanded: @js($node['expanded']),
-                        searching: @js($node['searching']),
-                        rootMatches: @js($node['rootMatches']),
-                        hasMatch: @js($node['hasMatch']),
-                    }"
-                    x-effect="if (searching && hasMatch) expanded = true"
-                    data-expanded="{{ $node['expanded'] ? 'true' : 'false' }}"
                 >
                     <div class="grid grid-cols-2 items-center gap-y-3 {{ $columns }}">
                         <div class="col-span-2 flex items-center gap-3 md:col-span-1">
-                            @if ($hasChildren)
-                                <button
-                                    type="button"
-                                    @click="expanded = ! expanded; $wire.toggleExpanded({{ $root->id }})"
-                                    :aria-expanded="expanded ? 'true' : 'false'"
-                                    :aria-label="expanded ? @js("Contraer {$root->name}") : @js("Expandir {$root->name}")"
-                                    class="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-gris-calido transition-colors duration-150 ease-in-out hover:bg-hueso hover:text-verde focus:outline-2 focus:outline-offset-2 focus:outline-verde"
-                                >
-                                    <svg
-                                        class="h-5 w-5 transition-transform duration-200"
-                                        :class="expanded ? 'rotate-90' : ''"
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        fill="none"
-                                        viewBox="0 0 24 24"
-                                        stroke-width="1.5"
-                                        stroke="currentColor"
-                                    >
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                                    </svg>
-                                </button>
-                            @else
-                                <span class="inline-flex h-8 w-8 shrink-0" aria-hidden="true"></span>
-                            @endif
-
-                            <span class="min-w-0 truncate font-display text-2xl font-medium text-tinta" title="{{ $root->name }}">
-                                {{ $root->name }}
+                            <span class="min-w-0 truncate font-display text-2xl font-medium text-tinta" title="{{ $category->name }}">
+                                {{ $category->name }}
                             </span>
 
-@if ($hasChildren)
-                                <span class="rounded-full bg-hueso px-2.5 py-0.5 text-xs font-medium text-gris-calido">
-                                    {{ $node['children']->count() }}
-                                </span>
-                            @endif
-
-                            @if ($root->sku_prefix)
-                                <span class="rounded-full bg-hueso px-2.5 py-0.5 text-xs font-medium text-gris-calido">{{ $root->sku_prefix }}</span>
-                            @else
-                                <span class="rounded-full bg-hueso px-2.5 py-0.5 text-xs font-medium text-ladrillo">Sin prefijo</span>
-                            @endif
+                            <span class="rounded-full bg-hueso px-2.5 py-0.5 text-xs font-medium text-gris-calido">{{ $category->sku_prefix }}</span>
                         </div>
 
                         @include('livewire.admin.categories.actions', [
-                            'category' => $root,
-                            'isFirst' => $node['isFirst'],
-                            'isLast' => $node['isLast'],
+                            'category' => $category,
+                            'isFirst' => $row['isFirst'],
+                            'isLast' => $row['isLast'],
                         ])
                     </div>
-
-                    @if ($hasChildren)
-                        <div
-                            x-cloak
-                            x-show="expanded"
-                            x-collapse.duration.250ms
-                            class="mt-4"
-                        >
-                            {{-- El sangrado va en la celda del nombre y no en este envoltorio:
-                                 indentar el envoltorio correría también Estado, Orden y Acciones. --}}
-                            <div class="overflow-hidden rounded-lg border-s-2 border-laton/60">
-                                <div class="divide-y divide-arena/70">
-                                    @foreach ($node['children'] as $childNode)
-                                        @php($child = $childNode['category'])
-
-                                        <div
-                                            wire:key="child-{{ $child->id }}"
-                                            data-flip-row
-                                            x-show="! searching || rootMatches || {{ $childNode['matches'] ? 'true' : 'false' }}"
-                                            class="px-5 py-4 transition-colors duration-150 ease-in-out hover:bg-hueso/60"
-                                        >
-                                            <div class="grid grid-cols-2 items-center gap-y-3 {{ $columns }}">
-                                                <div class="col-span-2 flex items-center gap-3 ps-6 md:col-span-1">
-                                                    <span class="inline-flex h-6 w-6 shrink-0 items-center justify-center text-arena" aria-hidden="true">└</span>
-
-                                                    <span class="min-w-0 truncate text-tinta" title="{{ $child->name }}">
-                                                        {{ $child->name }}
-                                                    </span>
-                                                </div>
-
-                                                @include('livewire.admin.categories.actions', [
-                                                    'category' => $child,
-                                                    'isFirst' => $childNode['isFirst'],
-                                                    'isLast' => $childNode['isLast'],
-                                                ])
-                                            </div>
-                                        </div>
-                                    @endforeach
-                                </div>
-                            </div>
-                        </div>
-                    @endif
                 </div>
             @empty
                 <div class="px-6 py-14 text-center text-sm text-gris-calido">
@@ -179,7 +96,7 @@
                             Limpiar búsqueda
                         </button>
                     @else
-                        Aún no hay categorías. Crea la primera con el botón «Nueva categoría».
+                        Aún no hay categorías en {{ $activeSection->label() }}. Crea la primera con el botón «Nueva categoría».
                     @endif
                 </div>
             @endforelse
@@ -187,9 +104,17 @@
     </div>
 
     <x-admin-modal
-        :title="$editingId !== null ? 'Editar categoría' : ($parentId !== null ? 'Nueva subcategoría' : 'Nueva categoría')"
+        :title="$editingId !== null ? 'Editar categoría' : 'Nueva categoría'"
         title-id="category-form-title"
     >
+        {{-- La sección no se elige: una categoría no cambia de sección una vez creada. --}}
+        <div>
+            <x-input-label value="Sección" />
+            <p class="mt-2 rounded-lg border border-arena bg-hueso/60 px-3 py-2 text-sm text-verde">
+                {{ $activeSection->label() }}
+            </p>
+        </div>
+
         <div>
             <x-input-label for="category-name" value="Nombre" />
             <x-text-input
@@ -204,59 +129,26 @@
         </div>
 
         <div>
-            @if ($editingId !== null)
-                <x-input-label for="category-parent" value="Categoría padre (opcional)" />
-                <x-select-input
-                    id="category-parent"
-                    wire:model.live="parentId"
-                    class="mt-1 block w-full"
-                >
-                    <option value="">— Ninguna: será una categoría raíz —</option>
-                    @foreach ($parentOptions as $parent)
-                        <option value="{{ $parent->id }}" @selected($parentId === (int) $parent->id)>
-                            {{ $parent->name }}
-                        </option>
-                    @endforeach
-                </x-select-input>
-                <p class="mt-2 text-xs text-gris-calido">
-                    Solo puedes elegir categorías raíz: las subcategorías no pueden tener hijas.
-                </p>
-                <x-input-error :messages="$errors->get('parentId')" class="mt-2" />
-            @elseif ($parentId !== null)
-                <x-input-label value="Categoría padre" />
-                <p class="mt-2 rounded-lg border border-arena bg-hueso/60 px-3 py-2 text-sm text-verde">
-                    Creando subcategoría dentro de: {{ $parentOptions->firstWhere('id', $parentId)?->name }}
-                </p>
-                <x-input-error :messages="$errors->get('parentId')" class="mt-2" />
-            @else
-                <x-input-label value="Categoría padre" />
-                <p class="mt-2 text-sm text-gris-calido">
-                    Se creará como categoría raíz.
-                </p>
-            @endif
+            <x-input-label for="category-sku-prefix" value="Prefijo SKU" />
+            <x-text-input
+                id="category-sku-prefix"
+                wire:model="skuPrefix"
+                type="text"
+                maxlength="4"
+                class="mt-1 block w-full uppercase"
+                placeholder="Ej. PLH"
+            />
+            <p class="mt-2 text-xs text-gris-calido">
+                @if ($activeSection === \App\Enums\StoreSection::Hombre)
+                    Ej. PLH para polos de hombre. Será el inicio de la referencia: PLH-001.
+                @elseif ($activeSection === \App\Enums\StoreSection::Mujer)
+                    Ej. PLM para polos de mujer. Será el inicio de la referencia: PLM-001.
+                @else
+                    Ej. PLN para polos de niño. Será el inicio de la referencia: PLN-001.
+                @endif
+            </p>
+            <x-input-error :messages="$errors->get('skuPrefix')" class="mt-2" />
         </div>
-
-        {{-- El prefijo solo tiene sentido en categorías raíz: es la raíz la que
-             aporta el primer tramo del SKU de sus productos. Con
-             `wire:model.live` en el selector de padre, el campo aparece y se
-             oculta sin pulsar «Guardar». --}}
-        @if ($parentId === null)
-            <div>
-                <x-input-label for="category-sku-prefix" value="Prefijo para SKU" />
-                <x-text-input
-                    id="category-sku-prefix"
-                    wire:model="skuPrefix"
-                    type="text"
-                    maxlength="4"
-                    class="mt-1 block w-full uppercase"
-                    placeholder="Ej. PL"
-                />
-                <p class="mt-2 text-xs text-gris-calido">
-                    Se usa al generar el SKU de los productos de esta categoría.
-                </p>
-                <x-input-error :messages="$errors->get('skuPrefix')" class="mt-2" />
-            </div>
-        @endif
 
         <x-slot:footer>
             <x-secondary-button type="button" wire:click="closeForm">
@@ -264,7 +156,7 @@
             </x-secondary-button>
 
             <x-primary-button type="button" wire:click="save" wire:loading.attr="disabled">
-                {{ $editingId !== null ? 'Guardar cambios' : ($parentId !== null ? 'Crear subcategoría' : 'Crear categoría') }}
+                {{ $editingId !== null ? 'Guardar cambios' : 'Crear categoría' }}
             </x-primary-button>
         </x-slot:footer>
     </x-admin-modal>

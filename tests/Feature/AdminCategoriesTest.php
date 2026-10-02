@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\StoreSection;
 use App\Livewire\Admin\Categories\Index;
 use App\Models\Category;
 use App\Models\Product;
@@ -7,84 +8,117 @@ use App\Models\User;
 use Database\Seeders\RoleSeeder;
 use Livewire\Livewire;
 
-test('lists categories and their subcategories', function () {
-    $root = Category::factory()->create(['name' => 'Camisetas', 'slug' => 'camisetas']);
-    Category::factory()->for($root, 'parent')->create(['name' => 'Camisetas básicas', 'slug' => 'camisetas-basicas']);
+test('lists only the categories of the active section', function () {
+    $hombre = Category::factory()->section(StoreSection::Hombre)->create(['name' => 'Polos']);
+    $mujer = Category::factory()->section(StoreSection::Mujer)->create(['name' => 'Vestidos']);
 
     Livewire::test(Index::class)
-        ->call('toggleExpanded', $root->id)
-        ->assertSee('Categorías')
-        ->assertSee('Camisetas')
-        ->assertSee('Camisetas básicas');
+        ->assertSet('section', StoreSection::Hombre->value)
+        ->assertSeeHtml('wire:key="category-'.$hombre->id.'"')
+        ->assertDontSeeHtml('wire:key="category-'.$mujer->id.'"')
+        ->assertSee('Polos')
+        ->assertDontSee('Vestidos');
+
+    expect($hombre->section)->toBe(StoreSection::Hombre)
+        ->and($mujer->section)->toBe(StoreSection::Mujer);
 });
 
-test('creates a root category with a generated slug', function () {
+test('offers the three sections as tabs and switches between them', function () {
+    $hombre = Category::factory()->section(StoreSection::Hombre)->create(['name' => 'Polos']);
+    $mujer = Category::factory()->section(StoreSection::Mujer)->create(['name' => 'Vestidos']);
+
+    Livewire::test(Index::class)
+        ->assertSee('Hombre')
+        ->assertSee('Mujer')
+        ->assertSee('Niños')
+        ->assertSeeHtml('role="tab"')
+        ->assertSeeHtml('aria-selected="true"')
+        ->call('setSection', StoreSection::Mujer->value)
+        ->assertSet('section', StoreSection::Mujer->value)
+        ->assertSee('Vestidos')
+        // El nombre de la fila se comprueba por su `wire:key` y no con
+        // `assertDontSee('Polos')`: el modal lleva `placeholder="Ej. Camisetas"`.
+        ->assertDontSeeHtml('wire:key="category-'.$hombre->id.'"')
+        ->assertSeeHtml('wire:key="category-'.$mujer->id.'"');
+});
+
+test('falls back to hombre when the url holds a section that does not exist', function () {
+    Livewire::test(Index::class)
+        ->set('section', 'invalida')
+        ->call('setSection', 'invalida')
+        ->assertSet('section', StoreSection::Hombre->value);
+});
+
+test('switching section discards the search and dismisses the form', function () {
+    Category::factory()->create(['name' => 'Camisetas']);
+
+    Livewire::test(Index::class)
+        ->set('search', 'cami')
+        ->call('create')
+        ->set('name', 'Pantalones')
+        ->assertSet('showForm', true)
+        ->call('setSection', StoreSection::Mujer->value)
+        ->assertSet('search', '')
+        ->assertSet('showForm', false)
+        ->assertSet('editingId', null)
+        ->assertSet('name', '');
+});
+
+test('creates a category with a generated slug in the active section', function () {
     Livewire::test(Index::class)
         ->call('create')
         ->set('name', 'Pantalones')
         ->set('skuPrefix', 'PA')
         ->call('save')
         ->assertHasNoErrors()
-        ->assertSet('showForm', false)
-        ->assertSet('notice', 'Categoría creada correctamente.');
+        ->assertSet('showForm', false);
 
     $category = Category::query()->where('slug', 'pantalones')->sole();
 
     expect($category->name)->toBe('Pantalones')
-        ->and($category->parent_id)->toBeNull();
+        ->and($category->section)->toBe(StoreSection::Hombre)
+        ->and($category->sku_prefix)->toBe('PA');
 });
 
-test('creates a valid subcategory under a root category', function () {
-    $root = Category::factory()->create();
-
+test('a created category belongs to the section that was active, not the default one', function () {
     Livewire::test(Index::class)
+        ->call('setSection', StoreSection::Ninos->value)
         ->call('create')
-        ->set('name', 'Camisetas básicas')
-        ->set('parentId', $root->id)
+        ->set('name', 'Pantalones')
+        ->set('skuPrefix', 'PA')
         ->call('save')
         ->assertHasNoErrors();
 
-    $category = Category::query()->where('slug', 'camisetas-basicas')->sole();
-
-    expect($category->name)->toBe('Camisetas básicas')
-        ->and($category->parent->is($root))->toBeTrue();
+    expect(Category::query()->where('slug', 'pantalones')->sole()->section)
+        ->toBe(StoreSection::Ninos);
 });
 
-test('creates a root category without offering a parent selector', function () {
+test('rejects a name already used in the same section', function () {
+    Category::factory()->section(StoreSection::Hombre)->create(['name' => 'Camisetas']);
+
     Livewire::test(Index::class)
         ->call('create')
-        ->assertDontSeeHtml('<select')
-        ->assertSee('Se creará como categoría raíz.')
-        ->set('name', 'Pantalones')
-        ->set('skuPrefix', 'PA')
+        ->set('name', 'Camisetas')
+        ->set('skuPrefix', 'CA')
         ->call('save')
-        ->assertHasNoErrors()
-        ->assertSet('notice', 'Categoría creada correctamente.');
+        ->assertHasErrors(['name'])
+        ->assertSee('Ya existe una categoría con ese nombre en esta sección.');
 
-    $category = Category::query()->where('slug', 'pantalones')->sole();
-
-    expect($category->name)->toBe('Pantalones')
-        ->and($category->parent_id)->toBeNull();
+    expect(Category::query()->count())->toBe(1);
 });
 
-test('creates a subcategory from a root row without selecting the parent', function () {
-    $root = Category::factory()->create(['name' => 'Camisetas']);
+test('lets another section reuse a name already taken in the active one', function () {
+    Category::factory()->section(StoreSection::Hombre)->create(['name' => 'Polos', 'slug' => 'polos', 'sku_prefix' => 'PLH']);
 
     Livewire::test(Index::class)
-        ->call('createSubcategory', $root->id)
-        ->assertSet('parentId', $root->id)
-        ->assertSee('Nueva subcategoría')
-        ->assertSee('Creando subcategoría dentro de: Camisetas')
-        ->assertDontSeeHtml('<select')
-        ->set('name', 'Camisetas básicas')
+        ->call('setSection', StoreSection::Mujer->value)
+        ->call('create')
+        ->set('name', 'Polos')
+        ->set('skuPrefix', 'PLM')
         ->call('save')
-        ->assertHasNoErrors()
-        ->assertSet('notice', 'Categoría creada correctamente.');
+        ->assertHasNoErrors();
 
-    $category = Category::query()->where('slug', 'camisetas-basicas')->sole();
-
-    expect($category->name)->toBe('Camisetas básicas')
-        ->and($category->parent->is($root))->toBeTrue();
+    expect(Category::query()->where('slug', 'polos')->count())->toBe(2);
 });
 
 test('generates a new slug when editing a category', function () {
@@ -107,6 +141,20 @@ test('generates a new slug when editing a category', function () {
 
     expect($category->name)->toBe('Sudaderas con capucha')
         ->and($category->slug)->toBe('sudaderas-con-capucha');
+});
+
+test('editing a category never moves it to another section', function () {
+    $category = Category::factory()->section(StoreSection::Mujer)->create(['name' => 'Vestidos']);
+
+    Livewire::test(Index::class)
+        ->set('section', StoreSection::Mujer->value)
+        ->call('edit', $category->id)
+        ->set('name', 'Vestidos de fiesta')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect($category->fresh()->section)->toBe(StoreSection::Mujer)
+        ->and($category->fresh()->slug)->toBe('vestidos-de-fiesta');
 });
 
 test('requires a name to create a category', function () {
@@ -145,31 +193,31 @@ test('rejects a name that collides with another category slug', function () {
     expect(Category::query()->count())->toBe(1);
 });
 
-test('requires a SKU prefix when creating a root category', function () {
+test('requires a SKU prefix to create a category', function () {
     Livewire::test(Index::class)
         ->call('create')
         ->set('name', 'Pantalones')
         ->call('save')
         ->assertHasErrors(['skuPrefix'])
-        ->assertSee('El prefijo de SKU es obligatorio para las categorías raíz.');
+        ->assertSee('El prefijo de SKU es obligatorio.');
 
     expect(Category::query()->count())->toBe(0);
 });
 
-test('rejects a SKU prefix that is not 2 to 4 uppercase letters or numbers', function () {
+test('rejects a SKU prefix that is not 2 to 4 uppercase letters or numbers', function (string $prefix) {
     Livewire::test(Index::class)
         ->call('create')
         ->set('name', 'Pantalones')
-        ->set('skuPrefix', 'P!')
+        ->set('skuPrefix', $prefix)
         ->call('save')
         ->assertHasErrors(['skuPrefix'])
         ->assertSee('Usa de 2 a 4 letras o números, sin espacios.');
 
     expect(Category::query()->count())->toBe(0);
-});
+})->with(['P!', 'AB!D', 'ABCDE', 'PL H']);
 
-test('rejects a SKU prefix already used by another category', function () {
-    Category::factory()->create(['name' => 'Camisetas', 'slug' => 'camisetas', 'sku_prefix' => 'CA']);
+test('rejects a SKU prefix already used by another category anywhere in the store', function () {
+    Category::factory()->section(StoreSection::Mujer)->create(['name' => 'Camisetas', 'slug' => 'camisetas', 'sku_prefix' => 'CA']);
 
     Livewire::test(Index::class)
         ->call('create')
@@ -182,7 +230,7 @@ test('rejects a SKU prefix already used by another category', function () {
     expect(Category::query()->where('name', 'Pantalones')->exists())->toBeFalse();
 });
 
-test('stores the SKU prefix uppercased and trimmed on a root category', function () {
+test('stores the SKU prefix uppercased and trimmed', function () {
     Livewire::test(Index::class)
         ->call('create')
         ->set('name', 'Pantalones')
@@ -193,20 +241,7 @@ test('stores the SKU prefix uppercased and trimmed on a root category', function
     expect(Category::query()->where('slug', 'pantalones')->sole()->sku_prefix)->toBe('PL');
 });
 
-test('keeps a category without a SKU prefix when it is demoted to a subcategory', function () {
-    $category = Category::factory()->create(['name' => 'Pantalones', 'sku_prefix' => 'PA']);
-
-    Livewire::test(Index::class)
-        ->call('edit', $category->id)
-        ->assertSet('skuPrefix', 'PA')
-        ->set('parentId', Category::factory()->create()->id)
-        ->call('save')
-        ->assertHasNoErrors();
-
-    expect($category->fresh()->sku_prefix)->toBeNull();
-});
-
-test('lets a root category keep its own prefix when edited', function () {
+test('lets a category keep its own prefix when edited', function () {
     $category = Category::factory()->create(['name' => 'Pantalones', 'sku_prefix' => 'PA']);
 
     Livewire::test(Index::class)
@@ -217,23 +252,26 @@ test('lets a root category keep its own prefix when edited', function () {
     expect($category->fresh()->sku_prefix)->toBe('PA');
 });
 
-test('only offers the SKU prefix field while the category is a root', function () {
-    $root = Category::factory()->create();
+test('shows the prefix of every category next to its name', function () {
+    Category::factory()->create(['name' => 'Camisetas', 'sku_prefix' => 'CMT']);
 
     Livewire::test(Index::class)
-        ->call('create')
-        ->assertSee('Prefijo para SKU')
-        ->set('parentId', $root->id)
-        ->assertDontSee('Prefijo para SKU');
+        ->assertSee('Camisetas')
+        ->assertSee('CMT');
 });
 
-test('flags root categories that have no SKU prefix', function () {
-    Category::factory()->create(['name' => 'Camisetas', 'sku_prefix' => 'CA']);
-    Category::factory()->create(['name' => 'Pantalones', 'sku_prefix' => null]);
+test('toggles a category between active and inactive', function () {
+    $category = Category::factory()->create();
 
     Livewire::test(Index::class)
-        ->assertSee('CA')
-        ->assertSee('Sin prefijo');
+        ->call('toggleActive', $category->id);
+
+    expect($category->fresh()->is_active)->toBeFalse();
+
+    Livewire::test(Index::class)
+        ->call('toggleActive', $category->id);
+
+    expect($category->fresh()->is_active)->toBeTrue();
 });
 
 test('blocks deleting a category that has products', function () {
@@ -253,21 +291,14 @@ test('blocks deleting a category that has products', function () {
     $this->assertModelExists($product);
 });
 
-test('blocks deleting a category that has subcategories', function () {
-    $root = Category::factory()->create();
-    $child = Category::factory()->for($root, 'parent')->create();
+test('deletes a category without products', function () {
+    $category = Category::factory()->create();
 
     Livewire::test(Index::class)
-        ->call('delete', $root->id)
-        ->assertSet('noticeType', 'error')
-        ->assertDispatched('toast', function (string $name, array $params) {
-            return $name === 'toast'
-                && $params['tone'] === 'error'
-                && str_contains($params['message'], 'subcategorías');
-        });
+        ->call('delete', $category->id)
+        ->assertSet('noticeType', 'success');
 
-    $this->assertModelExists($root);
-    $this->assertModelExists($child);
+    $this->assertModelMissing($category);
 });
 
 test('announces a created category in the toast stack', function () {
@@ -354,6 +385,17 @@ test('the category form is a full-viewport modal that stays mounted so it can an
         ->assertSet('editingId', null);
 });
 
+test('the form shows the active section instead of a selector', function () {
+    Livewire::test(Index::class)
+        ->call('create')
+        ->assertSee('Sección')
+        ->assertSee('Hombre')
+        ->assertDontSeeHtml('<select')
+        ->call('setSection', StoreSection::Ninos->value)
+        ->call('create')
+        ->assertSee('Niños');
+});
+
 test('filters categories by name', function () {
     Category::factory()->create(['name' => 'Camisetas', 'slug' => 'camisetas']);
     Category::factory()->create(['name' => 'Pantalones', 'slug' => 'pantalones']);
@@ -370,61 +412,14 @@ test('escapes the search term when it has no results', function () {
         ->assertSee('<script>alert(1)</script>');
 });
 
-test('rejects a subcategory as the parent', function () {
-    $root = Category::factory()->create();
-    $child = Category::factory()->for($root, 'parent')->create();
-
-    Livewire::test(Index::class)
-        ->call('create')
-        ->set('name', 'Categoría nieto')
-        ->set('parentId', $child->id)
-        ->call('save')
-        ->assertHasErrors(['parentId'])
-        ->assertSee('Solo puedes elegir una categoría raíz como categoría padre.');
-
-    expect(Category::query()->where('name', 'Categoría nieto')->exists())->toBeFalse();
-});
-
-test('marks subcategories as collapsed until their root is expanded', function () {
-    $root = Category::factory()->create(['name' => 'Camisetas']);
-    Category::factory()->for($root, 'parent')->create(['name' => 'Camisetas básicas']);
-
-    Livewire::test(Index::class)
-        ->assertSeeHtml('data-expanded="false"');
-});
-
-test('expands and collapses a root to show and hide its subcategories', function () {
-    $root = Category::factory()->create(['name' => 'Camisetas']);
-    Category::factory()->for($root, 'parent')->create(['name' => 'Camisetas básicas']);
-
-    Livewire::test(Index::class)
-        ->assertSeeHtml('data-expanded="false"')
-        ->call('toggleExpanded', $root->id)
-        ->assertSeeHtml('data-expanded="true"')
-        ->call('toggleExpanded', $root->id)
-        ->assertSeeHtml('data-expanded="false"');
-});
-
-test('auto-expands a root when the search matches one of its subcategories', function () {
-    $root = Category::factory()->create(['name' => 'Camisetas']);
-    Category::factory()->for($root, 'parent')->create(['name' => 'Camisetas básicas']);
-    Category::factory()->create(['name' => 'Pantalones']);
-
-    Livewire::test(Index::class)
-        ->set('search', 'básicas')
-        ->assertSee('Camisetas')
-        ->assertSee('Camisetas básicas')
-        ->assertDontSee('Pantalones');
-});
-
-test('moves a root category up above its previous sibling and reindexes the group', function () {
+test('moves a category up above its previous one and reindexes the section', function () {
     $first = Category::factory()->create(['name' => 'Camisetas', 'order' => 1]);
     $second = Category::factory()->create(['name' => 'Pantalones', 'order' => 2]);
 
     Livewire::test(Index::class)
         ->call('moveUp', $second->id);
 
-    // El grupo se reescribe a 0..n-1 en el orden mostrado, en vez de
+    // La sección se reescribe a 0..n-1 en el orden mostrado, en vez de
     // intercambiar los dos valores sueltos.
     expect(Category::query()->orderBy('order')->pluck('name')->all())
         ->toBe(['Pantalones', 'Camisetas'])
@@ -432,7 +427,7 @@ test('moves a root category up above its previous sibling and reindexes the grou
         ->and($second->fresh()->order)->toBe(0);
 });
 
-test('moves a root category down below its next sibling and reindexes the group', function () {
+test('moves a category down below its next one and reindexes the section', function () {
     $first = Category::factory()->create(['name' => 'Camisetas', 'order' => 1]);
     $second = Category::factory()->create(['name' => 'Pantalones', 'order' => 2]);
 
@@ -445,40 +440,7 @@ test('moves a root category down below its next sibling and reindexes the group'
         ->and($second->fresh()->order)->toBe(0);
 });
 
-test('moves a subcategory up within its own parent', function () {
-    $root = Category::factory()->create(['name' => 'Camisetas']);
-    $first = Category::factory()->for($root, 'parent')->create(['name' => 'Básicas', 'order' => 1]);
-    $second = Category::factory()->for($root, 'parent')->create(['name' => 'Deportivas', 'order' => 2]);
-
-    Livewire::test(Index::class)
-        ->call('moveUp', $second->id);
-
-    expect($first->fresh()->order)->toBe(1)
-        ->and($second->fresh()->order)->toBe(0)
-        ->and($root->fresh()->order)->toBe(0);
-});
-
-test('reordering subcategories of a root does not affect another root ordering', function () {
-    $rootA = Category::factory()->create(['name' => 'Camisetas']);
-    $rootB = Category::factory()->create(['name' => 'Pantalones']);
-
-    $aFirst = Category::factory()->for($rootA, 'parent')->create(['name' => 'Básicas', 'order' => 1]);
-    $aSecond = Category::factory()->for($rootA, 'parent')->create(['name' => 'Deportivas', 'order' => 2]);
-    $bFirst = Category::factory()->for($rootB, 'parent')->create(['name' => 'Slim', 'order' => 1]);
-    $bSecond = Category::factory()->for($rootB, 'parent')->create(['name' => 'Anchos', 'order' => 2]);
-
-    Livewire::test(Index::class)
-        ->call('moveUp', $aSecond->id);
-
-    expect($aFirst->fresh()->order)->toBe(1)
-        ->and($aSecond->fresh()->order)->toBe(0)
-        ->and($rootA->fresh()->order)->toBe(0)
-        ->and($rootB->fresh()->order)->toBe(0)
-        ->and($bFirst->fresh()->order)->toBe(1)
-        ->and($bSecond->fresh()->order)->toBe(2);
-});
-
-test('cannot move the first sibling up or the last sibling down', function () {
+test('cannot move the first category up or the last one down', function () {
     $first = Category::factory()->create(['name' => 'Camisetas', 'order' => 1]);
     $second = Category::factory()->create(['name' => 'Pantalones', 'order' => 2]);
     $third = Category::factory()->create(['name' => 'Zapatos', 'order' => 3]);
@@ -492,8 +454,8 @@ test('cannot move the first sibling up or the last sibling down', function () {
         ->and($third->fresh()->order)->toBe(3);
 });
 
-test('moves a category down even when another sibling shares its order value', function () {
-    // Estado corrupto reproducido a propósito: dos raíces con order 0.
+test('moves a category down even when another one shares its order value', function () {
+    // Estado corrupto reproducido a propósito: dos categorías con order 0.
     $first = Category::factory()->create(['name' => 'Camisetas', 'order' => 0]);
     $second = Category::factory()->create(['name' => 'Gorras', 'order' => 0]);
 
@@ -506,7 +468,7 @@ test('moves a category down even when another sibling shares its order value', f
         ->and($second->fresh()->order)->toBe(0);
 });
 
-test('moves a category up even when another sibling shares its order value', function () {
+test('moves a category up even when another one shares its order value', function () {
     $first = Category::factory()->create(['name' => 'Camisetas', 'order' => 0]);
     $second = Category::factory()->create(['name' => 'Gorras', 'order' => 0]);
 
@@ -517,6 +479,21 @@ test('moves a category up even when another sibling shares its order value', fun
         ->toBe(['Gorras', 'Camisetas'])
         ->and($first->fresh()->order)->toBe(1)
         ->and($second->fresh()->order)->toBe(0);
+});
+
+test('reordering one section leaves the other sections untouched', function () {
+    $hombreFirst = Category::factory()->section(StoreSection::Hombre)->create(['name' => 'Camisetas', 'order' => 1]);
+    $hombreSecond = Category::factory()->section(StoreSection::Hombre)->create(['name' => 'Pantalones', 'order' => 2]);
+    $mujerFirst = Category::factory()->section(StoreSection::Mujer)->create(['name' => 'Vestidos', 'order' => 1]);
+    $mujerSecond = Category::factory()->section(StoreSection::Mujer)->create(['name' => 'Faldas', 'order' => 2]);
+
+    Livewire::test(Index::class)
+        ->call('moveUp', $hombreSecond->id);
+
+    expect($hombreFirst->fresh()->order)->toBe(1)
+        ->and($hombreSecond->fresh()->order)->toBe(0)
+        ->and($mujerFirst->fresh()->order)->toBe(1)
+        ->and($mujerSecond->fresh()->order)->toBe(2);
 });
 
 test('assigns consecutive order values when creating categories in sequence', function () {
@@ -541,4 +518,18 @@ test('assigns consecutive order values when creating categories in sequence', fu
 
     $orders = Category::query()->orderBy('id')->pluck('order')->all();
     expect($orders)->toBe([0, 1, 2]);
+});
+
+test('starts the order of a new section from zero', function () {
+    Category::factory()->section(StoreSection::Hombre)->create(['order' => 5]);
+
+    Livewire::test(Index::class)
+        ->call('setSection', StoreSection::Ninos->value)
+        ->call('create')
+        ->set('name', 'Pantalones')
+        ->set('skuPrefix', 'PA')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect(Category::query()->where('slug', 'pantalones')->sole()->order)->toBe(0);
 });

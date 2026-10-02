@@ -16,6 +16,8 @@
         </x-primary-button>
     </div>
 
+    <x-admin-section-tabs :current="$activeSection->value" />
+
     <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
         <x-text-input
             variant="pill"
@@ -33,23 +35,10 @@
             aria-label="Filtrar por categoría"
         >
             <option value="">Todas las categorías</option>
-            @foreach ($categoryGroups as $group)
-                @if ($group['children']->isNotEmpty())
-                    <optgroup label="{{ $group['root']->name }}">
-                        <option value="{{ $group['root']->id }}" @selected($categoryFilter === (string) $group['root']->id)>
-                            {{ $group['root']->name }}
-                        </option>
-                        @foreach ($group['children'] as $child)
-                            <option value="{{ $child->id }}" @selected($categoryFilter === (string) $child->id)>
-                                {{ $child->name }}
-                            </option>
-                        @endforeach
-                    </optgroup>
-                @else
-                    <option value="{{ $group['root']->id }}" @selected($categoryFilter === (string) $group['root']->id)>
-                        {{ $group['root']->name }}
-                    </option>
-                @endif
+            @foreach ($categories as $category)
+                <option value="{{ $category->id }}" @selected($categoryFilter === (string) $category->id)>
+                    {{ $category->name }}
+                </option>
             @endforeach
         </x-select-input>
 
@@ -186,7 +175,7 @@
                                         Limpiar filtros
                                     </button>
                                 @else
-                                    Aún no hay productos. Crea el primero con el botón «Nuevo producto».
+                                    Aún no hay productos en {{ $activeSection->label() }}. Crea el primero con el botón «Nuevo producto».
                                 @endif
                             </td>
                         </tr>
@@ -212,12 +201,17 @@
         max-width="sm:max-w-2xl"
     >
         {{-- La referencia es de solo lectura: se asignó al crear el producto y ya forma
-             parte de los SKU construidos a partir de ella. --}}
+             parte de los SKU construidos a partir de ella. La sección tampoco se
+             elige: un producto no cambia de sección. --}}
         @if ($editingId !== null)
             <p class="text-xs text-gris-calido">
                 Referencia <span class="font-medium">{{ $editingReference }}</span>
             </p>
         @endif
+
+        <p class="text-xs text-gris-calido">
+            Sección: <span class="font-medium">{{ $formSection->label() }}</span>
+        </p>
 
         <div x-data="{ tab: 'datos' }">
             <div role="tablist" aria-label="Secciones del producto" class="flex gap-6 border-b border-arena">
@@ -285,39 +279,13 @@
                         class="mt-1 block w-full"
                     >
                         <option value="">— Selecciona una categoría —</option>
-                        @foreach ($categoryGroups as $group)
-                            @php
-                                $suffix = $group['numbered'] ? '' : ' — sin prefijo';
-                            @endphp
-
-                            @if ($group['children']->isNotEmpty())
-                                <optgroup label="{{ $group['root']->name }}">
-                                    <option
-                                        value="{{ $group['root']->id }}"
-                                        @selected($categoryId === $group['root']->id)
-                                        @disabled(! $group['numbered'])
-                                    >
-                                        {{ $group['root']->name }} (general){{ $suffix }}
-                                    </option>
-                                    @foreach ($group['children'] as $child)
-                                        <option
-                                            value="{{ $child->id }}"
-                                            @selected($categoryId === $child->id)
-                                            @disabled(! $group['numbered'])
-                                        >
-                                            {{ $child->name }}{{ $suffix }}
-                                        </option>
-                                    @endforeach
-                                </optgroup>
-                            @else
-                                <option
-                                    value="{{ $group['root']->id }}"
-                                    @selected($categoryId === $group['root']->id)
-                                    @disabled(! $group['numbered'])
-                                >
-                                    {{ $group['root']->name }}{{ $suffix }}
-                                </option>
-                            @endif
+                        @foreach ($formCategories as $category)
+                            <option
+                                value="{{ $category->id }}"
+                                @selected($categoryId === $category->id)
+                            >
+                                {{ $category->name }}
+                            </option>
                         @endforeach
                     </x-select-input>
                     <x-input-error :messages="$errors->get('categoryId')" class="mt-2" />

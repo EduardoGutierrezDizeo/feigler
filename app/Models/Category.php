@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use App\Enums\StoreSection;
 use Database\Factories\CategoryFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class Category extends Model
 {
@@ -22,7 +24,7 @@ class Category extends Model
     protected $fillable = [
         'name',
         'slug',
-        'parent_id',
+        'section',
         'sku_prefix',
         'order',
         'is_active',
@@ -36,27 +38,10 @@ class Category extends Model
     protected function casts(): array
     {
         return [
+            'section' => StoreSection::class,
             'order' => 'integer',
             'is_active' => 'boolean',
         ];
-    }
-
-    /**
-     * The parent category, when this category is a subcategory.
-     */
-    public function parent(): BelongsTo
-    {
-        return $this->belongsTo(self::class, 'parent_id');
-    }
-
-    /**
-     * The subcategories nested one level below this category.
-     *
-     * @return HasMany<Category>
-     */
-    public function children(): HasMany
-    {
-        return $this->hasMany(self::class, 'parent_id');
     }
 
     /**
@@ -70,79 +55,99 @@ class Category extends Model
     }
 
     /**
-     * The `order` a brand new category should get inside its sibling group.
+     * Only the categories of one store section.
+     *
+     * @param  Builder<Category>  $query
+     */
+    public function scopeInSection(Builder $query, StoreSection $section): void
+    {
+        $query->where('section', $section->value);
+    }
+
+    /**
+     * The `order` a brand new category should get inside its section.
      *
      * Every category created from the panel used to fall back to the migration
      * default of `0`, so a whole group ended up sharing the same value. That is
      * harmless on its own but makes reordering a no-op later on, because
      * swapping two identical values does not move anything. Appending to the
-     * current maximum keeps `order` unique per group from the start.
+     * current maximum keeps `order` unique per section from the start.
      */
-    public static function nextOrderFor(?int $parentId): int
+    public static function nextOrderFor(StoreSection $section): int
     {
         $maxOrder = static::query()
-            ->where('parent_id', $parentId)
+            ->inSection($section)
             ->max('order');
 
         return $maxOrder === null ? 0 : ((int) $maxOrder) + 1;
     }
 
     /**
-     * Move a category one slot up (-1) or down (+1) among its siblings.
+     * Move a category one slot up (-1) or down (+1) inside its section.
      *
-     * Instead of swapping the two colliding `order` values, the whole group is
+     * Instead of swapping the two colliding `order` values, the whole section is
      * reindexed: the category is lifted out of the list, inserted at its
-     * destination and every sibling is rewritten to a contiguous `0..n-1`
-     * sequence. Reindexing is what makes the move actually happen. Swapping only
-     * worked while the values were unique, and two siblings sharing a value
-     * (which is exactly what the old `create()` produced) turned the swap into a
-     * no-op that still ran its UPDATEs. Rebuilding the sequence also heals any
-     * group that is already corrupted.
+     * destination and every category of the section is rewritten to a contiguous
+     * `0..n-1` sequence. Reindexing is what makes the move actually happen.
+     * Swapping only worked while the values were unique, and two categories
+     * sharing a value (which is exactly what the old `create()` produced) turned
+     * the swap into a no-op that still ran its UPDATEs. Rebuilding the sequence
+     * also heals any section that is already corrupted.
      *
-     * The offset is clamped to the bounds of the group, so calling this at
+     * The offset is clamped to the bounds of the section, so calling this at
      * either end of the list is a no-op rather than an error.
      */
-    public static function moveWithinSiblings(Category $category, int $offset): void
+    public static function moveWithinSection(Category $category, int $offset): void
     {
         DB::transaction(function () use ($category, $offset) {
-            $siblingIds = static::siblingIdsFor($category->parent_id);
+            $sectionIds = static::sectionIdsFor($category->section);
 
-            $currentIndex = array_search($category->id, $siblingIds, true);
+            $currentIndex = array_search($category->id, $sectionIds, true);
 
             if ($currentIndex === false) {
                 return;
             }
 
-            $targetIndex = max(0, min($currentIndex + $offset, count($siblingIds) - 1));
+            $targetIndex = max(0, min($currentIndex + $offset, count($sectionIds) - 1));
 
-            array_splice($siblingIds, $currentIndex, 1);
-            array_splice($siblingIds, $targetIndex, 0, [$category->id]);
+            array_splice($sectionIds, $currentIndex, 1);
+            array_splice($sectionIds, $targetIndex, 0, [$category->id]);
 
-            static::writeOrderSequence($siblingIds);
+            static::writeOrderSequence($sectionIds);
         });
     }
 
     /**
-     * Reindex every sibling group in the table, roots included.
+     * Reindex every section in the table.
      *
-     * This is the data repair counterpart of `moveWithinSiblings()`: it applies
+     * This is the data repair counterpart of `moveWithinSection()`: it applies
      * the same `orderBy('order')->orderBy('id')` ordering and the same
-     * contiguous `0..n-1` rewrite to every group, which removes the duplicate
+     * contiguous `0..n-1` rewrite to every section, which removes the duplicate
      * values that shipped before `order` started being assigned on create.
+     *
+     * The name still says "siblings" because the migration that repairs the old
+     * data calls it that way; what a sibling group is now is a store section.
      *
      * @return int the number of rows actually rewritten
      */
     public static function reindexAllSiblingGroups(): int
     {
-        $parentIds = static::query()
-            ->distinct()
-            ->pluck('parent_id');
+        // The historical migration that calls this runs before `section` exists,
+        // so on a fresh database the whole table is still one single group.
+        /** @var list<StoreSection|null> $sections */
+        $sections = Schema::hasColumn('categories', 'section')
+            ? static::query()->distinct()->pluck('section')
+                ->map(fn (mixed $section) => $section instanceof StoreSection
+                    ? $section
+                    : StoreSection::from((string) $section))
+                ->all()
+            : [null];
 
         $rewritten = 0;
 
-        DB::transaction(function () use ($parentIds, &$rewritten) {
-            foreach ($parentIds as $parentId) {
-                $rewritten += static::writeOrderSequence(static::siblingIdsFor($parentId));
+        DB::transaction(function () use ($sections, &$rewritten) {
+            foreach ($sections as $section) {
+                $rewritten += static::writeOrderSequence(static::sectionIdsFor($section));
             }
         });
 
@@ -150,30 +155,36 @@ class Category extends Model
     }
 
     /**
-     * The ids of a sibling group in display order, the same order `render()` uses.
+     * The ids of one section in display order, the same order `render()` uses.
      *
      * `id` breaks ties so the result is deterministic even when the stored
      * `order` values collide, which is the situation this reindexing exists to
-     * repair. Passing `null` returns the root group.
+     * repair.
+     *
+     * A `null` section reindexes the whole table, which is what the migration
+     * that predates `section` needs.
      *
      * @return list<int>
      */
-    private static function siblingIdsFor(?int $parentId): array
+    private static function sectionIdsFor(?StoreSection $section): array
     {
-        return static::query()
-            ->where('parent_id', $parentId)
+        $query = static::query()
             ->orderBy('order')
-            ->orderBy('id')
-            ->pluck('id')
-            ->all();
+            ->orderBy('id');
+
+        if ($section !== null) {
+            $query->inSection($section);
+        }
+
+        return $query->pluck('id')->all();
     }
 
     /**
-     * Write `order` = 0, 1, 2... n-1 for an ordered list of sibling ids.
+     * Write `order` = 0, 1, 2... n-1 for an ordered list of category ids.
      *
      * Rows already sitting at their target value are skipped, so a single move
      * only touches the rows that really changed instead of bumping `updated_at`
-     * across the whole group.
+     * across the whole section.
      *
      * @param  list<int>  $orderedIds
      * @return int the number of rows actually rewritten

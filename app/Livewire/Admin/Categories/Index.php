@@ -2,12 +2,14 @@
 
 namespace App\Livewire\Admin\Categories;
 
+use App\Enums\StoreSection;
 use App\Livewire\Concerns\Notifies;
 use App\Models\Category;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 #[Layout('layouts::admin')]
@@ -15,6 +17,16 @@ use Livewire\Component;
 class Index extends Component
 {
     use Notifies;
+
+    /**
+     * The section of the catalog being managed: `hombre`, `mujer` or `ninos`.
+     *
+     * It is part of the URL so that a tab can be shared, bookmarked or reached
+     * with the back button, and it is reset to `hombre` whenever it holds a value
+     * the enum does not know.
+     */
+    #[Url(as: 'seccion')]
+    public string $section = 'hombre';
 
     public string $search = '';
 
@@ -24,27 +36,28 @@ class Index extends Component
 
     public string $name = '';
 
-    public ?int $parentId = null;
-
     public string $skuPrefix = '';
 
-    /** @var list<int> */
-    public array $expanded = [];
+    /**
+     * Switch the section being managed, from the tab bar.
+     *
+     * A section that does not exist falls back to `hombre` instead of leaving the
+     * panel listing nothing, and the form is reset: it was opened for the
+     * category of another section, and the section a category belongs to never
+     * changes once it is created. Resetting the fields (not just hiding the
+     * modal) keeps a name typed in one section from reappearing in another.
+     */
+    public function setSection(string $section): void
+    {
+        $this->section = StoreSection::tryFrom($section)?->value ?? StoreSection::Hombre->value;
+
+        $this->resetForm();
+        $this->search = '';
+    }
 
     public function create(): void
     {
         $this->resetForm();
-        $this->showForm = true;
-    }
-
-    public function createSubcategory(Category $category): void
-    {
-        if ($category->parent_id !== null) {
-            return;
-        }
-
-        $this->resetForm();
-        $this->parentId = $category->id;
         $this->showForm = true;
     }
 
@@ -53,7 +66,6 @@ class Index extends Component
         $this->resetForm();
         $this->editingId = $category->id;
         $this->name = $category->name;
-        $this->parentId = $category->parent_id;
         $this->skuPrefix = $category->sku_prefix ?? '';
         $this->showForm = true;
     }
@@ -71,26 +83,17 @@ class Index extends Component
 
     public function save(): void
     {
-        $isRoot = $this->parentId === null;
-        $this->skuPrefix = $isRoot ? mb_strtoupper(trim($this->skuPrefix)) : '';
+        $this->skuPrefix = mb_strtoupper(trim($this->skuPrefix));
 
-        $rootIds = Category::query()
-            ->whereNull('parent_id')
-            ->when($this->editingId !== null, fn ($query) => $query->whereKeyNot($this->editingId))
-            ->pluck('id');
+        $section = $this->activeSection();
 
         $validated = $this->validate([
             'name' => ['required', 'max:255'],
-            'parentId' => ['nullable', 'integer', Rule::in($rootIds->all())],
-            'skuPrefix' => $isRoot
-                ? ['required', 'regex:/^[A-Z0-9]{2,4}$/', Rule::unique('categories', 'sku_prefix')->ignore($this->editingId)]
-                : ['nullable'],
+            'skuPrefix' => ['required', 'regex:/^[A-Z0-9]{2,4}$/', Rule::unique('categories', 'sku_prefix')->ignore($this->editingId)],
         ], [
             'name.required' => 'El nombre es obligatorio.',
             'name.max' => 'El nombre no puede superar los 255 caracteres.',
-            'parentId.integer' => 'La categoría padre seleccionada no es válida.',
-            'parentId.in' => 'Solo puedes elegir una categoría raíz como categoría padre.',
-            'skuPrefix.required' => 'El prefijo de SKU es obligatorio para las categorías raíz.',
+            'skuPrefix.required' => 'El prefijo de SKU es obligatorio.',
             'skuPrefix.regex' => 'Usa de 2 a 4 letras o números, sin espacios.',
             'skuPrefix.unique' => 'Ya existe otra categoría con ese prefijo.',
         ]);
@@ -104,7 +107,20 @@ class Index extends Component
             return;
         }
 
+        $duplicateName = Category::query()
+            ->where('section', $section->value)
+            ->where('name', $name)
+            ->when($this->editingId !== null, fn ($query) => $query->whereKeyNot($this->editingId))
+            ->exists();
+
+        if ($duplicateName) {
+            $this->addError('name', 'Ya existe una categoría con ese nombre en esta sección.');
+
+            return;
+        }
+
         $duplicateSlug = Category::query()
+            ->where('section', $section->value)
             ->where('slug', $slug)
             ->when($this->editingId !== null, fn ($query) => $query->whereKeyNot($this->editingId))
             ->exists();
@@ -119,8 +135,7 @@ class Index extends Component
             Category::query()->findOrFail($this->editingId)->update([
                 'name' => $name,
                 'slug' => $slug,
-                'parent_id' => $validated['parentId'],
-                'sku_prefix' => $isRoot ? $this->skuPrefix : null,
+                'sku_prefix' => $this->skuPrefix,
             ]);
 
             $this->notifySuccess('Categoría actualizada correctamente.');
@@ -128,9 +143,9 @@ class Index extends Component
             Category::create([
                 'name' => $name,
                 'slug' => $slug,
-                'parent_id' => $validated['parentId'],
-                'sku_prefix' => $isRoot ? $this->skuPrefix : null,
-                'order' => Category::nextOrderFor($validated['parentId']),
+                'section' => $section,
+                'sku_prefix' => $this->skuPrefix,
+                'order' => Category::nextOrderFor($section),
             ]);
 
             $this->notifySuccess('Categoría creada correctamente.');
@@ -152,22 +167,9 @@ class Index extends Component
             return;
         }
 
-        if ($category->children()->exists()) {
-            $this->notifyError("No se puede eliminar «{$category->name}» porque tiene subcategorías. Primero elimina sus subcategorías.");
-
-            return;
-        }
-
         $category->delete();
 
         $this->notifySuccess("Categoría «{$category->name}» eliminada correctamente.");
-    }
-
-    public function toggleExpanded(int $categoryId): void
-    {
-        $this->expanded = in_array($categoryId, $this->expanded, true)
-            ? array_values(array_diff($this->expanded, [$categoryId]))
-            : [...$this->expanded, $categoryId];
     }
 
     public function moveUp(int $categoryId): void
@@ -175,7 +177,7 @@ class Index extends Component
         $category = Category::query()->findOrFail($categoryId);
 
         $previous = Category::query()
-            ->where('parent_id', $category->parent_id)
+            ->inSection($category->section)
             ->where(function ($query) use ($category) {
                 $query->where('order', '<', $category->order)
                     ->orWhere(function ($query) use ($category) {
@@ -187,7 +189,7 @@ class Index extends Component
             ->first();
 
         if ($previous !== null) {
-            Category::moveWithinSiblings($category, -1);
+            Category::moveWithinSection($category, -1);
             $this->dispatch('category-moved', id: $category->id);
         }
     }
@@ -197,7 +199,7 @@ class Index extends Component
         $category = Category::query()->findOrFail($categoryId);
 
         $next = Category::query()
-            ->where('parent_id', $category->parent_id)
+            ->inSection($category->section)
             ->where(function ($query) use ($category) {
                 $query->where('order', '>', $category->order)
                     ->orWhere(function ($query) use ($category) {
@@ -209,65 +211,51 @@ class Index extends Component
             ->first();
 
         if ($next !== null) {
-            Category::moveWithinSiblings($category, 1);
+            Category::moveWithinSection($category, 1);
             $this->dispatch('category-moved', id: $category->id);
         }
     }
 
     public function render()
     {
+        $section = $this->activeSection();
+
         $search = mb_strtolower(trim($this->search));
         $searching = $search !== '';
-        $matches = fn (Category $category): bool => str_contains(mb_strtolower($category->name), $search);
 
-        $categories = Category::query()->orderBy('order')->orderBy('id')->get();
+        $categories = Category::query()
+            ->inSection($section)
+            ->orderBy('order')
+            ->orderBy('id')
+            ->get();
 
-        $roots = $categories->whereNull('parent_id')->values();
-        $rootCount = $roots->count();
+        $visible = $searching
+            ? $categories->filter(fn (Category $category): bool => str_contains(mb_strtolower($category->name), $search))->values()
+            : $categories->values();
 
-        $nodes = $roots->map(function (Category $root, int $rootIndex) use ($categories, $searching, $matches, $rootCount) {
-            $children = $categories->where('parent_id', $root->id)->values();
-            $childCount = $children->count();
+        $count = $visible->count();
 
-            $childrenNodes = $children->map(function (Category $child, int $childIndex) use ($childCount, $matches) {
-                return [
-                    'category' => $child,
-                    'isFirst' => $childIndex === 0,
-                    'isLast' => $childIndex === $childCount - 1,
-                    'matches' => $matches($child),
-                ];
-            });
-
-            $rootMatches = $matches($root);
-            $matchingCount = $childrenNodes->filter(fn (array $childNode) => $childNode['matches'])->count();
-
-            return [
-                'category' => $root,
-                'isFirst' => $rootIndex === 0,
-                'isLast' => $rootIndex === $rootCount - 1,
-                'expanded' => in_array($root->id, $this->expanded, true)
-                    || ($searching && ($rootMatches || $matchingCount > 0)),
-                'searching' => $searching,
-                'rootMatches' => $rootMatches,
-                'hasMatch' => $rootMatches || $matchingCount > 0,
-                'visible' => ! $searching || $rootMatches || $matchingCount > 0,
-                'children' => $childrenNodes,
-            ];
-        })
-            ->filter(fn (array $node) => $node['visible'])
-            ->values();
+        $rows = $visible->map(fn (Category $category, int $index): array => [
+            'category' => $category,
+            'isFirst' => $index === 0,
+            'isLast' => $index === $count - 1,
+        ]);
 
         return view('livewire.admin.categories.index', [
-            'nodes' => $nodes,
-            'parentOptions' => $this->showForm
-                ? Category::query()
-                    ->whereNull('parent_id')
-                    ->when($this->editingId !== null, fn ($query) => $query->whereKeyNot($this->editingId))
-                    ->orderBy('order')
-                    ->orderBy('id')
-                    ->get()
-                : collect(),
+            // La clave no se llama `section` a propósito: ese es el nombre de la
+            // propiedad pública (un string), y ensombrecerla con el enum aquí
+            // haría que la vista reciba el string en vez de la sección resuelta.
+            'activeSection' => $section,
+            'rows' => $rows,
         ]);
+    }
+
+    /**
+     * The section being managed, resolved from the URL value.
+     */
+    private function activeSection(): StoreSection
+    {
+        return StoreSection::tryFrom($this->section) ?? StoreSection::Hombre;
     }
 
     private function resetForm(): void
@@ -275,7 +263,6 @@ class Index extends Component
         $this->showForm = false;
         $this->editingId = null;
         $this->name = '';
-        $this->parentId = null;
         $this->skuPrefix = '';
         $this->resetValidation();
     }

@@ -19,7 +19,8 @@
 import collapse from '@alpinejs/collapse';
 
 document.addEventListener('alpine:init', () => {
-    // `x-collapse` anima la altura de un elemento que lleva `x-show`, y es lo que
-    // usa el desplegable de subcategorías (`x-collapse.duration.250ms`).
+    // `x-collapse` anima la altura de un elemento que lleva `x-show`. Hoy el panel
+    // no lo usa en ninguna vista: se deja registrado para que los módulos que
+    // necesiten desplegables animen su altura sin tener que importar nada.
     Alpine.plugin(collapse);
 });

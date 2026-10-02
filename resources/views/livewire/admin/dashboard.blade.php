@@ -20,7 +20,7 @@
         >
             <span class="inline-block h-px w-8 bg-wood transition-[width] duration-200 ease-in-out group-hover:w-12" aria-hidden="true"></span>
             <span class="mt-4 block font-display text-xl font-semibold text-brand-green">Categorías</span>
-            <span class="mt-2 block text-sm text-clay">Organiza el catálogo en categorías y subcategorías.</span>
+            <span class="mt-2 block text-sm text-clay">Organiza el catálogo por secciones.</span>
         </a>
 
         <a

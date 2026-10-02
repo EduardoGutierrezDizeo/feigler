@@ -60,17 +60,6 @@
     </div>
 
     <div class="col-span-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm sm:gap-x-4 md:col-span-1 md:justify-end">
-        @if ($category->parent_id === null)
-            <button
-                type="button"
-                wire:click="createSubcategory({{ $category->id }})"
-                class="whitespace-nowrap font-medium text-gris-calido transition-colors duration-150 ease-in-out hover:text-verde active:opacity-80"
-            >
-                <span class="sm:hidden">+ Subcategoría</span>
-                <span class="hidden sm:inline">Agregar subcategoría</span>
-            </button>
-        @endif
-
         <button
             type="button"
             wire:click="edit({{ $category->id }})"

@@ -1,7 +1,7 @@
 <?php
 
+use App\Enums\StoreSection;
 use App\Exceptions\InsufficientStockException;
-use App\Exceptions\MissingSkuPrefixException;
 use App\Models\Category;
 use App\Models\Color;
 use App\Models\InventoryMovement;
@@ -11,14 +11,14 @@ use App\Models\ProductVariant;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
-function rootCategory(string $skuPrefix, string $name = 'Prenda'): Category
+function categoryWithPrefix(string $skuPrefix, string $name = 'Prenda'): Category
 {
     return Category::factory()->create(['name' => $name, 'sku_prefix' => $skuPrefix]);
 }
 
 test('products are numbered in their own series per prefix', function () {
-    $camisetas = rootCategory('CM', 'Camisetas');
-    $polos = rootCategory('PL', 'Polos');
+    $camisetas = categoryWithPrefix('CM', 'Camisetas');
+    $polos = categoryWithPrefix('PL', 'Polos');
 
     $primera = Product::factory()->for($camisetas)->create();
     $segunda = Product::factory()->for($camisetas)->create();
@@ -30,7 +30,7 @@ test('products are numbered in their own series per prefix', function () {
 });
 
 test('the counter keeps counting past three digits', function () {
-    $polos = rootCategory('PL', 'Polos');
+    $polos = categoryWithPrefix('PL', 'Polos');
 
     Product::factory()->for($polos)->create(['reference' => 'PL-998']);
     Product::factory()->for($polos)->create(['reference' => 'PL-999']);
@@ -40,7 +40,7 @@ test('the counter keeps counting past three digits', function () {
 });
 
 test('a reference in another format is left out of the count', function () {
-    $polos = rootCategory('PL', 'Polos');
+    $polos = categoryWithPrefix('PL', 'Polos');
 
     Product::factory()->for($polos)->create(['reference' => 'PL-ABC']);
     $siguiente = Product::factory()->for($polos)->create(['reference' => 'PL-007']);
@@ -49,20 +49,36 @@ test('a reference in another format is left out of the count', function () {
         ->and(Product::nextReferenceFor($polos))->toBe('PL-008');
 });
 
-test('a subcategory borrows the prefix of its root', function () {
-    $raiz = rootCategory('CM', 'Camisetas');
-    $hija = Category::factory()->for($raiz, 'parent')->create(['name' => 'Manga corta']);
+test('a prefix that starts like another one does not steal its series', function () {
+    // `PL` es el prefijo viejo del catálogo y `PLH` el nuevo de los polos de hombre:
+    // uno es prefijo del otro, así que la búsqueda de referencias tiene que exigir
+    // el guion justo detrás del prefijo y no solo el comienzo.
+    $polosViejos = categoryWithPrefix('PL', 'Polos');
+    $polosHombre = categoryWithPrefix('PLH', 'Polos de hombre');
 
-    $producto = Product::factory()->for($hija)->create();
+    Product::factory()->for($polosViejos)->create(['reference' => 'PL-001']);
+    Product::factory()->for($polosViejos)->create(['reference' => 'PL-002']);
 
-    expect($hija->sku_prefix)->toBeNull()
-        ->and($producto->reference)->toBe('CM-001')
-        ->and(Product::nextReferenceFor($hija))->toBe('CM-002');
+    expect(Product::nextReferenceFor($polosHombre))->toBe('PLH-001')
+        ->and(Product::factory()->for($polosHombre)->create()->reference)->toBe('PLH-001')
+        ->and(Product::factory()->for($polosHombre)->create()->reference)->toBe('PLH-002')
+        ->and(Product::nextReferenceFor($polosViejos))->toBe('PL-003');
+});
+
+test('a product takes the section of its category', function () {
+    $polosHombre = categoryWithPrefix('PLH', 'Polos de hombre');
+    $polosMujer = Category::factory()->section(StoreSection::Mujer)->create(['name' => 'Polos', 'sku_prefix' => 'PLM']);
+
+    $hombre = Product::factory()->for($polosHombre)->create();
+    $mujer = Product::factory()->for($polosMujer)->create();
+
+    expect($hombre->section)->toBe(StoreSection::Hombre)
+        ->and($mujer->section)->toBe(StoreSection::Mujer);
 });
 
 test('a product keeps its reference when its category changes', function () {
-    $camisetas = rootCategory('CM', 'Camisetas');
-    $polos = rootCategory('PL', 'Polos');
+    $camisetas = categoryWithPrefix('CM', 'Camisetas');
+    $polos = categoryWithPrefix('PL', 'Polos');
     $producto = Product::factory()->for($camisetas)->create();
 
     $producto->update(['category_id' => $polos->id]);
@@ -70,15 +86,8 @@ test('a product keeps its reference when its category changes', function () {
     expect($producto->refresh()->reference)->toBe('CM-001');
 });
 
-test('a product cannot be created when its root category has no sku prefix', function () {
-    $raiz = Category::factory()->create(['name' => 'Sin prefijo', 'sku_prefix' => null]);
-
-    expect(fn () => Product::factory()->for($raiz)->create())
-        ->toThrow(MissingSkuPrefixException::class, 'La categoría «Sin prefijo» no tiene prefijo de SKU. Asígnalo en Categorías antes de crear productos.');
-});
-
 test('the sku of a variant is the reference, the size and the color code', function () {
-    $product = Product::factory()->for(rootCategory('PL', 'Polos'))->create();
+    $product = Product::factory()->for(categoryWithPrefix('PL', 'Polos'))->create();
     $color = Color::factory()->create(['code' => 'AZU']);
 
     expect(ProductVariant::makeSku($product, 'M', $color))->toBe('PL-001-M-AZU')
@@ -88,7 +97,7 @@ test('the sku of a variant is the reference, the size and the color code', funct
 });
 
 test('a sku cannot be built for a product without a reference', function (?string $reference) {
-    $product = Product::factory()->for(rootCategory('PL', 'Polos'))->create(['name' => 'Polo Clásico']);
+    $product = Product::factory()->for(categoryWithPrefix('PL', 'Polos'))->create(['name' => 'Polo Clásico']);
     $color = Color::factory()->create(['code' => 'AZU']);
 
     DB::table('products')->where('id', $product->id)->update(['reference' => $reference]);
@@ -154,7 +163,7 @@ test('a movement needs a quantity greater than zero', function () {
 });
 
 test('the displayed status is computed instead of stored', function () {
-    $category = rootCategory('PL', 'Polos');
+    $category = categoryWithPrefix('PL', 'Polos');
     $color = Color::factory()->create();
 
     $inactivo = Product::factory()->for($category)->inactive()->create();
@@ -179,7 +188,7 @@ test('the displayed status is computed instead of stored', function () {
 });
 
 test('the displayed status reads the loaded variants instead of querying them', function () {
-    $category = rootCategory('PL', 'Polos');
+    $category = categoryWithPrefix('PL', 'Polos');
 
     $inactivo = Product::factory()->for($category)->inactive()->create();
     $sinVariantes = Product::factory()->for($category)->create();

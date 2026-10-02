@@ -2,7 +2,7 @@
 
 namespace App\Livewire\Admin\Products;
 
-use App\Exceptions\MissingSkuPrefixException;
+use App\Enums\StoreSection;
 use App\Livewire\Concerns\Notifies;
 use App\Models\Category;
 use App\Models\Product;
@@ -12,6 +12,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 #[Layout('layouts::admin')]
@@ -40,6 +41,16 @@ class Index extends Component
     private const DEFAULT_BRAND = 'Feigler';
 
     public const PAGE_SIZE = 20;
+
+    /**
+     * The section of the catalog being managed: `hombre`, `mujer` or `ninos`.
+     *
+     * It is part of the URL so that a tab can be shared, bookmarked or reached
+     * with the back button, and it is reset to `hombre` whenever it holds a value
+     * the enum does not know.
+     */
+    #[Url(as: 'seccion')]
+    public string $section = 'hombre';
 
     public string $search = '';
 
@@ -72,6 +83,24 @@ class Index extends Component
      * assigned once, when the product is created, and its SKUs are built from it.
      */
     public ?string $editingReference = null;
+
+    /**
+     * Switch the section being managed, from the tab bar.
+     *
+     * A section that does not exist falls back to `hombre` instead of leaving the
+     * panel listing nothing, and the form is dismissed: it was opened for the
+     * product of another section, and a product never moves between sections.
+     * Every filter is cleared along with the page size, because a category from
+     * the section being left would otherwise filter the new section down to
+     * nothing.
+     */
+    public function setSection(string $section): void
+    {
+        $this->section = StoreSection::tryFrom($section)?->value ?? StoreSection::Hombre->value;
+
+        $this->closeForm();
+        $this->clearFilters();
+    }
 
     public function create(): void
     {
@@ -111,9 +140,18 @@ class Index extends Component
             $this->editingId = (int) $this->editingId;
         }
 
+        // A product stays in the section it was created in, so the section to
+        // accept is read from the product when editing and from the open tab when
+        // creating. Either way the chosen category has to belong to it.
+        $section = $this->sectionForTheForm();
+
         $validated = $this->validate([
             'name' => ['required', 'max:255'],
-            'categoryId' => ['required', 'integer', Rule::exists('categories', 'id')],
+            'categoryId' => [
+                'required',
+                'integer',
+                Rule::exists('categories', 'id')->where('section', $section->value),
+            ],
             'description' => ['nullable', 'max:2000'],
             'brand' => ['nullable', 'max:100'],
             'material' => ['nullable', 'max:100'],
@@ -124,7 +162,7 @@ class Index extends Component
             'name.max' => 'El nombre no puede superar los 255 caracteres.',
             'categoryId.required' => 'Selecciona una categoría.',
             'categoryId.integer' => 'La categoría seleccionada no es válida.',
-            'categoryId.exists' => 'La categoría seleccionada no existe.',
+            'categoryId.exists' => 'La categoría seleccionada no existe en esta sección.',
             'description.max' => 'La descripción no puede superar los 2000 caracteres.',
             'brand.max' => 'La marca no puede superar los 100 caracteres.',
             'material.max' => 'El material no puede superar los 100 caracteres.',
@@ -188,9 +226,13 @@ class Index extends Component
 
     public function render()
     {
+        $section = $this->activeSection();
         $search = mb_strtolower(trim($this->search));
 
         $query = Product::query()
+            // La sección se resuelve en SQL, con un `where` sobre la categoría: el
+            // listado entero sale de una consulta y leer más filas no cuesta más.
+            ->whereHas('category', fn (Builder $query): Builder => $query->where('section', $section->value))
             ->when($search !== '', function (Builder $query) use ($search): void {
                 $query->where(fn (Builder $query) => $query
                     ->whereRaw('LOWER(name) LIKE ?', ["%{$search}%"])
@@ -210,17 +252,33 @@ class Index extends Component
             ->limit($this->perPage)
             ->get();
 
-        $categories = Category::query()->orderBy('order')->orderBy('id')->get();
-        $roots = $categories->whereNull('parent_id')->values();
+        $categories = Category::query()
+            ->inSection($section)
+            ->orderBy('order')
+            ->orderBy('id')
+            ->get();
+
+        // El formulario trabaja en la sección del producto cuando se edita, que
+        // puede no ser la de la pestaña. Solo entonces hace falta una segunda
+        // consulta; si es la misma, se reutiliza la del filtro.
+        $formSection = $this->sectionForTheForm();
+        $formCategories = $formSection === $section
+            ? $categories
+            : Category::query()
+                ->inSection($formSection)
+                ->orderBy('order')
+                ->orderBy('id')
+                ->get();
 
         return view('livewire.admin.products.index', [
+            // Ver `Admin\Categories\Index::render()`: la clave evita ensombrecer
+            // la propiedad pública `section`, que es un string.
+            'activeSection' => $section,
             'products' => $products,
             'remaining' => max(0, $total - $products->count()),
-            'categoryGroups' => $roots->map(fn (Category $root): array => [
-                'root' => $root,
-                'children' => $categories->where('parent_id', $root->id)->values(),
-                'numbered' => filled($root->sku_prefix),
-            ]),
+            'categories' => $categories,
+            'formSection' => $formSection,
+            'formCategories' => $formCategories,
             'statusFilters' => self::STATUS_FILTERS,
         ]);
     }
@@ -233,18 +291,6 @@ class Index extends Component
     private function update(Category $category, array $validated): void
     {
         $product = Product::query()->findOrFail($this->editingId);
-
-        // A product that stays in its category does not have to answer the prefix
-        // question again: it already got a reference from that very category.
-        if ($product->category_id !== $category->getKey()) {
-            try {
-                $this->ensureCategoryIsNumberable($category);
-            } catch (MissingSkuPrefixException $exception) {
-                $this->addError('categoryId', $exception->getMessage());
-
-                return;
-            }
-        }
 
         $product->update([
             'name' => trim($validated['name']),
@@ -274,24 +320,18 @@ class Index extends Component
             return;
         }
 
-        try {
-            DB::transaction(function () use ($category, $validated, $slug): void {
-                Product::create([
-                    'category_id' => $category->getKey(),
-                    'name' => trim($validated['name']),
-                    'slug' => $slug,
-                    'description' => $validated['description'] !== null ? trim($validated['description']) : null,
-                    'brand' => $this->brandOrDefault($validated['brand']),
-                    'material' => $validated['material'] !== null ? trim($validated['material']) : null,
-                    'base_price' => $validated['basePrice'],
-                    'status' => $validated['status'],
-                ]);
-            });
-        } catch (MissingSkuPrefixException $exception) {
-            $this->addError('categoryId', $exception->getMessage());
-
-            return;
-        }
+        DB::transaction(function () use ($category, $validated, $slug): void {
+            Product::create([
+                'category_id' => $category->getKey(),
+                'name' => trim($validated['name']),
+                'slug' => $slug,
+                'description' => $validated['description'] !== null ? trim($validated['description']) : null,
+                'brand' => $this->brandOrDefault($validated['brand']),
+                'material' => $validated['material'] !== null ? trim($validated['material']) : null,
+                'base_price' => $validated['basePrice'],
+                'status' => $validated['status'],
+            ]);
+        });
 
         $this->notifySuccess('Producto creado correctamente.');
         $this->resetForm();
@@ -334,39 +374,9 @@ class Index extends Component
         return $slug;
     }
 
-    /**
-     * The category (or its root) has to be able to number a product, which it can
-     * only do if the root carries a SKU prefix.
-     *
-     * @throws MissingSkuPrefixException
-     */
-    private function ensureCategoryIsNumberable(Category $category): void
-    {
-        $root = $category->parent_id !== null ? $category->parent : $category;
-
-        if (blank($root?->sku_prefix)) {
-            throw MissingSkuPrefixException::forCategory($root ?? $category);
-        }
-    }
-
-    /**
-     * Choosing a root also brings in its subcategories: they are numbered in the
-     * same series, so from the store's point of view they are the same family of
-     * products and filtering by the family should not hide half of it.
-     */
     private function applyCategoryFilter(Builder $query): void
     {
-        $category = Category::query()->find((int) $this->categoryFilter);
-
-        if ($category === null) {
-            return;
-        }
-
-        $ids = $category->parent_id === null
-            ? $category->children()->pluck('id')->push($category->getKey())
-            : collect([$category->getKey()]);
-
-        $query->whereIn('category_id', $ids->all());
+        $query->where('category_id', (int) $this->categoryFilter);
     }
 
     /**
@@ -398,6 +408,27 @@ class Index extends Component
                 ->whereHas('variants', fn (Builder $variants): Builder => $activeStock($variants)->havingRaw('stock_total > 0')),
             default => null,
         };
+    }
+
+    /**
+     * The section being managed, resolved from the URL value.
+     */
+    private function activeSection(): StoreSection
+    {
+        return StoreSection::tryFrom($this->section) ?? StoreSection::Hombre;
+    }
+
+    /**
+     * The section the open form works in: the product's own when editing, and the
+     * open tab when creating.
+     */
+    private function sectionForTheForm(): StoreSection
+    {
+        if ($this->editingId === null) {
+            return $this->activeSection();
+        }
+
+        return Product::query()->find($this->editingId)?->category?->section ?? $this->activeSection();
     }
 
     private function resetPage(): void
