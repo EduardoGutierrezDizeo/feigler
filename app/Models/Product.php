@@ -180,6 +180,11 @@ class Product extends Model
      * when the stock runs out, and a stored copy would go stale the moment a
      * movement is recorded. A stored `out_of_stock` is ignored on purpose, since
      * those are rows written before the status became computed.
+     *
+     * The variant count is read from the `variants` relation whenever it is already
+     * loaded, and only falls back to a query when it is not. A listing eager-loads
+     * the relation to read `stock_total`, so asking the database again here would
+     * put one query per row back into a table that had none.
      */
     protected function displayStatus(): Attribute
     {
@@ -188,7 +193,11 @@ class Product extends Model
                 return 'inactive';
             }
 
-            if (! $this->variants()->exists()) {
+            $hasVariants = $this->relationLoaded('variants')
+                ? $this->variants->isNotEmpty()
+                : $this->variants()->exists();
+
+            if (! $hasVariants) {
                 return 'no_variants';
             }
 

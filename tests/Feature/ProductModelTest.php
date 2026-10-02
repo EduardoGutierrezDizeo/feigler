@@ -178,6 +178,53 @@ test('the displayed status is computed instead of stored', function () {
         ->and($legacy->display_status)->toBe('active');
 });
 
+test('the displayed status reads the loaded variants instead of querying them', function () {
+    $category = rootCategory('PL', 'Polos');
+
+    $inactivo = Product::factory()->for($category)->inactive()->create();
+    $sinVariantes = Product::factory()->for($category)->create();
+    $agotado = Product::factory()->for($category)->create();
+    ProductVariant::factory()->for($agotado)->create(['stock' => 0]);
+    $soloVarianteInactiva = Product::factory()->for($category)->create();
+    ProductVariant::factory()->for($soloVarianteInactiva)->inactive()->create(['stock' => 9]);
+    $disponible = Product::factory()->for($category)->create();
+    ProductVariant::factory()->for($disponible)->create(['stock' => 4]);
+
+    $ids = collect([$inactivo, $sinVariantes, $agotado, $soloVarianteInactiva, $disponible])
+        ->map(fn (Product $product): int => $product->id)
+        ->all();
+
+    // Con la relación cargada: los cuatro estados se resuelven sin tocar la base de
+    // datos, porque `variants` ya está en memoria para `stock_total` y para el recuento.
+    $cargados = Product::query()->with('variants')->whereKey($ids)->get();
+
+    DB::connection()->flushQueryLog();
+    DB::connection()->enableQueryLog();
+
+    $estadosCargados = $cargados
+        ->mapWithKeys(fn (Product $product): array => [$product->id => $product->display_status])
+        ->all();
+
+    $consultas = count(DB::connection()->getQueryLog());
+
+    DB::connection()->disableQueryLog();
+
+    // Sin cargar: el accessor cae a la consulta, pero el resultado es el mismo.
+    $estadosSinCargar = Product::query()->whereKey($ids)->get()
+        ->mapWithKeys(fn (Product $product): array => [$product->id => $product->display_status])
+        ->all();
+
+    expect($estadosSinCargar)->toBe([
+        $inactivo->id => 'inactive',
+        $sinVariantes->id => 'no_variants',
+        $agotado->id => 'out_of_stock',
+        $soloVarianteInactiva->id => 'out_of_stock',
+        $disponible->id => 'active',
+    ])
+        ->and($estadosCargados)->toBe($estadosSinCargar)
+        ->and($consultas)->toBe(0);
+});
+
 test('the total stock leaves out the inactive variants', function () {
     $product = Product::factory()->create();
 
