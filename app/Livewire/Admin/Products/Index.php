@@ -37,6 +37,8 @@ class Index extends Component
      */
     public const STATUS_FILTERS = ['active', 'inactive', 'out_of_stock', 'no_variants'];
 
+    private const DEFAULT_BRAND = 'Feigler';
+
     public const PAGE_SIZE = 20;
 
     public string $search = '';
@@ -303,7 +305,7 @@ class Index extends Component
     {
         $brand = $brand !== null ? trim($brand) : '';
 
-        return $brand !== '' ? $brand : 'Feigler';
+        return $brand !== '' ? $brand : self::DEFAULT_BRAND;
     }
 
     /**
@@ -411,7 +413,7 @@ class Index extends Component
         $this->name = '';
         $this->categoryId = null;
         $this->description = '';
-        $this->brand = '';
+        $this->brand = self::DEFAULT_BRAND;
         $this->material = '';
         $this->basePrice = '';
         $this->status = 'active';

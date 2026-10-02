@@ -343,7 +343,7 @@
                             wire:model="brand"
                             type="text"
                             class="mt-1 block w-full"
-                            placeholder="Feigler"
+                            placeholder="Ej. Feigler"
                         />
                         <x-input-error :messages="$errors->get('brand')" class="mt-2" />
                     </div>
