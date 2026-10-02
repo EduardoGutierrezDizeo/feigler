@@ -1,9 +1,9 @@
 <x-guest-layout>
-    <h1 class="font-display text-3xl font-semibold text-brand-green">
+    <h1 class="font-display text-3xl font-semibold text-tinta">
         {{ __('Reset Password') }}
     </h1>
 
-    <p class="mt-1 text-sm text-clay">
+    <p class="mt-1 text-sm text-gris-calido">
         Elige una contraseña nueva para tu cuenta
     </p>
 

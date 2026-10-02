@@ -1,18 +1,18 @@
 <x-app-layout>
     <x-slot name="header">
-        <h2 class="font-display text-2xl font-semibold leading-tight text-brand-green">
+        <h2 class="font-display text-2xl font-semibold leading-tight text-tinta">
             Bienvenido, {{ Auth::user()->name }}
         </h2>
     </x-slot>
 
     <div class="py-12">
         <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div class="max-w-2xl border-l-2 border-wood/70 pl-6">
-                <p class="font-display text-2xl font-semibold text-brand-green">
+            <div class="max-w-2xl border-l-2 border-madera/70 pl-6">
+                <p class="font-display text-2xl font-semibold text-tinta">
                     Tu módulo de {{ $module }}
                 </p>
 
-                <p class="mt-3 text-base text-clay">
+                <p class="mt-3 text-base text-gris-calido">
                     Estará disponible pronto.
                 </p>
 

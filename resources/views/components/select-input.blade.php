@@ -1,8 +1,11 @@
-@props(['disabled' => false])
+@props(['disabled' => false, 'variant' => 'field'])
 
-{{-- Same focus treatment as `x-text-input`, so every field in the interface
-     signals focus the same way. Used by the selects that previously inlined the
-     ring utilities in each view. --}}
-<select @disabled($disabled) {{ $attributes->merge(['class' => 'rounded-md border-sand bg-cream text-sm text-charcoal transition-[border-color,box-shadow] duration-150 ease-in-out focus:border-brand-green focus:ring-2 focus:ring-brand-green/25']) }}>
+@php
+    $classes = $variant === 'pill'
+        ? 'rounded-full border border-arena bg-crema py-2.5 ps-5 pe-10 text-sm text-tinta shadow-none focus:border-laton focus:ring-1 focus:ring-laton'
+        : 'rounded-none border-0 border-b border-arena bg-transparent px-0 py-2 pe-8 text-sm text-tinta shadow-none focus:border-verde focus:outline-none focus:ring-0';
+@endphp
+
+<select @disabled($disabled) {{ $attributes->merge(['class' => $classes]) }}>
     {{ $slot }}
 </select>

@@ -1,7 +1,11 @@
-@props(['disabled' => false])
+@props(['disabled' => false, 'variant' => 'field'])
 
-{{-- The border colour and the ring are animated so the focus state arrives as a
-     soft fade instead of a snap. `focus:ring-2` over a translucent colour keeps
-     the ring discreet while still satisfying the 3:1 focus indicator ratio
-     against the cream surface. --}}
-<input @disabled($disabled) {{ $attributes->merge(['class' => 'rounded-md border-sand bg-cream text-charcoal transition-[border-color,box-shadow] duration-150 ease-in-out placeholder:text-clay focus:border-brand-green focus:ring-2 focus:ring-brand-green/25']) }}>
+{{-- `field` (por defecto): campo de formulario con solo filete inferior.
+     `pill`: píldora para buscadores y filtros. --}}
+@php
+    $classes = $variant === 'pill'
+        ? 'rounded-full border border-arena bg-crema px-5 py-2.5 text-sm text-tinta placeholder:text-gris-calido/70 shadow-none focus:border-laton focus:ring-1 focus:ring-laton'
+        : 'rounded-none border-0 border-b border-arena bg-transparent px-0 py-2 text-sm text-tinta placeholder:text-gris-calido/70 shadow-none focus:border-verde focus:outline-none focus:ring-0';
+@endphp
+
+<input @disabled($disabled) {{ $attributes->merge(['class' => $classes]) }}>

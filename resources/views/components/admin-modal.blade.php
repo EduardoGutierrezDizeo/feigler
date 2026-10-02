@@ -4,43 +4,16 @@
     'maxWidth' => 'sm:max-w-lg',
 ])
 
-{{-- Único patrón de modal para los formularios del panel admin (categorías,
-     subcategorías y usuarios), para que su overlay y su tamaño no dependan del
-     alto del contenido ni de la página.
+{{-- Único patrón de modal del panel admin (categorías, subcategorías y usuarios).
 
-     - Contenedor `fixed inset-0`: siempre el viewport completo, sin importar el
-       scroll ni el tamaño de la lista que hay detrás.
-     - Overlay `absolute inset-0`: vive dentro de ese mismo contenedor, así que
-       queda anclado al viewport y no puede quedar por debajo de la cabecera.
-     - Tarjeta centrada con `max-h-[90vh]` y `flex flex-col`: el alto lo decide el
-       viewport, no el contenido.
-     - Cuerpo con `min-h-0 flex-1 overflow-y-auto`: el `min-h-0` es obligatorio
-       (sin él, un ítem flex mantiene `min-height: auto`, la tarjeta no baja de
-       `max-h` y el scroll acaba en la página completa en vez de dentro).
-
-     Ojo: ningún ancestro de este componente puede tener un `transform`
-     distinto de `none`, o el `fixed inset-0` se resolvería contra esa caja.
-     Ver el comentario de `<main>` en `layouts/admin.blade.php`.
-
-     El nodo NO se monta ni se desmonta: las vistas de Livewire lo renderizan
-     siempre y la visibilidad la gobierna Alpine con `x-show="$data.open"`,
-     enlazado a la propiedad `showForm` del componente padre mediante
-     `Alpine.data('adminModal')`. Por eso el cierre puede animarse: si el modal
-     viviera dentro de un `@if ($showForm)`, el servidor borraría el nodo en el
-     mismo instante en que `showForm` pasa a `false` y no quedaría nada que
-     transicionar.
-
-     `$wire` se pasa como argumento (`adminModal($wire)`) porque
-     `$wire.entangle()` no devuelve el valor de la propiedad, sino un interceptor
-     de Alpine que solo se activa si está en el objeto de `x-data` cuando Alpine
-     lo recorre, y ese recorrido es anterior a `init()`. Ver la nota de
-     `resources/js/alpine/admin-modal.js`.
-
-     `x-show` y `x-transition` van en el MISMO elemento (overlay y tarjeta) a
-     propósito: Alpine solo interpola la visibilidad de un elemento si él mismo
-     declara la transición. El contenedor, en cambio, no lleva `x-show` sino
-     `pointer-events-none`, para que la capa no siga interceptando los clics de
-     la página una vez cerrado el modal. --}}
+     Invariantes que no se deben tocar:
+     - Contenedor `fixed inset-0`: siempre el viewport completo. Ningún ancestro puede tener
+       un `transform` distinto de `none` (ver el comentario de `<main>` en layouts/admin).
+     - El nodo nunca se monta ni se desmonta: Alpine gobierna la visibilidad con
+       `x-show="$data.open"` (enlazado a `showForm` mediante `adminModal($wire)`), así el
+       cierre puede animarse. `x-show` y `x-transition` van en el MISMO elemento.
+     - El contenedor lleva `pointer-events-none` para no interceptar clics al cerrarse.
+     - Cuerpo con `min-h-0 flex-1 overflow-y-auto`: sin `min-h-0` el scroll acaba en la página. --}}
 <div
     x-data="adminModal($wire)"
     class="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
@@ -48,7 +21,7 @@
     <div
         x-cloak
         x-show="$data.open"
-        class="pointer-events-auto absolute inset-0 bg-charcoal/40"
+        class="pointer-events-auto absolute inset-0 bg-tinta/40"
         wire:click="closeForm"
         aria-hidden="true"
         x-transition:enter="duration-[350ms] ease-out"
@@ -67,7 +40,7 @@
         aria-labelledby="{{ $titleId }}"
         x-on:keydown.escape.window="$data.open && close()"
         x-on:keydown.tab="trap($event)"
-        class="pointer-events-auto relative flex max-h-[90vh] w-full {{ $maxWidth }} flex-col overflow-hidden rounded-xl border border-sand bg-parchment shadow-xl"
+        class="pointer-events-auto relative flex max-h-[90vh] w-full {{ $maxWidth }} flex-col overflow-hidden rounded-2xl border border-arena bg-crema shadow-[0_28px_56px_-28px_rgb(30_27_24/0.5)]"
         x-transition:enter="duration-[350ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
         x-transition:enter-start="translate-y-3 scale-[0.96] opacity-0"
         x-transition:enter-end="translate-y-0 scale-100 opacity-100"
@@ -75,15 +48,18 @@
         x-transition:leave-start="translate-y-0 scale-100 opacity-100"
         x-transition:leave-end="translate-y-3 scale-[0.96] opacity-0"
     >
-        <div class="flex shrink-0 items-center justify-between gap-3 border-b border-sand px-6 py-4">
-            <h2 id="{{ $titleId }}" class="font-display text-xl font-semibold text-brand-green">
+        {{-- Filete de latón superior: el único adorno del modal. --}}
+        <div class="h-0.5 shrink-0 bg-laton-degradado" aria-hidden="true"></div>
+
+        <div class="flex shrink-0 items-center justify-between gap-3 border-b border-arena px-6 py-5">
+            <h2 id="{{ $titleId }}" class="font-display text-2xl font-medium text-tinta">
                 {{ $title }}
             </h2>
 
             <button
                 type="button"
                 wire:click="closeForm"
-                class="rounded-md p-1 text-clay transition-colors duration-150 ease-in-out hover:bg-sand/50 hover:text-brand-green focus:outline-2 focus:outline-offset-2 focus:outline-brand-green"
+                class="rounded-full p-1.5 text-gris-calido transition-colors duration-150 ease-in-out hover:bg-hueso hover:text-verde focus:outline-2 focus:outline-offset-2 focus:outline-verde"
                 aria-label="Cerrar formulario"
             >
                 <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
@@ -92,12 +68,12 @@
             </button>
         </div>
 
-        <div class="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 py-6">
+        <div class="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-6">
             {{ $slot }}
         </div>
 
         @isset($footer)
-            <div class="flex shrink-0 flex-col-reverse gap-3 border-t border-sand px-6 py-4 sm:flex-row sm:justify-end">
+            <div class="flex shrink-0 flex-col-reverse gap-3 border-t border-arena bg-hueso/50 px-6 py-4 sm:flex-row sm:justify-end">
                 {{ $footer }}
             </div>
         @endisset

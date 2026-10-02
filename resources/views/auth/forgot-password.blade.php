@@ -1,9 +1,9 @@
 <x-guest-layout>
-    <h1 class="font-display text-3xl font-semibold text-brand-green">
+    <h1 class="font-display text-3xl font-semibold text-tinta">
         {{ __('Forgot your password?') }}
     </h1>
 
-    <p class="mt-1 text-sm text-clay">
+    <p class="mt-1 text-sm text-gris-calido">
         {{ __('Forgot your password? No problem. Just let us know your email address and we will email you a password reset link that will allow you to choose a new one.') }}
     </p>
 

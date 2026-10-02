@@ -49,8 +49,8 @@ test('hides the top bar on desktop but keeps the sidebar toggle below lg', funct
     // ese sidebar no existe por debajo de `lg`.
     $response
         ->assertOk()
-        ->assertSee('border-b border-sand bg-parchment px-4 sm:px-6 lg:hidden', false)
+        ->assertSee('border-b border-arena bg-crema px-4 sm:px-6 lg:hidden', false)
         ->assertSee('sidebarOpen = ! sidebarOpen', false)
-        ->assertSee('hidden w-64 flex-col border-e border-sand bg-cream lg:flex', false)
-        ->assertSee('flex w-64 flex-col border-e border-sand bg-cream lg:hidden', false);
+        ->assertSee('hidden w-64 flex-col bg-verde-degradado lg:flex', false)
+        ->assertSee('flex w-64 flex-col bg-verde-degradado lg:hidden', false);
 });

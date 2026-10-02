@@ -26,6 +26,8 @@ class Index extends Component
 
     public ?int $parentId = null;
 
+    public string $skuPrefix = '';
+
     /** @var list<int> */
     public array $expanded = [];
 
@@ -52,6 +54,7 @@ class Index extends Component
         $this->editingId = $category->id;
         $this->name = $category->name;
         $this->parentId = $category->parent_id;
+        $this->skuPrefix = $category->sku_prefix ?? '';
         $this->showForm = true;
     }
 
@@ -68,6 +71,9 @@ class Index extends Component
 
     public function save(): void
     {
+        $isRoot = $this->parentId === null;
+        $this->skuPrefix = $isRoot ? mb_strtoupper(trim($this->skuPrefix)) : '';
+
         $rootIds = Category::query()
             ->whereNull('parent_id')
             ->when($this->editingId !== null, fn ($query) => $query->whereKeyNot($this->editingId))
@@ -76,11 +82,17 @@ class Index extends Component
         $validated = $this->validate([
             'name' => ['required', 'max:255'],
             'parentId' => ['nullable', 'integer', Rule::in($rootIds->all())],
+            'skuPrefix' => $isRoot
+                ? ['required', 'regex:/^[A-Z0-9]{2,4}$/', Rule::unique('categories', 'sku_prefix')->ignore($this->editingId)]
+                : ['nullable'],
         ], [
             'name.required' => 'El nombre es obligatorio.',
             'name.max' => 'El nombre no puede superar los 255 caracteres.',
             'parentId.integer' => 'La categoría padre seleccionada no es válida.',
             'parentId.in' => 'Solo puedes elegir una categoría raíz como categoría padre.',
+            'skuPrefix.required' => 'El prefijo de SKU es obligatorio para las categorías raíz.',
+            'skuPrefix.regex' => 'Usa de 2 a 4 letras o números, sin espacios.',
+            'skuPrefix.unique' => 'Ya existe otra categoría con ese prefijo.',
         ]);
 
         $name = trim($validated['name']);
@@ -108,6 +120,7 @@ class Index extends Component
                 'name' => $name,
                 'slug' => $slug,
                 'parent_id' => $validated['parentId'],
+                'sku_prefix' => $isRoot ? $this->skuPrefix : null,
             ]);
 
             $this->notifySuccess('Categoría actualizada correctamente.');
@@ -116,6 +129,7 @@ class Index extends Component
                 'name' => $name,
                 'slug' => $slug,
                 'parent_id' => $validated['parentId'],
+                'sku_prefix' => $isRoot ? $this->skuPrefix : null,
                 'order' => Category::nextOrderFor($validated['parentId']),
             ]);
 
@@ -262,6 +276,7 @@ class Index extends Component
         $this->editingId = null;
         $this->name = '';
         $this->parentId = null;
+        $this->skuPrefix = '';
         $this->resetValidation();
     }
 }

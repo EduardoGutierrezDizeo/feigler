@@ -1,9 +1,9 @@
 <x-guest-layout>
-    <h1 class="font-display text-3xl font-semibold text-brand-green">
+    <h1 class="font-display text-3xl font-semibold text-tinta">
         {{ __('Register') }}
     </h1>
 
-    <p class="mt-1 text-sm text-clay">
+    <p class="mt-1 text-sm text-gris-calido">
         Crea una cuenta para entrar al panel de Feigler
     </p>
 
@@ -48,7 +48,7 @@
         </div>
 
         <div class="mt-6 flex flex-col-reverse items-center gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <a class="w-full rounded-md py-2 text-center text-sm text-clay underline underline-offset-4 transition-colors duration-150 ease-in-out hover:text-brand-green focus:outline-2 focus:outline-offset-2 focus:outline-brand-green sm:w-auto sm:px-0 sm:py-0 sm:text-start" href="{{ route('login') }}">
+            <a class="w-full rounded-md py-2 text-center text-sm text-gris-calido underline underline-offset-4 transition-colors duration-150 ease-in-out hover:text-tinta focus:outline-2 focus:outline-offset-2 focus:outline-brand-green sm:w-auto sm:px-0 sm:py-0 sm:text-start" href="{{ route('login') }}">
                 {{ __('Already registered?') }}
             </a>
 

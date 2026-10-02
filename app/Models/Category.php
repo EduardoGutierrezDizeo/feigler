@@ -23,6 +23,7 @@ class Category extends Model
         'name',
         'slug',
         'parent_id',
+        'sku_prefix',
         'order',
         'is_active',
     ];

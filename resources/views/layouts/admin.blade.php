@@ -10,33 +10,26 @@
         <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
 
         @vite(['resources/css/app.css'])
 
         @livewireStyles
 
-        {{-- Hides Alpine-powered elements until Livewire's Alpine initializes them. --}}
+        {{-- Oculta los elementos de Alpine hasta que el Alpine de Livewire los inicializa. --}}
         <style>[x-cloak] { display: none !important; }</style>
-        {{-- Registers the Alpine stores and the FLIP animation helper used by the
-             admin panel. Must not import Alpine: Livewire already bundles it and
-             booting a second instance would break every page. --}}
+        {{-- Registra los stores de Alpine y el helper FLIP del panel. No debe importar Alpine:
+             Livewire ya lo incluye y una segunda instancia rompería todas las páginas. --}}
         @vite(['resources/js/admin.js'])
     </head>
-    <body class="bg-cream font-sans text-charcoal antialiased">
-        <div
-            class="min-h-screen bg-cream"
-            x-data="{ sidebarOpen: false }"
-        >
-            {{-- Parchment, not a solid dark block: the top bar keeps cream
-                 dominant and only separates content with a thin border. --}}
-            <!-- Sidebar (desktop): cream surface, separated by a thin border
-                 instead of a block of colour. -->
-            <aside class="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-e border-sand bg-cream lg:flex">
+    <body class="bg-crema font-sans text-tinta antialiased">
+        <div class="min-h-screen" x-data="{ sidebarOpen: false }">
+            <!-- Sidebar (escritorio): degradado verde Feigler -->
+            <aside class="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-verde-degradado lg:flex">
                 @include('layouts.admin.sidebar')
             </aside>
 
-            <!-- Sidebar backdrop (mobile) -->
+            <!-- Fondo del sidebar (móvil) -->
             <div
                 x-cloak
                 x-show="sidebarOpen"
@@ -47,11 +40,10 @@
                 x-transition:leave="ease-in duration-150"
                 x-transition:leave-start="opacity-100"
                 x-transition:leave-end="opacity-0"
-                class="fixed inset-0 z-40 bg-charcoal/40 lg:hidden"
+                class="fixed inset-0 z-40 bg-tinta/40 lg:hidden"
             ></div>
 
-            <!-- Sidebar (mobile): entra deslizándose desde el borde, con el
-                 mismo par de duraciones que el diálogo de confirmación. -->
+            <!-- Sidebar (móvil): entra deslizándose desde el borde -->
             <aside
                 x-cloak
                 x-show="sidebarOpen"
@@ -61,28 +53,21 @@
                 x-transition:leave="ease-in duration-150"
                 x-transition:leave-start="translate-x-0 opacity-100"
                 x-transition:leave-end="-translate-x-full opacity-0"
-                class="fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-e border-sand bg-cream lg:hidden"
+                class="fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-verde-degradado lg:hidden"
             >
                 @include('layouts.admin.sidebar')
             </aside>
 
-            <!-- Content -->
+            <!-- Contenido -->
             <div class="min-w-0 lg:ps-64">
-                {{-- La barra superior es solo móvil y tablet: en escritorio el
-                     sidebar fijo ya ocupa la columna izquierda y la marca se
-                     repite en su propio encabezado, de modo que el header solo
-                     servía para dejar una franja vacía sobre el contenido.
-
-                     Ocultarla con `lg` (y no antes) es obligatorio: el botón de
-                     este mismo header es el que abre el sidebar colapsable, y ese
-                     sidebar no existe por debajo de `lg`. El padding superior de
-                     `<main>` (`lg:py-10`) queda como único aire sobre el
-                     contenido, así que no sobra ningún espacio. --}}
-                <header class="flex h-16 items-center justify-between gap-3 border-b border-sand bg-parchment px-4 sm:px-6 lg:hidden">
+                {{-- Barra superior solo en móvil y tablet: en escritorio el sidebar fijo ya
+                     lleva la marca. Debe ocultarse con `lg` y no antes, porque su botón es el
+                     que abre el sidebar colapsable, que no existe por debajo de `lg`. --}}
+                <header class="flex h-16 items-center justify-between gap-3 border-b border-arena bg-crema px-4 sm:px-6 lg:hidden">
                     <button
                         type="button"
                         @click="sidebarOpen = ! sidebarOpen"
-                        class="-ms-2 inline-flex shrink-0 items-center justify-center rounded-md p-2 text-brand-green transition-colors duration-150 ease-in-out hover:bg-sand/50 focus:outline-2 focus:outline-offset-2 focus:outline-brand-green"
+                        class="-ms-2 inline-flex shrink-0 items-center justify-center rounded-full p-2 text-verde transition-colors duration-150 ease-in-out hover:bg-hueso focus:outline-2 focus:outline-offset-2 focus:outline-verde"
                     >
                         <span class="sr-only">Abrir menú lateral</span>
                         <svg class="h-6 w-6" stroke="currentColor" fill="none" viewBox="0 0 24 24">
@@ -90,22 +75,17 @@
                         </svg>
                     </button>
 
-                    <div class="min-w-0 truncate text-sm font-medium text-clay">
+                    <span class="font-display text-base font-semibold uppercase tracking-[0.3em] text-verde">Feigler</span>
+
+                    <div class="min-w-0 max-w-[8rem] truncate text-sm text-gris-calido">
                         {{ Auth::user()->name }}
                     </div>
                 </header>
 
-                {{-- Solo el contenido que cambia entre páginas entra con una
-                     animación: el sidebar y la cabecera permanecen fijos.
-
-                     OJO: el estado final NO lleva `translate-y-0`. Un `transform`
-                     distinto de `none` convierte a `<main>` en bloque contenedor
-                     de los descendientes `position: fixed` y en un contexto de
-                     apilamiento. Los modales de Livewire viven dentro de
-                     `$slot`, así que su `fixed inset-0` se resolvería contra
-                     esta caja en vez de contra el viewport: el overlay no
-                     taparía la cabecera y su alto seguiría al del contenido.
-                     Sin transform, `fixed` vuelve a significar "la pantalla". --}}
+                {{-- OJO: el estado final de la animación de entrada NO lleva `translate-y-0`.
+                     Un `transform` distinto de `none` convierte a `<main>` en bloque contenedor
+                     de los descendientes `position: fixed`: el `fixed inset-0` de los modales
+                     se resolvería contra esta caja y no contra el viewport. --}}
                 <main
                     x-cloak
                     x-data="pageEnter"

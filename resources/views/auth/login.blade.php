@@ -1,9 +1,9 @@
 <x-guest-layout>
-    <h1 class="font-display text-3xl font-semibold text-brand-green">
+    <h1 class="font-display text-3xl font-semibold text-tinta">
         {{ __('Log In') }}
     </h1>
 
-    <p class="mt-2 text-sm text-clay">
+    <p class="mt-2 text-sm text-gris-calido">
         Acceso al panel de Feigler
     </p>
 
@@ -35,14 +35,14 @@
         <!-- Remember Me -->
         <div class="block mt-4">
             <label for="remember_me" class="inline-flex items-center">
-                <input id="remember_me" type="checkbox" class="rounded border-sand bg-cream text-brand-green transition-[border-color,box-shadow] duration-150 ease-in-out focus:ring-2 focus:ring-brand-green/25" name="remember">
-                <span class="ms-2 text-sm text-charcoal">{{ __('Remember me') }}</span>
+                <input id="remember_me" type="checkbox" class="rounded border-arena bg-crema text-verde transition-[border-color,box-shadow] duration-150 ease-in-out focus:ring-2 focus:ring-verde/25" name="remember">
+                <span class="ms-2 text-sm text-tinta">{{ __('Remember me') }}</span>
             </label>
         </div>
 
         <div class="mt-6 flex flex-col-reverse items-center gap-3 sm:flex-row sm:items-center sm:justify-between">
             @if (Route::has('password.request'))
-                <a class="w-full rounded-md py-2 text-center text-sm text-clay underline underline-offset-4 transition-colors duration-150 ease-in-out hover:text-brand-green focus:outline-2 focus:outline-offset-2 focus:outline-brand-green sm:w-auto sm:px-0 sm:py-0 sm:text-start" href="{{ route('password.request') }}">
+                <a class="w-full rounded-md py-2 text-center text-sm text-gris-calido underline underline-offset-4 transition-colors duration-150 ease-in-out hover:text-brand-green focus:outline-2 focus:outline-offset-2 focus:outline-brand-green sm:w-auto sm:px-0 sm:py-0 sm:text-start" href="{{ route('password.request') }}">
                     {{ __('Forgot your password?') }}
                 </a>
             @endif

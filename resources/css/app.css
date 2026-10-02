@@ -1,62 +1,89 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/forms";
 
-/*
- * Tailwind v4 does not scan git-ignored paths, and the v3 tailwind.config.js
- * explicitly listed the framework pagination views as content sources.
- */
+/* Tailwind v4 no escanea rutas ignoradas por git: las vistas de paginación del framework se declaran a mano. */
 @source "../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php";
 
-/*
- * Feigler is a single fixed light theme: `dark:` utilities only react to an
- * explicit `.dark` class, never to the operating system's color scheme.
- */
+/* Tema claro fijo: `dark:` solo reacciona a una clase `.dark` explícita. */
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-    /* Brand palette */
-    --color-brand-green: #2f4a38;
-    --color-cream: #f4eedb;
-    --color-terracotta: #b25b34;
-    --color-wood: #5a3a24;
-    --color-charcoal: #1c1c1a;
-    --color-gold: #c6a15b;
+    /* Paleta Feigler (guía de estilo). Verde y blanco del logo; madera, ladrillo y latón de la tienda. */
+    --color-verde: #0b5f36;
+    --color-verde-hondo: #073f25;
+    --color-crema: #fffcf5;
+    --color-laton: #b8944a;
+    --color-hueso: #e9e9e9;
+    --color-arena: #e7dcc5;
+    --color-ladrillo: #a9552b;
+    --color-madera: #6a3a1e;
+    --color-gris-calido: #7a746b;
+    --color-tinta: #1e1b18;
 
-    /* Tints derived from cream for surfaces, dividers and muted text */
-    --color-parchment: #fbf7ee;
-    --color-sand: #e4d8c1;
-    --color-clay: #8c7a63;
+    /* Alias de los nombres anteriores: las vistas aún no migradas toman la paleta nueva sin cambios. */
+    --color-brand-green: #0b5f36;
+    --color-cream: #fffcf5;
+    --color-parchment: #fffcf5;
+    --color-sand: #e7dcc5;
+    --color-clay: #7a746b;
+    --color-terracotta: #a9552b;
+    --color-wood: #6a3a1e;
+    --color-charcoal: #1e1b18;
+    --color-gold: #b8944a;
 
-    /*
-     * Motion: a single elevation shadow, tinted with charcoal instead of pure
-     * black so it stays in the same warm family as the rest of the palette.
-     * It is the only depth cue the interface uses, and it only ever appears on
-     * hover, so it never competes with the surfaces.
-     */
-    --shadow-lift: 0 2px 8px -3px rgb(28 28 26 / 0.22);
+    /* Profundidad: sombras casi invisibles, teñidas con tinta y no con negro puro. */
+    --shadow-lift: 0 2px 8px -3px rgb(30 27 24 / 0.22);
+    --shadow-suave: 0 14px 28px -20px rgb(30 27 24 / 0.3);
+    --shadow-boton: 0 8px 16px -8px rgb(7 63 37 / 0.55);
 
-    /* Typography: characterful serif for headings, clean sans for body copy */
-    --font-display: "Playfair Display", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+    --font-display: "Cormorant Garamond", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
     --font-sans: "Figtree", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif,
         "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
 }
 
+/* Los fondos son degradados suaves, nunca colores planos. */
+@utility bg-verde-degradado {
+    background-image: linear-gradient(160deg, #0b5f36 0%, #073f25 100%);
+}
+
+@utility bg-laton-degradado {
+    background-image: linear-gradient(135deg, #d3b672 0%, #a98744 100%);
+}
+
+/* El arco de las puertas coloniales: forma que firma el diseño. */
+@utility rounded-arco {
+    border-radius: 999px 999px 0.5rem 0.5rem;
+}
+
+/* Tarjeta base: esquinas redondeadas, filete arena y sombra casi invisible. */
+@utility tarjeta {
+    border-radius: 1rem;
+    border: 1px solid #e7dcc5;
+    background-color: #fffcf5;
+    box-shadow: 0 14px 28px -20px rgb(30 27 24 / 0.3);
+}
+
+/* Encabezado de columna: versalitas finas en latón. */
+@utility etiqueta {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #b8944a;
+}
+
 @layer base {
     body {
-        @apply bg-cream text-charcoal;
+        color: #1e1b18;
+        background-color: #fffcf5;
+        background-image: linear-gradient(135deg, #ffffff 0%, #fffcf5 100%);
+        background-attachment: fixed;
     }
 
     /*
-     * `prefers-reduced-motion`: collapses every transition and animation to a
-     * single instant. The reset needs `!important` because Tailwind's
-     * `duration-*` utilities live in the later `utilities` layer and would
-     * otherwise win the cascade.
-     *
-     * This also covers the animations Alpine drives through `x-transition`
-     * (dialog, toasts, dropdown, modal), whose durations are passed as classes
-     * that cannot be gated by a variant. The two motions implemented in
-     * JavaScript — the page entrance and the FLIP row reorder — read the same
-     * preference through `matchMedia` instead of relying on this rule.
+     * `prefers-reduced-motion`: colapsa transiciones y animaciones a un instante.
+     * Necesita `!important` porque las utilidades `duration-*` viven en una capa posterior.
+     * Las animaciones en JavaScript (entrada de página y FLIP) leen la preferencia con `matchMedia`.
      */
     @media (prefers-reduced-motion: reduce) {
         *,
@@ -70,11 +97,7 @@
     }
 }
 
-/*
- * Row reordering (FLIP): the row mover sets the transform and its transition
- * inline, so this class only keeps the moving row above its neighbours and
- * freezes the hover colour while the displacement is being animated.
- */
+/* Reordenamiento de filas (FLIP): mantiene la fila en movimiento sobre sus vecinas. */
 .row-is-moving {
     position: relative;
     z-index: 1;

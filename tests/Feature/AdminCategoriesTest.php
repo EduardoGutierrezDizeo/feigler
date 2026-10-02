@@ -22,6 +22,7 @@ test('creates a root category with a generated slug', function () {
     Livewire::test(Index::class)
         ->call('create')
         ->set('name', 'Pantalones')
+        ->set('skuPrefix', 'PA')
         ->call('save')
         ->assertHasNoErrors()
         ->assertSet('showForm', false)
@@ -55,6 +56,7 @@ test('creates a root category without offering a parent selector', function () {
         ->assertDontSeeHtml('<select')
         ->assertSee('Se creará como categoría raíz.')
         ->set('name', 'Pantalones')
+        ->set('skuPrefix', 'PA')
         ->call('save')
         ->assertHasNoErrors()
         ->assertSet('notice', 'Categoría creada correctamente.');
@@ -92,10 +94,12 @@ test('generates a new slug when editing a category', function () {
         ->call('edit', $category->id)
         ->assertSet('editingId', $category->id)
         ->assertSet('name', 'Sudaderas')
+        ->set('skuPrefix', 'SU')
         ->call('save')
         ->assertHasNoErrors()
         ->call('edit', $category->id)
         ->set('name', 'Sudaderas con capucha')
+        ->set('skuPrefix', 'SC')
         ->call('save')
         ->assertHasNoErrors();
 
@@ -119,6 +123,7 @@ test('rejects a name without letters or numbers', function () {
     Livewire::test(Index::class)
         ->call('create')
         ->set('name', '!!!')
+        ->set('skuPrefix', 'XX')
         ->call('save')
         ->assertHasErrors(['name'])
         ->assertSee('El nombre debe contener letras o números.');
@@ -132,11 +137,103 @@ test('rejects a name that collides with another category slug', function () {
     Livewire::test(Index::class)
         ->call('create')
         ->set('name', 'Camisetas!')
+        ->set('skuPrefix', 'CA')
         ->call('save')
         ->assertHasErrors(['name'])
         ->assertSee('Ya existe una categoría con ese nombre.');
 
     expect(Category::query()->count())->toBe(1);
+});
+
+test('requires a SKU prefix when creating a root category', function () {
+    Livewire::test(Index::class)
+        ->call('create')
+        ->set('name', 'Pantalones')
+        ->call('save')
+        ->assertHasErrors(['skuPrefix'])
+        ->assertSee('El prefijo de SKU es obligatorio para las categorías raíz.');
+
+    expect(Category::query()->count())->toBe(0);
+});
+
+test('rejects a SKU prefix that is not 2 to 4 uppercase letters or numbers', function () {
+    Livewire::test(Index::class)
+        ->call('create')
+        ->set('name', 'Pantalones')
+        ->set('skuPrefix', 'P!')
+        ->call('save')
+        ->assertHasErrors(['skuPrefix'])
+        ->assertSee('Usa de 2 a 4 letras o números, sin espacios.');
+
+    expect(Category::query()->count())->toBe(0);
+});
+
+test('rejects a SKU prefix already used by another category', function () {
+    Category::factory()->create(['name' => 'Camisetas', 'slug' => 'camisetas', 'sku_prefix' => 'CA']);
+
+    Livewire::test(Index::class)
+        ->call('create')
+        ->set('name', 'Pantalones')
+        ->set('skuPrefix', 'CA')
+        ->call('save')
+        ->assertHasErrors(['skuPrefix'])
+        ->assertSee('Ya existe otra categoría con ese prefijo.');
+
+    expect(Category::query()->where('name', 'Pantalones')->exists())->toBeFalse();
+});
+
+test('stores the SKU prefix uppercased and trimmed on a root category', function () {
+    Livewire::test(Index::class)
+        ->call('create')
+        ->set('name', 'Pantalones')
+        ->set('skuPrefix', '  pl  ')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect(Category::query()->where('slug', 'pantalones')->sole()->sku_prefix)->toBe('PL');
+});
+
+test('keeps a category without a SKU prefix when it is demoted to a subcategory', function () {
+    $category = Category::factory()->create(['name' => 'Pantalones', 'sku_prefix' => 'PA']);
+
+    Livewire::test(Index::class)
+        ->call('edit', $category->id)
+        ->assertSet('skuPrefix', 'PA')
+        ->set('parentId', Category::factory()->create()->id)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect($category->fresh()->sku_prefix)->toBeNull();
+});
+
+test('lets a root category keep its own prefix when edited', function () {
+    $category = Category::factory()->create(['name' => 'Pantalones', 'sku_prefix' => 'PA']);
+
+    Livewire::test(Index::class)
+        ->call('edit', $category->id)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect($category->fresh()->sku_prefix)->toBe('PA');
+});
+
+test('only offers the SKU prefix field while the category is a root', function () {
+    $root = Category::factory()->create();
+
+    Livewire::test(Index::class)
+        ->call('create')
+        ->assertSee('Prefijo para SKU')
+        ->set('parentId', $root->id)
+        ->assertDontSee('Prefijo para SKU');
+});
+
+test('flags root categories that have no SKU prefix', function () {
+    Category::factory()->create(['name' => 'Camisetas', 'sku_prefix' => 'CA']);
+    Category::factory()->create(['name' => 'Pantalones', 'sku_prefix' => null]);
+
+    Livewire::test(Index::class)
+        ->assertSee('CA')
+        ->assertSee('Sin prefijo');
 });
 
 test('blocks deleting a category that has products', function () {
@@ -177,6 +274,7 @@ test('announces a created category in the toast stack', function () {
     Livewire::test(Index::class)
         ->call('create')
         ->set('name', 'Pantalones')
+        ->set('skuPrefix', 'PA')
         ->call('save')
         ->assertHasNoErrors()
         ->assertDispatched('toast', message: 'Categoría creada correctamente.', tone: 'success');
@@ -244,7 +342,7 @@ test('the category form is a full-viewport modal that stays mounted so it can an
         // con el modal cerrado, de ahí el `pointer-events-none` permanente y el
         // `pointer-events-auto` limitado al overlay y a la tarjeta.
         ->assertSee('pointer-events-none fixed inset-0', false)
-        ->assertSee('pointer-events-auto absolute inset-0 bg-charcoal/40', false)
+        ->assertSee('pointer-events-auto absolute inset-0 bg-tinta/40', false)
         // Geometría: el overlay cubre el viewport entero y el scroll ocurre
         // dentro de la tarjeta, no en la página de detrás.
         ->assertSee('max-h-[90vh]', false)
@@ -430,12 +528,15 @@ test('assigns consecutive order values when creating categories in sequence', fu
         ->test(Index::class)
         ->call('create')
         ->set('name', 'Camisetas')
+        ->set('skuPrefix', 'CM')
         ->call('save')
         ->call('create')
         ->set('name', 'Pantalones')
+        ->set('skuPrefix', 'PA')
         ->call('save')
         ->call('create')
         ->set('name', 'Gorras')
+        ->set('skuPrefix', 'GO')
         ->call('save');
 
     $orders = Category::query()->orderBy('id')->pluck('order')->all();

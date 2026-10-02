@@ -13,10 +13,10 @@
 >
     <template x-for="toast in $store.toast.items" :key="toast.id">
         <div
-            class="pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-lg border bg-cream px-4 py-3 text-sm shadow-md sm:w-96"
+            class="pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-lg border border-arena bg-crema px-4 py-3 text-sm shadow-md sm:w-96"
             :class="{
-                'border-brand-green/40': toast.tone === 'success',
-                'border-terracotta/50': toast.tone === 'error',
+                'border-verde/40': toast.tone === 'success',
+                'border-ladrillo/50': toast.tone === 'error',
             }"
             role="status"
             x-transition:enter="ease-out duration-200"
@@ -28,7 +28,7 @@
         >
             <span
                 class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
-                :class="toast.tone === 'success' ? 'bg-brand-green text-cream' : 'bg-terracotta text-cream'"
+                :class="toast.tone === 'success' ? 'bg-verde text-crema' : 'bg-ladrillo text-crema'"
                 aria-hidden="true"
             >
                 <svg
@@ -51,13 +51,13 @@
 
             <p
                 class="min-w-0 flex-1"
-                :class="toast.tone === 'success' ? 'text-brand-green' : 'text-terracotta'"
+                :class="toast.tone === 'success' ? 'text-verde' : 'text-ladrillo'"
                 x-text="toast.message"
             ></p>
 
             <button
                 type="button"
-                class="-me-1 -mt-1 shrink-0 rounded-md p-1 text-clay transition-colors duration-150 ease-in-out hover:bg-sand/50 hover:text-brand-green"
+                class="-me-1 -mt-1 shrink-0 rounded-md p-1 text-gris-calido transition-colors duration-150 ease-in-out hover:bg-sand/50 hover:text-verde"
                 aria-label="Cerrar aviso"
                 x-on:click="$store.toast.dismiss(toast.id)"
             >
