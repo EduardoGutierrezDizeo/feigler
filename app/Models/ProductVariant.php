@@ -37,6 +37,18 @@ class ProductVariant extends Model
     public const STOCK_ADDING_TYPES = ['ajuste_entrada', 'devolucion'];
 
     /**
+     * The sizes a variant can be sold in, from the smallest to the largest.
+     *
+     * They are stored uppercased and without spaces, the same way `makeSku`
+     * normalizes a size, so `m`, ` m ` and `M` are one size and not three: the
+     * database would refuse two of them anyway, since the unique index on
+     * (product_id, size, color_id) compares them as equal.
+     *
+     * @var list<string>
+     */
+    public const SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', 'ÚNICA'];
+
+    /**
      * The attributes that are mass assignable.
      *
      * @var list<string>
