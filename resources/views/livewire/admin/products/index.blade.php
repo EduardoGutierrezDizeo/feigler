@@ -213,7 +213,11 @@
             Sección: <span class="font-medium">{{ $formSection->label() }}</span>
         </p>
 
-        <div x-data="{ tab: 'datos' }">
+        <div
+            x-data="{ tab: 'datos' }"
+            x-on:product-modal-open.window="tab = 'datos'"
+            x-on:open-product-variants-tab.window="tab = 'variantes'"
+        >
             <div role="tablist" aria-label="Secciones del producto" class="flex gap-6 border-b border-arena">
                 <button
                     type="button"
@@ -228,24 +232,44 @@
                     Datos
                 </button>
 
+                {{-- Las variantes viven en un producto que ya existe: hasta que el alta
+                     guarda, esta pestaña no tiene nada que mostrar. --}}
                 <button
                     type="button"
                     role="tab"
-                    disabled
-                    aria-disabled="true"
-                    title="Próximamente"
-                    class="cursor-not-allowed border-b-2 border-transparent px-1 pb-3 text-sm font-medium text-gris-calido opacity-50"
+                    id="product-tab-variantes"
+                    aria-controls="product-panel-variantes"
+                    x-on:click="tab = 'variantes'"
+                    x-bind:aria-selected="(tab === 'variantes').toString()"
+                    @class([
+                        'border-b-2 px-1 pb-3 text-sm font-medium transition-colors duration-150 ease-in-out',
+                        'cursor-not-allowed opacity-50' => $editingId === null,
+                    ])
+                    x-bind:class="tab === 'variantes' ? 'border-laton text-verde' : 'border-transparent text-gris-calido'"
+                    @disabled($editingId === null)
+                    aria-disabled="{{ $editingId === null ? 'true' : 'false' }}"
+                    title="{{ $editingId === null ? 'Guarda el producto primero' : 'Tallas y colores de este producto' }}"
                 >
                     Variantes
                 </button>
 
+                {{-- Las imágenes cuelgan de un color, y los colores de las variantes: hasta
+                     que el alta guarda, esta pestaña no tiene nada que mostrar. --}}
                 <button
                     type="button"
                     role="tab"
-                    disabled
-                    aria-disabled="true"
-                    title="Próximamente"
-                    class="cursor-not-allowed border-b-2 border-transparent px-1 pb-3 text-sm font-medium text-gris-calido opacity-50"
+                    id="product-tab-imagenes"
+                    aria-controls="product-panel-imagenes"
+                    x-on:click="tab = 'imagenes'"
+                    x-bind:aria-selected="(tab === 'imagenes').toString()"
+                    @class([
+                        'border-b-2 px-1 pb-3 text-sm font-medium transition-colors duration-150 ease-in-out',
+                        'cursor-not-allowed opacity-50' => $editingId === null,
+                    ])
+                    x-bind:class="tab === 'imagenes' ? 'border-laton text-verde' : 'border-transparent text-gris-calido'"
+                    @disabled($editingId === null)
+                    aria-disabled="{{ $editingId === null ? 'true' : 'false' }}"
+                    title="{{ $editingId === null ? 'Guarda el producto primero' : 'Fotos de cada color de este producto' }}"
                 >
                     Imágenes
                 </button>
@@ -258,6 +282,20 @@
                 x-show="tab === 'datos'"
                 class="space-y-6 pt-6"
             >
+                @php
+                    // El input del precio arranca con el monto ya agrupado. Alpine lo
+                    // vuelve a formatear en cada tecla, pero pintarlo desde el servidor
+                    // evita el destello con el número pelado y deja el valor inicial en
+                    // el HTML. Solo se piden decimales cuando los hay: `number_format`
+                    // con dos decimales pondría «89.900,00» y, sobre todo, un precio
+                    // con centavos redondeado a «89.901» se guardaría redondeado. Los
+                    // separadores son punto para los miles y coma para los decimales,
+                    // los mismos que usa el listado y los mensajes de la validación.
+                    $basePriceFormateado = blank($basePrice)
+                        ? ''
+                        : number_format((float) $basePrice, fmod((float) $basePrice, 1.0) === 0.0 ? 0 : 2, ',', '.');
+                @endphp
+
                 <div>
                     <x-input-label for="product-name" value="Nombre" />
                     <x-text-input
@@ -332,14 +370,22 @@
                 <div class="grid gap-6 sm:grid-cols-2">
                     <div>
                         <x-input-label for="product-price" value="Precio base" />
-                        <x-text-input
-                            id="product-price"
-                            wire:model="basePrice"
-                            type="text"
-                            inputmode="decimal"
-                            class="mt-1 block w-full"
-                            placeholder="89900"
-                        />
+                        {{-- El input NO lleva wire:model: Alpine muestra el monto con los puntos de los
+                             miles y le manda a Livewire el número pelado, que es lo que
+                             acaba en la columna. Con wire:model, Livewire leería del DOM
+                             el texto con puntos y coma, la validación numeric lo
+                             rechazaría y la base guardaría ese string en vez del 89900.50. --}}
+                        <div x-data="priceInput($wire, 'basePrice', '{{ $basePriceFormateado }}')">
+                            <x-text-input
+                                id="product-price"
+                                type="text"
+                                inputmode="decimal"
+                                class="mt-1 block w-full"
+                                placeholder="89.900"
+                                x-bind:value="display"
+                                x-on:input="format"
+                            />
+                        </div>
                         <x-input-error :messages="$errors->get('basePrice')" class="mt-2" />
                     </div>
 
@@ -361,6 +407,45 @@
                     <p class="text-xs text-gris-calido">
                         Al crear, se asigna la referencia y las variantes se añaden después, en su propia pestaña.
                     </p>
+                @endif
+            </div>
+
+            <div
+                role="tabpanel"
+                id="product-panel-variantes"
+                aria-labelledby="product-tab-variantes"
+                x-show="tab === 'variantes'"
+                class="pt-6"
+            >
+                {{-- `@product-variants-changed="$refresh"` es la forma que tiene el
+                     padre de volver a pintarse cuando el hijo avisa: un `#[On]` se
+                     ejecutaría en la petición del hijo, donde el HTML del padre no
+                     viaja de vuelta. --}}
+                @if ($editingId !== null)
+                    <livewire:admin.products.variants
+                        :product-id="$editingId"
+                        wire:key="variants-{{ $editingId }}"
+                        @product-variants-changed="$refresh"
+                    />
+                @endif
+            </div>
+
+            <div
+                role="tabpanel"
+                id="product-panel-imagenes"
+                aria-labelledby="product-tab-imagenes"
+                x-show="tab === 'imagenes'"
+                class="pt-6"
+            >
+                {{-- El mismo contrato que las variantes: el hijo avisa y el padre se
+                     vuelve a pintar con `$refresh`, porque un `#[On]` correría en la
+                     petición del hijo, donde el HTML del padre no viaja de vuelta. --}}
+                @if ($editingId !== null)
+                    <livewire:admin.products.images
+                        :product-id="$editingId"
+                        wire:key="images-{{ $editingId }}"
+                        @product-images-changed="$refresh"
+                    />
                 @endif
             </div>
         </div>

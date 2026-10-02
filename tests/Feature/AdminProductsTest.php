@@ -10,19 +10,6 @@ use Database\Seeders\RoleSeeder;
 use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 
-function numberedCategory(string $prefix = 'PL', string $name = 'Prenda', StoreSection $section = StoreSection::Hombre): Category
-{
-    return Category::factory()->section($section)->create(['sku_prefix' => $prefix, 'name' => $name]);
-}
-
-function adminForPanel(): User
-{
-    $admin = User::factory()->create();
-    $admin->assignRole('admin');
-
-    return $admin;
-}
-
 test('renders the products page for users with the admin role', function () {
     $this->seed(RoleSeeder::class);
 
@@ -60,9 +47,10 @@ test('the product form uses the same modal with the tabs of the admin panel', fu
         ->assertSee('sm:max-w-2xl', false)
         ->assertSee('role="tablist"', false)
         ->assertSee('role="tabpanel"', false)
-        // «Variantes» e «Imágenes» se anuncian pero no se pueden abrir todavía.
+        // Las dos pestañas que viven en un producto guardado se anuncian cerradas
+        // mientras no lo haya.
         ->assertSee('aria-disabled="true"', false)
-        ->assertSee('Próximamente')
+        ->assertSee('Guarda el producto primero', false)
         ->call('create')
         ->assertSet('showForm', true)
         ->assertSet('editingId', null);
@@ -265,7 +253,7 @@ test('creates a product with a generated reference, slug, brand and status', fun
 
     $polos = numberedCategory('PL', 'Polos');
 
-    Livewire::actingAs(adminForPanel())
+    $creado = Livewire::actingAs(adminForPanel())
         ->test(Index::class)
         ->call('create')
         ->set('name', 'Polo clásico piqué')
@@ -275,10 +263,16 @@ test('creates a product with a generated reference, slug, brand and status', fun
         ->set('basePrice', '89900')
         ->call('save')
         ->assertHasNoErrors()
-        ->assertSet('showForm', false)
-        ->assertSet('notice', 'Producto creado correctamente.');
+        // El modal sigue abierto y en modo edición: las variantes se crean sobre el
+        // producto que acaba de existir, y para eso necesita su id y su referencia.
+        ->assertSet('showForm', true)
+        ->assertSet('notice', 'Producto creado correctamente.')
+        ->assertDispatched('open-product-variants-tab');
 
     $producto = Product::query()->where('name', 'Polo clásico piqué')->sole();
+
+    $creado->assertSet('editingId', $producto->id)
+        ->assertSet('editingReference', 'PL-001');
 
     expect($producto->reference)->toBe('PL-001')
         ->and($producto->slug)->toBe('polo-clasico-pique')
@@ -342,6 +336,61 @@ test('creating in a category of another section fails and stores nothing', funct
         ->assertSet('showForm', true);
 
     expect(Product::query()->count())->toBe(0);
+});
+
+/**
+ * El campo del precio muestra el monto con los separadores de siempre y lo que
+ * llega a la columna es el número pelado.
+ *
+ * Los puntos y las comas son solo presentación. El input no lleva `wire:model`:
+ * Alpine es dueño del texto que se ve y le empuja los dígitos a Livewire, que es
+ * lo que hace que `numeric` acepte el valor y que la columna guarde `89900.50` en
+ * lugar del texto con separadores. El valor formateado lo pinta el servidor para
+ * que el campo ya salga bien en el primer render, en vez de destellar el número.
+ *
+ * El formato es el de la app: punto para los miles y coma para los decimales, lo
+ * mismo que el `$89.901` del listado de arriba y que el «99.999.999,99» del
+ * mensaje de validación. Y los centavos no se redondean al pintarlos: agrupar
+ * `89900.50` sin decimales mostraría «89.901», y ese redondeo es justo lo que se
+ * acabaría guardando.
+ */
+test('the price field shows the amount with separators and stores the plain number', function () {
+    $this->seed(RoleSeeder::class);
+
+    $polos = numberedCategory('PL', 'Polos');
+
+    // Vacío al abrir: nada de «0,00» inventado.
+    Livewire::actingAs(adminForPanel())
+        ->test(Index::class)
+        ->call('create')
+        ->assertSee("priceInput(\$wire, 'basePrice', '')", false)
+        ->assertDontSeeHtml('wire:model="basePrice"');
+
+    $producto = Product::factory()->for($polos, 'category')->create([
+        'name' => 'Polo con centavos',
+        'base_price' => 89900.5,
+    ]);
+
+    Livewire::actingAs(adminForPanel())
+        ->test(Index::class)
+        ->call('edit', $producto)
+        ->assertSee("priceInput(\$wire, 'basePrice', '89.900,50')", false);
+
+    // Editar sin tocar el precio deja el número como estaba, sin redondear.
+    Livewire::actingAs(adminForPanel())
+        ->test(Index::class)
+        ->call('edit', $producto)
+        ->set('name', 'Polo con centavos editado')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect((float) $producto->refresh()->base_price)->toEqual(89900.5);
+
+    // Y tras guardar, el modal se limpia: el input vuelve a quedar vacío.
+    Livewire::actingAs(adminForPanel())
+        ->test(Index::class)
+        ->call('create')
+        ->assertSee("priceInput(\$wire, 'basePrice', '')", false);
 });
 
 test('validates the general data of a product', function () {

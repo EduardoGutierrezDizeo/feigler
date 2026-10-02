@@ -19,6 +19,8 @@ use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\User;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\Event;
 
 /**
  * A product with a known reference, so the SKU of its variants is predictable.
@@ -489,4 +491,46 @@ test('a section is inherited from the category of the product', function () {
     $product = Product::factory()->for($category, 'category')->create();
 
     expect($product->section)->toBe(StoreSection::Mujer);
+});
+
+/**
+ * A variant cannot be written against a color that is not there.
+ *
+ * The action takes a `Color` object, so the only way a bad id reaches the write is
+ * through the raw column: this is the database refusing it, which is the last line
+ * of defence under the `exists` rule of the panel.
+ */
+test('a variant cannot be saved against a color that does not exist', function () {
+    $product = productFor();
+
+    expect(fn () => $product->variants()->create([
+        'size' => 'M',
+        'color_id' => 987654,
+        'sku' => 'PL-001-M-XXX',
+    ]))->toThrow(QueryException::class);
+
+    expect($product->variants()->count())->toBe(0);
+});
+
+/**
+ * The transaction is what makes a half-written creation disappear.
+ *
+ * `DuplicateProductVariantException` is thrown before the insert, so it proves
+ * nothing about the rollback; here the failure is injected once the row is already
+ * in the table, which is where a rollback has something to undo.
+ */
+test('a creation that fails after the insert leaves nothing behind', function () {
+    $product = productFor();
+    $color = azul();
+    $user = User::factory()->create();
+
+    Event::listen('eloquent.created: '.ProductVariant::class, function (): void {
+        throw new RuntimeException('Fallo simulado a mitad del alta');
+    });
+
+    expect(fn () => (new CreateProductVariant)($product, 'M', $color, null, 5, $user))
+        ->toThrow(RuntimeException::class);
+
+    expect($product->variants()->count())->toBe(0)
+        ->and(InventoryMovement::query()->count())->toBe(0);
 });

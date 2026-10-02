@@ -43,6 +43,18 @@ class Index extends Component
     public const PAGE_SIZE = 20;
 
     /**
+     * The tab the modal lands on when it is opened from the listing, so it does
+     * not stay on the tab of the product that was open before it.
+     */
+    public const EVENT_RESET_TAB = 'product-modal-open';
+
+    /**
+     * The tab the modal lands on right after a product is created: the reference
+     * and the slug only exist from that moment, and so do the variants.
+     */
+    public const EVENT_OPEN_VARIANTS_TAB = 'open-product-variants-tab';
+
+    /**
      * The section of the catalog being managed: `hombre`, `mujer` or `ninos`.
      *
      * It is part of the URL so that a tab can be shared, bookmarked or reached
@@ -106,6 +118,7 @@ class Index extends Component
     {
         $this->resetForm();
         $this->showForm = true;
+        $this->dispatch(self::EVENT_RESET_TAB);
     }
 
     public function edit(Product $product): void
@@ -121,6 +134,7 @@ class Index extends Component
         $this->basePrice = (string) $product->base_price;
         $this->status = $product->status === 'inactive' ? 'inactive' : 'active';
         $this->showForm = true;
+        $this->dispatch(self::EVENT_RESET_TAB);
     }
 
     public function closeForm(): void
@@ -311,6 +325,10 @@ class Index extends Component
      * the lock on the category row is still held when the row is written. Outside
      * of it, two products created at the same time could both read the same
      * counter and collide on the unique reference.
+     *
+     * Unlike the update, the modal stays open and the panel switches to editing
+     * the product that was just created: a product is born without variants, and
+     * the tab that fills them is one click away only while the product exists.
      */
     private function createProduct(Category $category, array $validated): void
     {
@@ -320,8 +338,8 @@ class Index extends Component
             return;
         }
 
-        DB::transaction(function () use ($category, $validated, $slug): void {
-            Product::create([
+        $product = DB::transaction(function () use ($category, $validated, $slug): Product {
+            return Product::create([
                 'category_id' => $category->getKey(),
                 'name' => trim($validated['name']),
                 'slug' => $slug,
@@ -333,8 +351,12 @@ class Index extends Component
             ]);
         });
 
+        $this->editingId = $product->getKey();
+        $this->editingReference = $product->reference;
+        $this->showForm = true;
+
         $this->notifySuccess('Producto creado correctamente.');
-        $this->resetForm();
+        $this->dispatch(self::EVENT_OPEN_VARIANTS_TAB);
     }
 
     /**
