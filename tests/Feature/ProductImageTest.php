@@ -1,19 +1,19 @@
 <?php
 
+use App\Models\Color;
 use App\Models\Product;
 use App\Models\ProductImage;
-use App\Models\ProductVariant;
 
-test('an image is either general for the product or tied to one variant', function () {
+test('an image is either general for the product or tied to one color', function () {
     $product = Product::factory()->create();
-    $variant = ProductVariant::factory()->for($product)->create();
+    $color = Color::factory()->create();
 
     $general = ProductImage::factory()->for($product)->create()->refresh();
-    $specific = ProductImage::factory()->for($product)->for($variant)->create()->refresh();
+    $specific = ProductImage::factory()->for($product)->for($color, 'color')->create()->refresh();
 
-    expect($general->product_variant_id)->toBeNull()
+    expect($general->color_id)->toBeNull()
         ->and($general->order)->toBe(0)
-        ->and($specific->product_variant_id)->toEqual($variant->id)
+        ->and($specific->color_id)->toEqual($color->id)
         ->and($specific->product->is($product))->toBeTrue()
-        ->and($specific->productVariant->is($variant))->toBeTrue();
+        ->and($specific->color->is($color))->toBeTrue();
 });

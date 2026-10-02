@@ -1,20 +1,21 @@
 <?php
 
+use App\Models\Color;
 use App\Models\Product;
 use App\Models\ProductImage;
 use App\Models\ProductVariant;
 use Illuminate\Database\QueryException;
 
-test('a variant belongs to its product and owns its images', function () {
+test('a variant belongs to its product and shows the gallery of its color', function () {
     $variant = ProductVariant::factory()->create();
     $image = ProductImage::factory()
         ->for($variant->product, 'product')
-        ->for($variant, 'productVariant')
+        ->for($variant->color, 'color')
         ->create();
 
     expect($image->product->is($variant->product))->toBeTrue()
-        ->and($image->productVariant->is($variant))->toBeTrue()
-        ->and($variant->images()->count())->toBe(1);
+        ->and($image->color->is($variant->color))->toBeTrue()
+        ->and($variant->gallery()->count())->toBe(1);
 });
 
 test('a variant cannot reuse the sku of another variant', function () {
@@ -27,12 +28,13 @@ test('a variant cannot reuse the sku of another variant', function () {
 
 test('a product cannot repeat the same size and color in two variants', function () {
     $product = Product::factory()->create();
+    $color = Color::factory()->create();
 
-    ProductVariant::factory()->for($product)->create(['size' => 'M', 'color' => 'red']);
+    ProductVariant::factory()->for($product)->create(['size' => 'M', 'color_id' => $color->id]);
 
     $this->expectException(QueryException::class);
 
-    ProductVariant::factory()->for($product)->create(['size' => 'M', 'color' => 'red']);
+    ProductVariant::factory()->for($product)->create(['size' => 'M', 'color_id' => $color->id]);
 });
 
 test('a variant has no stock and stays active until it says otherwise', function () {

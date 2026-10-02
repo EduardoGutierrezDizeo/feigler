@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\Color;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use Illuminate\Database\Eloquent\Factories\Factory;
@@ -21,7 +22,7 @@ class ProductVariantFactory extends Factory
         return [
             'product_id' => Product::factory(),
             'size' => fake()->randomElement(['XS', 'S', 'M', 'L', 'XL']),
-            'color' => fake()->safeColorName(),
+            'color_id' => Color::factory(),
             'sku' => strtoupper(fake()->unique()->bothify('FG-####??')),
         ];
     }

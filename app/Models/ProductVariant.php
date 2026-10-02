@@ -2,16 +2,39 @@
 
 namespace App\Models;
 
+use App\Exceptions\InsufficientStockException;
 use Database\Factories\ProductVariantFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use InvalidArgumentException;
+use LogicException;
 
 class ProductVariant extends Model
 {
     /** @use HasFactory<ProductVariantFactory> */
     use HasFactory;
+
+    /**
+     * The movement types that take units out of the stock of a variant.
+     *
+     * Everything else puts them back. The movement carries the sign, so reading a
+     * report is a plain sum: a negative row is stock that left, a positive one is
+     * stock that came back.
+     *
+     * @var list<string>
+     */
+    public const STOCK_REDUCING_TYPES = ['venta_online', 'venta_pos', 'ajuste_salida'];
+
+    /**
+     * The movement types that put units back into the stock of a variant.
+     *
+     * @var list<string>
+     */
+    public const STOCK_ADDING_TYPES = ['ajuste_entrada', 'devolucion'];
 
     /**
      * The attributes that are mass assignable.
@@ -21,7 +44,7 @@ class ProductVariant extends Model
     protected $fillable = [
         'product_id',
         'size',
-        'color',
+        'color_id',
         'sku',
         'stock',
         'price_override',
@@ -51,13 +74,27 @@ class ProductVariant extends Model
     }
 
     /**
-     * The images that show this specific variant/color.
+     * The color this variant is sold in.
+     */
+    public function color(): BelongsTo
+    {
+        return $this->belongsTo(Color::class);
+    }
+
+    /**
+     * The images that show this variant, which are the images of its color.
+     *
+     * A color is shared by every size of a product, so a photo taken in, say,
+     * blue is worth showing for the blue XL as well. The photos are not owned by
+     * the variant: they belong to the product and are attached to the color.
      *
      * @return HasMany<ProductImage>
      */
-    public function images(): HasMany
+    public function gallery(): HasMany
     {
-        return $this->hasMany(ProductImage::class);
+        return $this->product->images()
+            ->where('color_id', $this->color_id)
+            ->orderBy('order');
     }
 
     /**
@@ -88,5 +125,91 @@ class ProductVariant extends Model
     public function inventoryMovements(): HasMany
     {
         return $this->hasMany(InventoryMovement::class);
+    }
+
+    /**
+     * The SKU of a size/color combination: the reference of the product, the size
+     * and the code of the color, e.g. `PL-001-M-AZU`.
+     *
+     * The size is normalized because it reaches this method from wherever the
+     * store typed it: `m`, ` m ` and `M` are the same size and have to produce the
+     * same SKU, or the same garment would end up with two different codes.
+     *
+     * The reference is required and is never invented here. A reference that does
+     * not exist yet means the product was never persisted, and numbering it on the
+     * spot would hand out a reference that nobody stored, so every SKU built from
+     * it would point at a product that does not exist either.
+     *
+     * @throws LogicException when the product has no reference
+     */
+    public static function makeSku(Product $product, string $size, Color $color): string
+    {
+        if (blank($product->reference)) {
+            throw new LogicException("El producto «{$product->name}» no tiene referencia; no se puede generar el SKU.");
+        }
+
+        $normalizedSize = Str::upper(preg_replace('/\s+/', '', $size) ?? $size);
+
+        return "{$product->reference}-{$normalizedSize}-{$color->code}";
+    }
+
+    /**
+     * Move the stock of this variant and leave a movement behind saying why.
+     *
+     * The caller passes the magnitude, always positive, and the type decides which
+     * way the stock goes; the movement then stores that same amount signed, the way
+     * `InventoryMovement` has always stored it. Stock is read again with
+     * `lockForUpdate` inside the transaction instead of trusting the in-memory
+     * value, so two concurrent sales cannot both read the same stock and both
+     * succeed. A movement that would push the stock below zero is refused before
+     * anything is written.
+     */
+    public function recordStockChange(string $type, int $quantity, ?int $userId = null, ?string $note = null, ?int $orderId = null): InventoryMovement
+    {
+        if ($quantity <= 0) {
+            throw new InvalidArgumentException("La cantidad de un movimiento de inventario debe ser mayor que cero, se recibió {$quantity}.");
+        }
+
+        if (! in_array($type, array_merge(self::STOCK_REDUCING_TYPES, self::STOCK_ADDING_TYPES), true)) {
+            throw new InvalidArgumentException("El tipo de movimiento «{$type}» no está permitido.");
+        }
+
+        $signedQuantity = static::signedQuantityFor($type, $quantity);
+
+        [$movement, $newStock] = DB::transaction(function () use ($type, $signedQuantity, $userId, $note, $orderId) {
+            $variant = static::query()->lockForUpdate()->findOrFail($this->getKey());
+
+            $newStock = $variant->stock + $signedQuantity;
+
+            if ($newStock < 0) {
+                throw InsufficientStockException::forVariant($variant, abs($signedQuantity));
+            }
+
+            $variant->update(['stock' => $newStock]);
+
+            $movement = InventoryMovement::create([
+                'product_variant_id' => $variant->getKey(),
+                'type' => $type,
+                'quantity' => $signedQuantity,
+                'order_id' => $orderId,
+                'user_id' => $userId,
+                'note' => $note,
+            ]);
+
+            return [$movement, $newStock];
+        });
+
+        $this->setAttribute('stock', $newStock);
+
+        return $movement;
+    }
+
+    /**
+     * The amount a movement of this type stores: negative for the types that take
+     * units out, positive for the ones that put them back.
+     */
+    private static function signedQuantityFor(string $type, int $magnitude): int
+    {
+        return in_array($type, self::STOCK_REDUCING_TYPES, true) ? -$magnitude : $magnitude;
     }
 }

@@ -19,7 +19,7 @@ class ProductImage extends Model
      */
     protected $fillable = [
         'product_id',
-        'product_variant_id',
+        'color_id',
         'path',
         'order',
     ];
@@ -45,10 +45,13 @@ class ProductImage extends Model
     }
 
     /**
-     * The variant this image is specific to, or null for a general product image.
+     * The color this image shows, or null for a general product image.
+     *
+     * The image is attached to a color instead of to a size because a photo in,
+     * say, blue tells the same story for every blue size of the product.
      */
-    public function productVariant(): BelongsTo
+    public function color(): BelongsTo
     {
-        return $this->belongsTo(ProductVariant::class);
+        return $this->belongsTo(Color::class);
     }
 }

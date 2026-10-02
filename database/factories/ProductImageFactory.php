@@ -20,6 +20,7 @@ class ProductImageFactory extends Factory
     {
         return [
             'product_id' => Product::factory(),
+            'color_id' => null,
             'path' => 'products/'.fake()->unique()->slug(4).'.jpg',
         ];
     }
