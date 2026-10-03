@@ -15,6 +15,7 @@ use App\Exceptions\DuplicateColorNameException;
 use App\Exceptions\InvalidColorHexException;
 use App\Livewire\Concerns\Notifies;
 use App\Models\Color;
+use Illuminate\Validation\Rule;
 use Livewire\Component;
 
 /**
@@ -109,13 +110,24 @@ class Colors extends Component
         $validated = $this->validate([
             'name' => ['required', 'string', 'max:100'],
             'hex' => ['required', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
-            'code' => ['nullable', 'string', 'max:3'],
+            'code' => [
+                'nullable',
+                'string',
+                // Un código en blanco no es un código: es la señal de que el catálogo
+                // lo deriva del nombre, que es como se escriben la mayoría de los
+                // colores. La forma exacta se le pide sólo a lo que de verdad se
+                // escribió, porque `DerivesColorCodes` completa en silencio lo que
+                // falta (`RR` se guardaría como `RRX`) y el admin nunca vería ese
+                // cambio. Sin tildes ni espacios: el código es lo que distingue dos
+                // colores dentro de un SKU, y ahí viaja pegado a otras letras.
+                Rule::when(filled($this->code), ['regex:/^[A-Za-z0-9]{3}$/']),
+            ],
         ], [
             'name.required' => 'El nombre del color es obligatorio.',
             'name.max' => 'El nombre del color no puede superar los 100 caracteres.',
             'hex.required' => 'El hexadecimal es obligatorio.',
             'hex.regex' => 'Usa un # seguido de seis dígitos hexadecimales, como #1A2B3C.',
-            'code.max' => 'El código del color no puede superar los 3 caracteres.',
+            'code.regex' => 'El código debe tener exactamente 3 letras o números.',
         ]);
 
         if ($this->editingId !== null) {

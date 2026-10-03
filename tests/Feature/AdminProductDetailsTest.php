@@ -461,7 +461,7 @@ test('the code of a color with variants is shown as read-only and is refused on 
 
     panelDeColores()
         ->call('edit', $color->getKey())
-        ->set('code', 'RR')
+        ->set('code', 'RRR')
         ->call('save')
         ->assertHasNoErrors()
         ->assertDispatched('toast', tone: 'error');
@@ -476,22 +476,48 @@ test('a color nothing is sold in keeps its code editable', function () {
         ->call('edit', $color->getKey())
         ->assertSet('codeIsLocked', false)
         ->assertSeeHtml('wire:model="code"')
-        ->set('code', 'RR')
+        ->set('code', 'rr1')
         ->call('save')
         ->assertHasNoErrors();
 
-    // El código del catálogo siempre mide tres: `RR` se completa con `X`.
-    expect($color->fresh()->code)->toBe('RRX');
+    // Lo escribe el catálogo en mayúsculas; lo que decide la forma lo decide el formulario.
+    expect($color->fresh()->code)->toBe('RR1');
 });
 
-test('a code is held to three characters', function () {
+test('a code written by hand has to be exactly three letters or digits', function (string $code) {
     panelDeColores()
         ->call('create')
         ->set('name', 'Rojo')
         ->set('hex', '#FF0000')
-        ->set('code', 'ROJO')
+        ->set('code', $code)
         ->call('save')
-        ->assertHasErrors(['code' => 'max']);
+        ->assertHasErrors([
+            'code' => ['regex', 'El código debe tener exactamente 3 letras o números.'],
+        ]);
+
+    // Un código con la forma equivocada no llega a escribirse: `DerivesColorCodes` lo
+    // completaría en silencio con `X`, y el admin se iría creyendo que pidió otra cosa.
+    expect(Color::query()->count())->toBe(0);
+})->with([
+    'too short' => ['RR'],
+    'too long' => ['ROJO'],
+    'with a space' => ['R 1'],
+    'with an accent' => ['ÑBC'],
+    'with a symbol' => ['R-1'],
+]);
+
+test('a color written without a code keeps the one derived from its name', function () {
+    panelDeColores()
+        ->call('create')
+        ->set('name', 'Rojo')
+        ->set('hex', '#FF0000')
+        ->set('code', '')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    // El campo en blanco no es un código mal formado: es la señal de que el catálogo lo
+    // deriva del nombre, que es como se escriben la mayoría de los colores.
+    expect(Color::query()->sole()->code)->toBe('ROJ');
 });
 
 test('the same name is refused even when it only differs in accents and case', function (string $nombre) {
