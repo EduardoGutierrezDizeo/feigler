@@ -209,40 +209,19 @@ class BackfillProductDetails
     }
 
     /**
-     * The sizes every category starts with.
-     *
-     * The list is read from `Size::STANDARD_NAMES` instead of being repeated here,
-     * so the tables that replace the constant start with exactly what the constant
-     * held and there is no second list that could go stale.
-     *
-     * @return list<string>
-     */
-    private function standardSizes(): array
-    {
-        return Size::STANDARD_NAMES;
-    }
-
-    /**
      * The number of `sizes` rows written for the standard sizes.
      *
-     * An existing row is left completely alone, prefix included: a size that is
-     * already there keeps the position it was given.
+     * The list itself is not repeated here: every category is asked for the eight
+     * sizes it starts with through `Size::seedStandardSizesFor()`, which is also
+     * what a category created from the panel goes through. An existing row is left
+     * completely alone, position included.
      */
     private function createStandardSizes(): int
     {
         $created = 0;
 
         foreach (Category::query()->orderBy('id')->get() as $category) {
-            foreach ($this->standardSizes() as $index => $name) {
-                $size = Size::query()->firstOrCreate(
-                    ['category_id' => $category->getKey(), 'name' => $name],
-                    ['order' => $index + 1],
-                );
-
-                if ($size->wasRecentlyCreated) {
-                    $created++;
-                }
-            }
+            $created += Size::seedStandardSizesFor($category);
         }
 
         return $created;

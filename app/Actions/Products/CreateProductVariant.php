@@ -2,6 +2,7 @@
 
 namespace App\Actions\Products;
 
+use App\Actions\Products\Concerns\GuardsVariantColor;
 use App\Actions\Products\Concerns\GuardsVariantSize;
 use App\Exceptions\InvalidStockAdjustmentException;
 use App\Models\Color;
@@ -13,6 +14,7 @@ use Illuminate\Support\Facades\DB;
 
 class CreateProductVariant
 {
+    use GuardsVariantColor;
     use GuardsVariantSize;
 
     /**
@@ -63,6 +65,7 @@ class CreateProductVariant
             $size = Size::query()->findOrFail($sizeId);
 
             $this->guardSizeIsSettable($product, $size);
+            $this->guardColorIsSettable($color);
             $this->guardCombinationIsFree($product, $size, $color);
 
             $variant = $product->variants()->create([

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Database\Factories\MaterialFactory;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -63,5 +64,60 @@ class Material extends Model
     public function scopeActive(Builder $query): void
     {
         $query->where('is_active', true);
+    }
+
+    /**
+     * In the order the catalog reads materials, with the id breaking the tie between
+     * two materials that share a position.
+     *
+     * It is the one order every list of materials uses, so a form and a listing never
+     * read the same set in two different orders.
+     *
+     * @param  Builder<Material>  $query
+     */
+    public function scopeOrdered(Builder $query): void
+    {
+        $query->orderBy('order')->orderBy('id');
+    }
+
+    /**
+     * Every material of the store, in the order the catalog reads them.
+     *
+     * @return Collection<int, Material>
+     */
+    public static function listed(): Collection
+    {
+        return static::query()->ordered()->get();
+    }
+
+    /**
+     * The materials a product can still be given, in the order the catalog reads
+     * them.
+     *
+     * @return Collection<int, Material>
+     */
+    public static function listedActive(): Collection
+    {
+        return static::query()->active()->ordered()->get();
+    }
+
+    /**
+     * The ids of every material, in the order the catalog reads them.
+     *
+     * @return list<int>
+     */
+    public static function orderedIds(): array
+    {
+        return static::query()->ordered()->pluck('id')->all();
+    }
+
+    /**
+     * The `order` a material added at the end gets.
+     */
+    public static function nextOrder(): int
+    {
+        $highest = static::query()->max('order');
+
+        return $highest === null ? 0 : ((int) $highest) + 1;
     }
 }

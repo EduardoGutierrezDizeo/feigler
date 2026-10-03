@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Database\Factories\SizeFactory;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -89,5 +90,89 @@ class Size extends Model
     public function scopeActive(Builder $query): void
     {
         $query->where('is_active', true);
+    }
+
+    /**
+     * In the order the catalog reads sizes, with the id breaking the tie between
+     * two sizes that share a position.
+     *
+     * It is the one order every list of sizes uses, so a form and a listing never
+     * read the same set in two different orders.
+     *
+     * @param  Builder<Size>  $query
+     */
+    public function scopeOrdered(Builder $query): void
+    {
+        $query->orderBy('order')->orderBy('id');
+    }
+
+    /**
+     * The sizes of a category, in the order the catalog reads them.
+     *
+     * @return Collection<int, Size>
+     */
+    public static function listedForCategory(int $categoryId): Collection
+    {
+        return static::query()
+            ->where('category_id', $categoryId)
+            ->ordered()
+            ->get();
+    }
+
+    /**
+     * The sizes a variant can still be created in inside a category, in the order the
+     * catalog reads them.
+     *
+     * @return Collection<int, Size>
+     */
+    public static function listedActiveForCategory(int $categoryId): Collection
+    {
+        return static::query()
+            ->where('category_id', $categoryId)
+            ->active()
+            ->ordered()
+            ->get();
+    }
+
+    /**
+     * The `order` a size added at the end of a category gets.
+     *
+     * The list starts at 1 rather than at 0, which is the position the standard
+     * sizes of a category are written with, so a category that has only those eight
+     * does not end up with a ninth one in front of them.
+     */
+    public static function nextOrderInCategory(int $categoryId): int
+    {
+        $highest = static::query()
+            ->where('category_id', $categoryId)
+            ->max('order');
+
+        return $highest === null ? 1 : ((int) $highest) + 1;
+    }
+
+    /**
+     * Give a category the sizes the store sells, and say how many were written.
+     *
+     * A size that is already there is left completely alone, position included, so
+     * this is safe to run again over a category that already has its sizes: which is
+     * what makes it usable both when a category is created and when the catalog is
+     * seeded from the sizes that used to live in a constant.
+     */
+    public static function seedStandardSizesFor(Category $category): int
+    {
+        $created = 0;
+
+        foreach (self::STANDARD_NAMES as $index => $name) {
+            $size = static::query()->firstOrCreate(
+                ['category_id' => $category->getKey(), 'name' => $name],
+                ['order' => $index + 1],
+            );
+
+            if ($size->wasRecentlyCreated) {
+                $created++;
+            }
+        }
+
+        return $created;
     }
 }

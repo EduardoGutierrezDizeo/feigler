@@ -7,6 +7,7 @@ use App\Actions\Products\ToggleProductVariant;
 use App\Actions\Products\UpdateProductVariant;
 use App\Enums\StoreSection;
 use App\Exceptions\DuplicateProductVariantException;
+use App\Exceptions\InactiveVariantColorException;
 use App\Exceptions\InactiveVariantSizeException;
 use App\Exceptions\InsufficientStockException;
 use App\Exceptions\InvalidStockAdjustmentException;
@@ -647,4 +648,83 @@ test('a variant in an inactive size can still be edited on other fields', functi
     expect($edited->price_override)->toEqual('175.00')
         ->and($edited->size_id)->toBe($talla)
         ->and($edited->refresh()->sku)->toBe($variant->sku);
+});
+
+/**
+ * Turning a color off is how the store takes it out of the offer, and a variant in a
+ * color that is not offered is not for sale in anything.
+ */
+test('an inactive color cannot be chosen for a new variant', function () {
+    $product = productFor();
+    $inactiva = Color::factory()->inactive()->create(['name' => 'Verde', 'code' => 'VER']);
+
+    expect(fn () => (new CreateProductVariant)($product, talla($product), $inactiva))
+        ->toThrow(InactiveVariantColorException::class);
+
+    expect($product->variants()->count())->toBe(0);
+});
+
+test('an inactive color cannot be moved onto by an edit', function () {
+    $product = productFor();
+    $azul = azul();
+    $variant = (new CreateProductVariant)($product, talla($product), $azul);
+    $inactiva = Color::factory()->inactive()->create(['name' => 'Verde', 'code' => 'VER']);
+
+    expect(fn () => (new UpdateProductVariant)($product, $variant->id, talla($product), $inactiva))
+        ->toThrow(InactiveVariantColorException::class);
+
+    expect($variant->refresh()->color_id)->toBe($azul->id);
+});
+
+test('the refusal names the color that is switched off', function () {
+    $product = productFor();
+    $inactiva = Color::factory()->inactive()->create(['name' => 'Verde', 'code' => 'VER']);
+
+    expect(fn () => (new CreateProductVariant)($product, talla($product), $inactiva))
+        ->toThrow(
+            InactiveVariantColorException::class,
+            'El color «Verde» está desactivado y no admite variantes nuevas.'
+        );
+});
+
+/**
+ * A variant that is already in a deactivated color stays in it: the store is still
+ * selling what it already has.
+ */
+test('a variant in an inactive color can still be edited on other fields', function () {
+    $product = productFor();
+    $inactiva = Color::factory()->create(['name' => 'Verde', 'code' => 'VER']);
+    $variant = (new CreateProductVariant)($product, talla($product), $inactiva);
+    $inactiva->update(['is_active' => false]);
+
+    $edited = (new UpdateProductVariant)($product, $variant->id, talla($product), $inactiva, '175.00');
+
+    expect($edited->price_override)->toEqual('175.00')
+        ->and($edited->color_id)->toBe($inactiva->id)
+        ->and($edited->refresh()->sku)->toBe($variant->sku);
+});
+
+test('moving a variant off an inactive color into an active one is allowed', function () {
+    $product = productFor();
+    $inactiva = Color::factory()->create(['name' => 'Verde', 'code' => 'VER']);
+    $variant = (new CreateProductVariant)($product, talla($product), $inactiva);
+    $inactiva->update(['is_active' => false]);
+    $azul = azul();
+
+    $edited = (new UpdateProductVariant)($product, $variant->id, talla($product), $azul);
+
+    expect($edited->refresh()->color_id)->toBe($azul->id);
+});
+
+test('a refused color leaves the variant and its sku alone', function () {
+    $product = productFor();
+    $azul = azul();
+    $variant = (new CreateProductVariant)($product, talla($product), $azul);
+    $inactiva = Color::factory()->inactive()->create(['name' => 'Verde', 'code' => 'VER']);
+
+    expect(fn () => (new UpdateProductVariant)($product, $variant->id, talla($product), $inactiva))
+        ->toThrow(InactiveVariantColorException::class);
+
+    expect($variant->refresh()->color_id)->toBe($azul->id)
+        ->and($variant->sku)->toBe('PL-001-M-AZU');
 });

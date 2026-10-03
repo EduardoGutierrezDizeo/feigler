@@ -1,11 +1,14 @@
 <?php
 
+use App\Actions\ProductDetails\DeleteCategory;
 use App\Enums\StoreSection;
 use App\Livewire\Admin\Categories\Index;
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\Size;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
+use Illuminate\Support\Facades\Event;
 use Livewire\Livewire;
 
 test('lists only the categories of the active section', function () {
@@ -299,6 +302,100 @@ test('deletes a category without products', function () {
         ->assertSet('noticeType', 'success');
 
     $this->assertModelMissing($category);
+});
+
+/**
+ * The sizes belong to the category, so a category is deleted together with them.
+ *
+ * Without this, the foreign key of `sizes.category_id` restricts the delete and no
+ * category of the store could ever be removed, not even one created seconds ago.
+ */
+test('deletes the sizes of a category that sells nothing', function () {
+    $category = Category::factory()->create();
+    $sizes = Size::seedStandardSizesFor($category);
+
+    expect($sizes)->toBe(8)
+        ->and(Size::query()->where('category_id', $category->id)->count())->toBe(8);
+
+    Livewire::test(Index::class)
+        ->call('delete', $category->id)
+        ->assertSet('noticeType', 'success');
+
+    $this->assertModelMissing($category);
+    expect(Size::query()->where('category_id', $category->id)->count())->toBe(0);
+});
+
+test('a refused category keeps its sizes', function () {
+    $category = Category::factory()->create();
+    Product::factory()->for($category)->create();
+    Size::seedStandardSizesFor($category);
+
+    Livewire::test(Index::class)
+        ->call('delete', $category->id)
+        ->assertSet('noticeType', 'error');
+
+    $this->assertModelExists($category);
+    expect(Size::query()->where('category_id', $category->id)->count())->toBe(8);
+});
+
+test('the sizes of another category are not touched by a deletion', function () {
+    $sought = Category::factory()->create();
+    $kept = Category::factory()->create();
+    Size::seedStandardSizesFor($sought);
+    Size::seedStandardSizesFor($kept);
+
+    (new DeleteCategory)($sought);
+
+    expect(Size::query()->where('category_id', $kept->id)->count())->toBe(8);
+});
+
+test('a category created from the panel starts with the eight sizes of the store', function () {
+    Livewire::test(Index::class)
+        ->call('create')
+        ->set('name', 'Pantalones')
+        ->set('skuPrefix', 'PA')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $category = Category::query()->where('slug', 'pantalones')->sole();
+
+    expect(Size::listedForCategory($category->id)->pluck('name')->all())
+        ->toBe(Size::STANDARD_NAMES);
+});
+
+test('the sizes of a new category come out active and in order', function () {
+    Livewire::test(Index::class)
+        ->call('create')
+        ->set('name', 'Camisetas')
+        ->set('skuPrefix', 'CM')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $sizes = Size::listedForCategory(Category::query()->where('slug', 'camisetas')->sole()->id);
+
+    expect($sizes->pluck('order')->all())->toBe([1, 2, 3, 4, 5, 6, 7, 8])
+        ->and($sizes->every(fn (Size $size): bool => $size->is_active))->toBeTrue()
+        ->and(Size::listedActiveForCategory($sizes->first()->category_id))->toHaveCount(8);
+});
+
+/**
+ * The two writes are one unit of work, so a category is never left in the store
+ * without the sizes it sells in.
+ */
+test('a category is not left behind when writing its sizes fails', function () {
+    Event::listen('eloquent.created: '.Size::class, function (): void {
+        throw new RuntimeException('Fallo simulado al escribir las tallas');
+    });
+
+    expect(fn () => Livewire::test(Index::class)
+        ->call('create')
+        ->set('name', 'Pantalones')
+        ->set('skuPrefix', 'PA')
+        ->call('save'))
+        ->toThrow(RuntimeException::class);
+
+    expect(Category::query()->where('slug', 'pantalones')->exists())->toBeFalse()
+        ->and(Size::query()->count())->toBe(0);
 });
 
 test('announces a created category in the toast stack', function () {

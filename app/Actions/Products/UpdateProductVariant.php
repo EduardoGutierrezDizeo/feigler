@@ -2,6 +2,7 @@
 
 namespace App\Actions\Products;
 
+use App\Actions\Products\Concerns\GuardsVariantColor;
 use App\Actions\Products\Concerns\GuardsVariantSize;
 use App\Models\Color;
 use App\Models\Product;
@@ -11,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 
 class UpdateProductVariant
 {
+    use GuardsVariantColor;
     use GuardsVariantSize;
 
     /**
@@ -36,6 +38,7 @@ class UpdateProductVariant
             $size = Size::query()->findOrFail($sizeId);
 
             $this->guardSizeIsSettable($product, $size, $variant);
+            $this->guardColorIsSettable($color, $variant);
             $this->guardCombinationIsFree($product, $size, $color, $variant);
 
             $variant->update([

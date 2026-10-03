@@ -349,6 +349,43 @@ test('refuses a size that is turned off and keeps the one the variant already ha
         ->and($variante->refresh()->size_id)->toBe($mediana->getKey());
 });
 
+test('refuses a color that is turned off and keeps the one the variant already has', function () {
+    $this->seed(RoleSeeder::class);
+
+    $producto = Product::factory()->create();
+    $color = Color::factory()->create(['name' => 'Azul']);
+    $apagado = Color::factory()->inactive()->create(['name' => 'Verde']);
+    $mediana = sizeOfProduct($producto);
+
+    variantPanel($producto)
+        ->call('startCreating')
+        ->set('sizeId', $mediana->getKey())
+        ->set('colorId', $color->getKey())
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $variante = $producto->variants()->sole();
+
+    // Desactivado no quiere decir borrado: el mismo trato que una talla apagada, con el
+    // aviso bajo su propio select porque son dos campos con dos motivos distintos.
+    variantPanel($producto)
+        ->call('startCreating')
+        ->set('sizeId', $mediana->getKey())
+        ->set('colorId', $apagado->getKey())
+        ->call('save')
+        ->assertHasErrors(['colorId' => 'El color «Verde» está desactivado y no admite variantes nuevas.'])
+        ->assertSet('showForm', true);
+
+    // La variante que ya está en él sí se puede seguir editando.
+    variantPanel($producto)
+        ->call('startEditing', $variante->getKey())
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect($producto->variants()->count())->toBe(1)
+        ->and($variante->refresh()->color_id)->toBe($color->getKey());
+});
+
 test('editing a variant changes its data but neither its sku nor its stock', function () {
     $this->seed(RoleSeeder::class);
 

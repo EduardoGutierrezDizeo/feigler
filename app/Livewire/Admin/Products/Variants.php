@@ -8,6 +8,7 @@ use App\Actions\Products\DeleteProductVariant;
 use App\Actions\Products\ToggleProductVariant;
 use App\Actions\Products\UpdateProductVariant;
 use App\Exceptions\DuplicateProductVariantException;
+use App\Exceptions\InactiveVariantColorException;
 use App\Exceptions\InactiveVariantSizeException;
 use App\Exceptions\InsufficientStockException;
 use App\Exceptions\InvalidStockAdjustmentException;
@@ -189,6 +190,12 @@ class Variants extends Component
             }
         } catch (DuplicateProductVariantException|InvalidVariantSizeException|InactiveVariantSizeException $exception) {
             $this->addError('sizeId', $exception->getMessage());
+
+            return;
+        } catch (InactiveVariantColorException $exception) {
+            // El color desactivado se avisa bajo su propio select y no junto a la
+            // talla: son dos campos distintos con dos motivos distintos.
+            $this->addError('colorId', $exception->getMessage());
 
             return;
         } catch (InvalidStockAdjustmentException $exception) {

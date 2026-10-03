@@ -2,9 +2,13 @@
 
 namespace App\Livewire\Admin\Categories;
 
+use App\Actions\ProductDetails\DeleteCategory;
 use App\Enums\StoreSection;
+use App\Exceptions\CategoryInUseException;
 use App\Livewire\Concerns\Notifies;
 use App\Models\Category;
+use App\Models\Size;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
@@ -140,13 +144,7 @@ class Index extends Component
 
             $this->notifySuccess('Categoría actualizada correctamente.');
         } else {
-            Category::create([
-                'name' => $name,
-                'slug' => $slug,
-                'section' => $section,
-                'sku_prefix' => $this->skuPrefix,
-                'order' => Category::nextOrderFor($section),
-            ]);
+            $this->createCategoryWithItsSizes($name, $slug, $section);
 
             $this->notifySuccess('Categoría creada correctamente.');
         }
@@ -154,20 +152,51 @@ class Index extends Component
         $this->resetForm();
     }
 
+    /**
+     * Write a new category and the sizes it sells garments in.
+     *
+     * The sizes are written with the category and not after it: a category that is
+     * born without them cannot be sold in, because the variant form has nothing to
+     * offer and no variant can be created until somebody adds the sizes by hand.
+     * Both writes are one transaction, so a category is never left in the store
+     * without the sizes that belong to it.
+     */
+    private function createCategoryWithItsSizes(string $name, string $slug, StoreSection $section): void
+    {
+        DB::transaction(function () use ($name, $slug, $section): void {
+            $category = Category::create([
+                'name' => $name,
+                'slug' => $slug,
+                'section' => $section,
+                'sku_prefix' => $this->skuPrefix,
+                'order' => Category::nextOrderFor($section),
+            ]);
+
+            Size::seedStandardSizesFor($category);
+        });
+    }
+
     public function toggleActive(Category $category): void
     {
         $category->update(['is_active' => ! $category->is_active]);
     }
 
+    /**
+     * Delete a category that sells nothing, together with the sizes of its own.
+     *
+     * The rule itself lives in the action, not here: a category that still has
+     * products keeps both the products and its sizes, and the sizes are what makes
+     * the delete possible at all, so the two go together in one unit of work.
+     */
     public function delete(Category $category): void
     {
-        if ($category->products()->exists()) {
-            $this->notifyError("No se puede eliminar «{$category->name}» porque tiene productos asociados. Primero mueve esos productos a otra categoría o elimínalos.");
+        try {
+            (new DeleteCategory)($category);
+        } catch (CategoryInUseException $exception) {
+            $this->notifyError($exception->getMessage());
 
             return;
         }
-
-        $category->delete();
 
         $this->notifySuccess("Categoría «{$category->name}» eliminada correctamente.");
     }
