@@ -261,7 +261,6 @@ test('creates a product with a generated reference, slug, brand and status', fun
         ->call('create')
         ->set('name', 'Polo clásico piqué')
         ->set('categoryId', $polos->id)
-        ->set('description', 'Piqué de algodón peinado.')
         ->set('composition', [
             ['material_id' => (string) $algodon->getKey(), 'percentage' => '80'],
             ['material_id' => (string) $poliester->getKey(), 'percentage' => '20'],
@@ -285,7 +284,9 @@ test('creates a product with a generated reference, slug, brand and status', fun
         ->and($producto->brand)->toBe('Feigler')
         ->and($producto->status)->toBe('active')
         ->and($producto->status)->not->toBe('out_of_stock')
-        ->and($producto->description)->toBe('Piqué de algodón peinado.')
+        // La descripción ya no la escribe el formulario: lo que se verá en la tienda
+        // saldría de las características de detalle, así que la columna queda vacía.
+        ->and($producto->description)->toBeNull()
         ->and($producto->materials()->orderBy('materials.id')->pluck('materials.name')->all())->toBe(['Algodón', 'Poliéster'])
         ->and(array_map(
             fn (Material $material): int => $material->pivot->percentage,
@@ -326,24 +327,48 @@ test('a duplicate slug gets a numeric suffix', function () {
         ->and(Product::query()->where('slug', 'polo-basico')->count())->toBe(1);
 });
 
-test('creating in a category of another section fails and stores nothing', function () {
+/**
+ * El género lo elige el admin en el selector, así que crear un producto de mujer desde
+ * la pestaña de hombre es correcto siempre que el género escolhido sea el de la
+ * categoría. Lo que no vale es una categoría de otro género que la elegida: es la
+ * garantía que queda, y es la que evita guardar un producto donde el listado no lo
+ * enseñará nunca.
+ */
+test('creating with a category of another gender than the chosen one fails and stores nothing', function () {
     $this->seed(RoleSeeder::class);
 
-    // El prefijo de SKU ya no puede faltar: es `NOT NULL` y único en toda la
-    // tienda. Lo que sigue vedado es cambiar de sección, y la garantía pasa a
-    // ser que la categoría elegida tiene que pertenecer a la sección abierta.
-    $mujer = numberedCategory('VM', 'Vestidos', StoreSection::Mujer);
+    $polos = numberedCategory('PL', 'Polos');
 
     Livewire::actingAs(adminForPanel())
         ->test(Index::class)
         ->call('create')
-        ->set('name', 'Producto de otra sección')
-        ->set('categoryId', $mujer->id)
+        ->set('name', 'Producto de otro género')
+        ->set('formSection', StoreSection::Mujer->value)
+        ->set('categoryId', $polos->id)
         ->set('basePrice', '19900')
         ->call('save')
         ->assertHasErrors(['categoryId'])
-        ->assertSee('La categoría seleccionada no existe en esta sección.')
+        ->assertSee('La categoría seleccionada no pertenece al género elegido.')
         ->assertSet('showForm', true);
+
+    expect(Product::query()->count())->toBe(0);
+});
+
+test('a gender the enum does not know is refused', function () {
+    $this->seed(RoleSeeder::class);
+
+    $vestidos = numberedCategory('VM', 'Vestidos', StoreSection::Mujer);
+
+    Livewire::actingAs(adminForPanel())
+        ->test(Index::class)
+        ->call('create')
+        ->set('name', 'Vestido sin género')
+        ->set('formSection', 'unicornio')
+        ->set('categoryId', $vestidos->id)
+        ->set('basePrice', '19900')
+        ->call('save')
+        ->assertHasErrors(['formSection'])
+        ->assertSee('El género seleccionado no es válido.');
 
     expect(Product::query()->count())->toBe(0);
 });
@@ -442,7 +467,7 @@ test('validates the general data of a product', function () {
         ->set('basePrice', '19900')
         ->call('save')
         ->assertHasErrors(['categoryId'])
-        ->assertSee('La categoría seleccionada no existe en esta sección.');
+        ->assertSee('La categoría seleccionada no pertenece al género elegido.');
 
     // «Agotado» es un estado calculado: nunca se escribe, y menos aún desde el formulario.
     Livewire::actingAs(adminForPanel())
@@ -513,7 +538,7 @@ test('editing into a category of another section fails and keeps the product whe
         ->set('categoryId', $vestidos->id)
         ->call('save')
         ->assertHasErrors(['categoryId'])
-        ->assertSee('La categoría seleccionada no existe en esta sección.');
+        ->assertSee('La categoría seleccionada no pertenece al género elegido.');
 
     expect($producto->refresh()->category_id)->toBe($polos->id)
         ->and($producto->section)->toBe(StoreSection::Hombre);
@@ -561,7 +586,6 @@ test('a product with variants cannot be moved to another category of its section
         'slug' => 'polo-clasico',
         'reference' => 'PL-001',
         'base_price' => '1990.00',
-        'description' => 'Piqué de algodón.',
     ]);
 
     ProductVariant::factory()->for($producto)->create();
@@ -572,7 +596,6 @@ test('a product with variants cannot be moved to another category of its section
         ->set('categoryId', $camisetas->id)
         ->set('name', 'Polo de algodón')
         ->set('basePrice', '2990')
-        ->set('description', 'Otra descripción.')
         ->set('status', 'inactive')
         ->call('save')
         ->assertHasErrors(['categoryId'])
@@ -584,7 +607,6 @@ test('a product with variants cannot be moved to another category of its section
         ->category_id->toBe($polos->id)
         ->name->toBe('Polo clásico')
         ->base_price->toEqual('1990.00')
-        ->description->toBe('Piqué de algodón.')
         ->status->toBe('active')
         ->and($producto->variants()->count())->toBe(1);
 
@@ -593,8 +615,7 @@ test('a product with variants cannot be moved to another category of its section
         ->test(Index::class)
         ->assertSeeHtml('wire:key="product-'.$producto->id.'"')
         ->assertSee('Polo clásico')
-        ->assertDontSeeHtml('Polo de algodón')
-        ->assertDontSeeHtml('Otra descripción.');
+        ->assertDontSee('Polo de algodón');
 });
 
 /**
@@ -624,7 +645,6 @@ test('a product with variants is still edited while it stays in its category', f
         ->set('categoryId', $polos->id)
         ->set('name', 'Polo clásico piqué')
         ->set('basePrice', '2490')
-        ->set('description', 'Piqué de algodón peinado.')
         ->set('status', 'inactive')
         ->call('save')
         ->assertHasNoErrors()
@@ -636,7 +656,6 @@ test('a product with variants is still edited while it stays in its category', f
         // El slug se deja a propósito al editar, así que sigue siendo el de antes.
         ->slug->toBe('polo-clasico')
         ->base_price->toEqual('2490.00')
-        ->description->toBe('Piqué de algodón peinado.')
         ->status->toBe('inactive')
         // La referencia no se toca, así que las variantes que ya tiene siguen siendo
         // las mismas y con el mismo SKU.
@@ -727,6 +746,65 @@ test('shows twenty products at a time and loads twenty more on demand', function
         ->assertDontSee('Mostrar más');
 });
 
+/**
+ * The list is read from the A to the Z by name, and a name is read by its letters and
+ * not by the bytes it happens to be stored in: `Ámbar` has to land next to `Ambar`
+ * instead of after every `z`, and `zafiro` has to land last despite the lowercase.
+ *
+ * This is the guard for the folding, not only for the alphabet. Sorted by raw bytes,
+ * which is what SQLite does when it is left to itself, the order would come out
+ * `Brezo`, `zafiro`, `Ámbar`, because the byte of `Á` is above the byte of `z`.
+ */
+test('lists the products from the A to the Z by name', function () {
+    $this->seed(RoleSeeder::class);
+
+    $polos = numberedCategory('PL', 'Polos');
+
+    // Las referencias van al revés que los nombres a propósito: si el listado se
+    // ordenara por referencia, esta prueba no distinguiría un orden del otro.
+    $zafiro = Product::factory()->for($polos)->create([
+        'name' => 'zafiro',
+        'reference' => 'PL-001',
+    ]);
+    $ambar = Product::factory()->for($polos)->create([
+        'name' => 'Ámbar',
+        'reference' => 'PL-002',
+    ]);
+    $brezo = Product::factory()->for($polos)->create([
+        'name' => 'Brezo',
+        'reference' => 'PL-003',
+    ]);
+
+    $posiciones = function (string $html, Product $producto): int {
+        return (int) mb_strpos($html, 'wire:key="product-'.$producto->id.'"');
+    };
+
+    $html = Livewire::actingAs(adminForPanel())->test(Index::class)->html();
+
+    expect($posiciones($html, $ambar))->toBeGreaterThan(0)
+        ->and($posiciones($html, $brezo))->toBeGreaterThan($posiciones($html, $ambar))
+        ->and($posiciones($html, $zafiro))->toBeGreaterThan($posiciones($html, $brezo));
+});
+
+/**
+ * Folding has to carry the case as well: a product whose name starts with a lowercase
+ * letter still has to come before one that starts with a later uppercase letter, which
+ * is the half of the folding that `ORDER BY name` gets wrong on its own.
+ */
+test('sorts a lowercase name after the capital letter it starts with', function () {
+    $this->seed(RoleSeeder::class);
+
+    $polos = numberedCategory('PL', 'Polos');
+
+    $minuscula = Product::factory()->for($polos)->create(['name' => 'camiseta', 'reference' => 'PL-001']);
+    $mayuscula = Product::factory()->for($polos)->create(['name' => 'Bermuda', 'reference' => 'PL-002']);
+
+    $html = Livewire::actingAs(adminForPanel())->test(Index::class)->html();
+
+    expect(mb_strpos($html, 'wire:key="product-'.$mayuscula->id.'"'))
+        ->toBeLessThan(mb_strpos($html, 'wire:key="product-'.$minuscula->id.'"'));
+});
+
 test('searching or filtering starts the list over from the first twenty', function () {
     $this->seed(RoleSeeder::class);
 
@@ -786,6 +864,254 @@ test('the listing runs the same number of queries with three products as with fi
     expect($conQuince)->toBe($conTres);
 });
 
+/*
+|-------------------------------------------------------------------------------
+| El género del formulario
+|-------------------------------------------------------------------------------
+|
+| El alta es la única parte del panel donde el género se elige: la pestaña ya lo dice y
+| un producto que ya existe no muda de sección. Lo que se prueba aquí es que el selector
+| de categorías ofrezca las del género elegido, que no se pueda colar una de otro, y que
+| la descripción haya salido del formulario.
+|
+*/
+
+describe('el género del formulario', function () {
+    beforeEach(function (): void {
+        $this->seed(RoleSeeder::class);
+    });
+
+    /**
+     * El selector de categorías se lee del HTML de ese `<select>` y no del de la vista
+     * entera, porque el nombre de una categoría también sale en el filtro del listado y
+     * una fila del selector podría estar leyéndose en el sitio que no es.
+     */
+    test('el selector de categorías ofrece sólo las del género elegido', function () {
+        $polos = numberedCategory('PL', 'Polos');
+        $camisetas = numberedCategory('CM', 'Camisetas');
+        $vestidos = numberedCategory('VM', 'Vestidos', StoreSection::Mujer);
+        $faldas = numberedCategory('FD', 'Faldas', StoreSection::Mujer);
+
+        $selectorDeCategorias = function (?string $genero = null): string {
+            $component = Livewire::actingAs(adminForPanel())
+                ->test(Index::class)
+                ->call('create');
+
+            if ($genero !== null) {
+                $component->set('formSection', $genero);
+            }
+
+            $html = $component->html();
+
+            preg_match('/id="product-category".*?<\/select>/s', $html, $encontrado);
+
+            return $encontrado[0] ?? '';
+        };
+
+        $deHombre = $selectorDeCategorias();
+
+        expect($deHombre)
+            ->toContain('value="'.$polos->id.'"')
+            ->toContain('value="'.$camisetas->id.'"')
+            ->not->toContain('value="'.$vestidos->id.'"')
+            ->not->toContain('value="'.$faldas->id.'"');
+
+        // Y al elegir mujer, el mismo selector pasa a llevar las de mujer y a soltar las
+        // de hombre: es el mismo `<select>`, no dos distintos.
+        $deMujer = $selectorDeCategorias(StoreSection::Mujer->value);
+
+        expect($deMujer)
+            ->toContain('value="'.$vestidos->id.'"')
+            ->toContain('value="'.$faldas->id.'"')
+            ->not->toContain('value="'.$polos->id.'"')
+            ->not->toContain('value="'.$camisetas->id.'"');
+    });
+
+    /**
+     * Los tres géneros del enum salen en el selector, y el alta se abre en el de la
+     * pestaña que está activa, que es donde el admin ya está mirando.
+     */
+    test('el selector de género ofrece los tres y arranca en el de la pestaña', function () {
+        Livewire::actingAs(adminForPanel())
+            ->test(Index::class)
+            ->call('create')
+            ->assertSet('formSection', StoreSection::Hombre->value)
+            ->assertSee('value="'.StoreSection::Hombre->value.'"', false)
+            ->assertSee('value="'.StoreSection::Mujer->value.'"', false)
+            ->assertSee('value="'.StoreSection::Ninos->value.'"', false);
+
+        Livewire::actingAs(adminForPanel())
+            ->test(Index::class)
+            ->call('setSection', StoreSection::Mujer->value)
+            ->call('create')
+            ->assertSet('formSection', StoreSection::Mujer->value);
+    });
+
+    /**
+     * Cambiar de género suelta la categoría elegida: es de un género que ya no es el del
+     * formulario, y dejarla marcada haría que el selector mostrara una opción que no
+     * está en su lista, que es justo lo que el admin no puede corregir a la vista.
+     */
+    test('cambiar de género suelta la categoría que es de otro', function () {
+        $polos = numberedCategory('PL', 'Polos');
+        $vestidos = numberedCategory('VM', 'Vestidos', StoreSection::Mujer);
+
+        Livewire::actingAs(adminForPanel())
+            ->test(Index::class)
+            ->call('create')
+            ->set('categoryId', $polos->id)
+            ->assertSet('categoryId', $polos->id)
+            ->set('formSection', StoreSection::Mujer->value)
+            ->assertSet('formSection', StoreSection::Mujer->value)
+            ->assertSet('categoryId', null);
+
+        // Y al revés: primero se cambia el género y la categoría se elige después, así
+        // que una de ese género sí se queda. El orden importa porque el género suelta la
+        // categoría cada vez que cambia, y no al revés.
+        Livewire::actingAs(adminForPanel())
+            ->test(Index::class)
+            ->call('create')
+            ->set('formSection', StoreSection::Mujer->value)
+            ->set('categoryId', $vestidos->id)
+            ->assertSet('formSection', StoreSection::Mujer->value)
+            ->assertSet('categoryId', $vestidos->id);
+    });
+
+    /**
+     * Crear en un género distinto al de la pestaña es correcto y mueve el listado a ese
+     * género, filtros incluidos. Sin ese salto el admin leería «Producto creado
+     * correctamente» y no vería la fila en ninguna parte, porque el listado enseña un
+     * género cada vez; y el filtro de categoría que se deja es del género que se
+     * abandona, así que filtraría la lista nueva hasta dejarla vacía.
+     */
+    test('crear en otro género mueve el listado a ese género y limpia los filtros', function () {
+        $polos = numberedCategory('PL', 'Polos');
+        $vestidos = numberedCategory('VM', 'Vestidos', StoreSection::Mujer);
+
+        Product::factory()->for($polos)->create(['name' => 'Polo de hombre']);
+
+        Livewire::actingAs(adminForPanel())
+            ->test(Index::class)
+            ->set('categoryFilter', (string) $polos->id)
+            ->assertSet('section', StoreSection::Hombre->value)
+            ->call('create')
+            ->set('name', 'Vestido de fiesta')
+            ->set('formSection', StoreSection::Mujer->value)
+            ->set('categoryId', $vestidos->id)
+            ->set('basePrice', '19900')
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertSet('section', StoreSection::Mujer->value)
+            ->assertSet('categoryFilter', '')
+            ->assertSet('perPage', Index::PAGE_SIZE);
+
+        $vestido = Product::query()->where('name', 'Vestido de fiesta')->sole();
+
+        expect($vestido->category_id)->toBe($vestidos->id)
+            ->and($vestido->section)->toBe(StoreSection::Mujer);
+
+        // El modal sigue abierto y la fila del nuevo producto está en la lista, que es
+        // lo que hacía falta para que el alta se viera terminada. La lista se abre
+        // por la pestaña que quedó activa, que es donde la dejó el alta.
+        Livewire::actingAs(adminForPanel())
+            ->test(Index::class)
+            ->set('section', StoreSection::Mujer->value)
+            ->assertSeeHtml('wire:key="product-'.$vestido->id.'"')
+            ->assertSee('Vestido de fiesta');
+    });
+
+    /**
+     * Editar no deja cambiar el género: un producto no muda de sección y el selector va
+     * apagado. El valor del servidor manda sobre el que venga del navegador, así que
+     * mandar el de otro por debajo tampoco cambia el resultado: la categoría se sigue
+     * validando contra el género del propio producto.
+     */
+    test('el género no se puede cambiar al editar', function () {
+        $polos = numberedCategory('PL', 'Polos');
+        $vestidos = numberedCategory('VM', 'Vestidos', StoreSection::Mujer);
+
+        $producto = Product::factory()->for($polos)->create([
+            'name' => 'Polo clásico',
+            'reference' => 'PL-001',
+        ]);
+
+        $formulario = Livewire::actingAs(adminForPanel())
+            ->test(Index::class)
+            ->call('edit', $producto->id)
+            ->assertSet('formSection', StoreSection::Hombre->value);
+
+        preg_match('/<select[^>]*id="product-form-section".*?<\/select>/s', $formulario->html(), $encontrado);
+
+        // El selector existe y se ve, pero apagado. El `wire:model` se queda puesto a
+        // propósito: es la garantía de que la vida del componente sigue en el servidor,
+        // y `disabled` es lo que le quita el ratón al admin. Lo que decide el género de
+        // una edición es el producto, no el navegador, así que la prueba de abajo es la
+        // que importa: mandar el de mujer por debajo tampoco mueve la categoría.
+        expect($encontrado[0] ?? '')
+            ->toContain('disabled')
+            ->toContain('wire:model.live="formSection"');
+
+        $formulario
+            ->set('formSection', StoreSection::Mujer->value)
+            ->set('categoryId', $vestidos->id)
+            ->call('save')
+            ->assertHasErrors(['categoryId'])
+            ->assertSee('La categoría seleccionada no pertenece al género elegido.');
+
+        expect($producto->refresh())
+            ->category_id->toBe($polos->id)
+            ->section->toBe(StoreSection::Hombre);
+    });
+
+    /**
+     * La descripción ya no está en el formulario, ni al crear ni al editar: es el mismo
+     * modal. Lo que se verá en la tienda sale de las características de detalle del
+     * producto, así que un campo que no lleva a ninguna parte engañaría a quien lo
+     * rellenara pensando que se guarda.
+     */
+    test('el formulario no tiene campo de descripción ni al crear ni al editar', function () {
+        $polos = numberedCategory('PL', 'Polos');
+        $producto = Product::factory()->for($polos)->create(['name' => 'Polo clásico']);
+
+        foreach ([['create'], ['edit', $producto->id]] as $llamada) {
+            Livewire::actingAs(adminForPanel())
+                ->test(Index::class)
+                ->call(...$llamada)
+                ->assertDontSee('product-description')
+                ->assertDontSeeHtml('wire:model="description"')
+                // El `textarea` era el suyo: si no queda ninguno, no quedó el campo.
+                ->assertDontSeeHtml('<textarea');
+        }
+    });
+
+    /**
+     * Quitar el campo del formulario no es borrar lo ya escrito: la columna sigue ahí y
+     * editar un producto conserva lo que tuviera, porque mientras no exista lo que la
+     * vaya a sustituir nadie ha pedido perderlo.
+     */
+    test('editar un producto conserva una descripción que ya tuviera', function () {
+        $polos = numberedCategory('PL', 'Polos');
+
+        $producto = Product::factory()->for($polos)->create([
+            'name' => 'Polo clásico',
+            'reference' => 'PL-001',
+            'description' => 'Piqué de algodón.',
+        ]);
+
+        Livewire::actingAs(adminForPanel())
+            ->test(Index::class)
+            ->call('edit', $producto->id)
+            ->set('name', 'Polo clásico piqué')
+            ->set('categoryId', $polos->id)
+            ->set('basePrice', '19900')
+            ->call('save')
+            ->assertHasNoErrors();
+
+        expect($producto->refresh())
+            ->name->toBe('Polo clásico piqué')
+            ->description->toBe('Piqué de algodón.');
+    });
+});
 /*
 |-------------------------------------------------------------------------------
 | La composición de materiales

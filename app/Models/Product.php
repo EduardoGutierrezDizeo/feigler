@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\StoreSection;
 use Database\Factories\ProductFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -284,6 +285,54 @@ class Product extends Model
 
             return $this->stock_total <= 0 ? 'out_of_stock' : 'active';
         });
+    }
+
+    /**
+     * The products from the A to the Z, by name, however the name was typed.
+     *
+     * A name is folded to its plain letters before it is compared, the same way
+     * `NormalizesNames` folds it before it is looked for: `Ámbar` has to land where
+     * `Ambar` would, or the panel and the search would disagree about which comes
+     * first. The folding is spelled out as a chain of `REPLACE` and wrapped in `LOWER`
+     * because neither driver folds on its own the same way: MySQL gets it from the
+     * collation of the column, `utf8mb4_unicode_ci`, and SQLite's `LOWER()` only
+     * touches ASCII, so `Á` stayed `Á` and every accented name sorted to the end.
+     * The chain is written so that it agrees with MySQL rather than with SQLite, since
+     * the store runs on MySQL and the tests run on SQLite: a rule that only held on one
+     * of the two would be a rule that only held in the tests.
+     *
+     * The id breaks the tie of two products with the same name, so that reading a
+     * longer stretch of the list never moves a row between two reads, which is what a
+     * listing that pages by growing a limit would show.
+     *
+     * @param  Builder<Product>  $query
+     */
+    public function scopeAlphabetically(Builder $query): void
+    {
+        $query->orderByRaw(static::foldedName('name'))->orderBy('id');
+    }
+
+    /**
+     * The SQL that reads a text column as its folded, lowercase form.
+     *
+     * The letters are the ones Spanish product names actually carry, plus the
+     * diaeresis. `ñ` is folded onto `n` and not left as a letter of its own, because
+     * that is what the collation of the column does and the two have to agree.
+     */
+    private static function foldedName(string $column): string
+    {
+        $letters = [
+            'Á' => 'A', 'É' => 'E', 'Í' => 'I', 'Ó' => 'O', 'Ú' => 'U', 'Ü' => 'U', 'Ñ' => 'N',
+            'á' => 'a', 'é' => 'e', 'í' => 'i', 'ó' => 'o', 'ú' => 'u', 'ü' => 'u', 'ñ' => 'n',
+        ];
+
+        $folded = $column;
+
+        foreach ($letters as $written => $plain) {
+            $folded = "REPLACE({$folded}, '{$written}', '{$plain}')";
+        }
+
+        return "LOWER({$folded})";
     }
 
     /**

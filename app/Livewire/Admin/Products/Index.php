@@ -96,9 +96,23 @@ class Index extends Component
 
     public string $name = '';
 
-    public ?int $categoryId = null;
+    /**
+     * The gender the form is writing in, as the value of the `StoreSection` enum.
+     *
+     * It is a string and not the enum because a public Livewire property has to
+     * survive the round trip to the browser as data, and it is kept apart from the
+     * public `$section` of the tab bar on purpose: that one says which part of the
+     * catalog the listing is showing, and this one says which part the product being
+     * written belongs to. They usually agree and are not the same thing — a product
+     * of another gender than the open tab is exactly what this select is for.
+     *
+     * It is a string rather than the resolved section because the select is a string
+     * and this is what comes back from it; `sectionForTheForm()` is the one that
+     * resolves it, and falls back to the section of the product when editing.
+     */
+    public string $formSection = StoreSection::Hombre->value;
 
-    public string $description = '';
+    public ?int $categoryId = null;
 
     public string $brand = '';
 
@@ -146,7 +160,11 @@ class Index extends Component
 
     public function create(): void
     {
+        // El alta arranca en el género de la pestaña abierta: es donde el admin ya
+        // está mirando, así que no tiene por qué cambiarlo para crear lo que sea.
+        // El selector está para cuando el producto es de otro. Lo pone `resetForm()`.
         $this->resetForm();
+
         $this->showForm = true;
         $this->dispatch(self::EVENT_RESET_TAB);
     }
@@ -158,8 +176,10 @@ class Index extends Component
         $this->editingReference = $product->reference;
         $this->name = $product->name;
         $this->categoryId = $product->category_id;
-        $this->description = $product->description ?? '';
         $this->brand = $product->brand ?? '';
+        // El género es el de la categoría del producto, no el de la pestaña que esté
+        // abierta, y el selector lo muestra apagado: un producto no cambia de sección.
+        $this->formSection = ($product->category->section ?? $this->activeSection())->value;
         // Los materiales se leen sólo del producto que se está editando: el listado
         // no los muestra, así que cargarlos aquí es una consulta para el producto
         // abierto en vez de una por fila de la página.
@@ -222,24 +242,24 @@ class Index extends Component
             $this->editingId = (int) $this->editingId;
         }
 
-        // A product stays in the section it was created in, so the section to
-        // accept is read from the product when editing and from the open tab when
-        // creating. Either way the chosen category has to belong to it.
+        // A product stays in the gender it was created in, so the gender to accept is
+        // the product's own when editing and the one the selector holds when creating.
+        // Either way the chosen category has to belong to it.
         $section = $this->sectionForTheForm();
 
-        // The composition is only asked to be well formed here: a whole number of
-        // shares of a material the store has. Whether the shares add up to the whole
-        // garment, whether one of them is repeated and whether a material is turned
-        // off is not decided by the form: that is the action, which is also the only
-        // place that knows a material the product already carries may be kept.
+        // La composición solo se pide bien formada: un entero de participación de un
+        // material que la tienda tiene. Que las participaciones sumen la prenda entera,
+        // que una esté repetida y que un material esté apagado no lo decide el
+        // formulario: es la acción, que además es el único sitio que sabe que un
+        // material que el producto ya tiene se puede conservar.
         $validated = $this->validate([
             'name' => ['required', 'max:255'],
+            'formSection' => ['required', Rule::in(StoreSection::values())],
             'categoryId' => [
                 'required',
                 'integer',
                 Rule::exists('categories', 'id')->where('section', $section->value),
             ],
-            'description' => ['nullable', 'max:2000'],
             'brand' => ['nullable', 'max:100'],
             'composition' => ['array'],
             'composition.*.material_id' => ['required', 'integer', Rule::exists('materials', 'id')],
@@ -249,10 +269,11 @@ class Index extends Component
         ], [
             'name.required' => 'El nombre es obligatorio.',
             'name.max' => 'El nombre no puede superar los 255 caracteres.',
+            'formSection.required' => 'Selecciona un género.',
+            'formSection.in' => 'El género seleccionado no es válido.',
             'categoryId.required' => 'Selecciona una categoría.',
             'categoryId.integer' => 'La categoría seleccionada no es válida.',
-            'categoryId.exists' => 'La categoría seleccionada no existe en esta sección.',
-            'description.max' => 'La descripción no puede superar los 2000 caracteres.',
+            'categoryId.exists' => 'La categoría seleccionada no pertenece al género elegido.',
             'brand.max' => 'La marca no puede superar los 100 caracteres.',
             'composition.*.material_id.required' => 'Selecciona un material.',
             'composition.*.material_id.integer' => 'El material seleccionado no es válido.',
@@ -277,7 +298,7 @@ class Index extends Component
             return;
         }
 
-        $this->createProduct($category, $validated);
+        $this->createProduct($category, $section, $validated);
     }
 
     public function toggleActive(Product $product): void
@@ -307,6 +328,33 @@ class Index extends Component
     public function updatedSearch(): void
     {
         $this->resetPage();
+    }
+
+    /**
+     * Change the gender the form is writing in, from its own selector.
+     *
+     * The chosen category is dropped, because a category of the gender that was left
+     * is not one of the gender that was picked: keeping it would leave the category
+     * selector showing an option that is not in its list, and saving would refuse a
+     * product the admin cannot see the mistake of.
+     *
+     * A gender the enum does not know falls back to the one of the open tab instead of
+     * leaving the form without categories, the same way the tab bar does.
+     */
+    public function updatedFormSection(): void
+    {
+        // El género desconocido no se corrige aquí a propósito: `tryFrom` devuelve null
+        // y el valor se deja como llegó para que la validación lo rechace diciendo que
+        // el género no existe. Normalizarlo a la pestaña abriría el formulario en un
+        // género que nadie eligió y el error nunca llegaría a verse.
+        if (StoreSection::tryFrom($this->formSection) === null) {
+            return;
+        }
+
+        // La categoría se suelta porque una categoría del género que se deja no es del
+        // género que se acaba de elegir: mantenerla dejaría el selector de categorías
+        // marcando una opción que no está en su lista.
+        $this->categoryId = null;
     }
 
     public function updatedCategoryFilter(): void
@@ -345,8 +393,7 @@ class Index extends Component
         // one per product. Only the images of the products on this page are read.
         $products = $query
             ->with(['category', 'variants', 'images'])
-            ->orderBy('reference')
-            ->orderBy('id')
+            ->alphabetically()
             ->limit($this->perPage)
             ->get();
 
@@ -356,9 +403,9 @@ class Index extends Component
             ->orderBy('id')
             ->get();
 
-        // El formulario trabaja en la sección del producto cuando se edita, que
-        // puede no ser la de la pestaña. Solo entonces hace falta una segunda
-        // consulta; si es la misma, se reutiliza la del filtro.
+        // El formulario trabaja en el género que dice su selector, que puede no ser el de la
+        // pestaña. Solo cuando no coinciden hace falta una segunda consulta; si es el
+        // mismo, se reutiliza la del filtro.
         $formSection = $this->sectionForTheForm();
         $formCategories = $formSection === $section
             ? $categories
@@ -375,7 +422,10 @@ class Index extends Component
             'products' => $products,
             'remaining' => max(0, $total - $products->count()),
             'categories' => $categories,
-            'formSection' => $formSection,
+            // El género vive en la propiedad pública `formSection`, que Livewire ya
+            // pone en la vista: aquí solo van los casos del enum para pintar el
+            // selector y las categorías del género que se está escribiendo.
+            'storeSections' => StoreSection::cases(),
             'formCategories' => $formCategories,
             'statusFilters' => self::STATUS_FILTERS,
             // Los materiales solo se piden con el formulario abierto: el listado no
@@ -415,7 +465,6 @@ class Index extends Component
                 $product->update([
                     'name' => trim($validated['name']),
                     'category_id' => $category->getKey(),
-                    'description' => $validated['description'] !== null ? trim($validated['description']) : null,
                     'brand' => $this->brandOrDefault($validated['brand']),
                     'base_price' => $validated['basePrice'],
                     'status' => $validated['status'],
@@ -459,18 +508,24 @@ class Index extends Component
      * the product that was just created: a product is born without variants, and
      * the tab that fills them is one click away only while the product exists.
      *
+     * A product created in a gender other than the open tab moves the listing to
+     * that gender, filters included. Otherwise the admin would read «Producto creado
+     * correctamente» and not see the row anywhere, because the listing only shows
+     * one gender at a time.
+     *
      * The row is written by the action, which is also where the reference is
      * reserved and where the name, the brand and the status are put in the form
      * the catalog keeps, and where the composition is written next to it. What it
      * refuses is shown under the field it belongs to, the same way the messages of
      * the form come out.
+     *
+     * @param  StoreSection  $section  the section the form was writing in, which is the one the product was born in.
      */
-    private function createProduct(Category $category, array $validated): void
+    private function createProduct(Category $category, StoreSection $section, array $validated): void
     {
         try {
             $product = (new CreateProduct)($category, [
                 'name' => $validated['name'],
-                'description' => $validated['description'],
                 'brand' => $validated['brand'],
                 'base_price' => $validated['basePrice'],
                 'status' => $validated['status'],
@@ -498,6 +553,14 @@ class Index extends Component
         $this->editingId = $product->getKey();
         $this->editingReference = $product->reference;
         $this->showForm = true;
+
+        // El listado pasa al género del producto recién creado. Los filtros se limpian
+        // porque los de la pestaña que se deja son de otro género, y una categoría de
+        // hombre filtrando productos de mujer no dejaría ver ni el que se acaba de crear.
+        if ($this->section !== $section->value) {
+            $this->section = $section->value;
+            $this->clearFilters();
+        }
 
         $this->notifySuccess('Producto creado correctamente.');
         $this->dispatch(self::EVENT_OPEN_VARIANTS_TAB);
@@ -698,7 +761,7 @@ class Index extends Component
     }
 
     /**
-     * The section being managed, resolved from the URL value.
+     * The section the open form works in, resolved from the URL value.
      */
     private function activeSection(): StoreSection
     {
@@ -706,16 +769,23 @@ class Index extends Component
     }
 
     /**
-     * The section the open form works in: the product's own when editing, and the
-     * open tab when creating.
+     * The section the open form works in, and the one the categories of the form are
+     * read from: the one the gender selector holds.
+     *
+     * Editing does not read it from the selector but from the product, because a
+     * product does not change of section and the selector is shown disabled while one
+     * is open. A value the enum does not know — a hand-written request, a stale one —
+     * falls back to the section of the open tab, which is the same fallback the tab
+     * bar makes, so the form always has a section whose categories it can offer.
      */
     private function sectionForTheForm(): StoreSection
     {
-        if ($this->editingId === null) {
-            return $this->activeSection();
+        if ($this->editingId !== null) {
+            return Product::query()->find($this->editingId)?->category?->section
+                ?? $this->activeSection();
         }
 
-        return Product::query()->find($this->editingId)?->category?->section ?? $this->activeSection();
+        return StoreSection::tryFrom($this->formSection) ?? $this->activeSection();
     }
 
     private function resetPage(): void
@@ -729,8 +799,11 @@ class Index extends Component
         $this->editingId = null;
         $this->editingReference = null;
         $this->name = '';
+        // El formulario arranca siempre en el género de la pestaña abierta, y también
+        // al montar el componente, que es lo que hace que las categorías que se ofrecen
+        // sin abrir el alta sean las de la pestaña y no las de un valor por defecto.
+        $this->formSection = $this->activeSection()->value;
         $this->categoryId = null;
-        $this->description = '';
         $this->brand = self::DEFAULT_BRAND;
         $this->composition = [];
         $this->basePrice = '';

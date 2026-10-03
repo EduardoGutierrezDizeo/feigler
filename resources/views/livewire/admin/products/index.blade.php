@@ -224,17 +224,35 @@
         max-width="sm:max-w-2xl"
     >
         {{-- La referencia es de solo lectura: se asignó al crear el producto y ya forma
-             parte de los SKU construidos a partir de ella. La sección tampoco se
-             elige: un producto no cambia de sección. --}}
+             parte de los SKU construidos a partir de ella. El género se elige al crear y
+             no se cambia después: un producto no muda de sección, así que el selector va
+             apagado mientras se edita uno que ya existe. --}}
         @if ($editingId !== null)
             <p class="text-xs text-gris-calido">
                 Referencia <span class="font-medium">{{ $editingReference }}</span>
             </p>
         @endif
 
-        <p class="text-xs text-gris-calido">
-            Sección: <span class="font-medium">{{ $formSection->label() }}</span>
-        </p>
+        <div>
+            <x-input-label for="product-form-section" value="Género" />
+            <x-select-input
+                id="product-form-section"
+                wire:model.live="formSection"
+                :disabled="$editingId !== null"
+                class="mt-1 block w-full"
+            >
+                @foreach ($storeSections as $storeSection)
+                    <option value="{{ $storeSection->value }}" @selected($formSection === $storeSection->value)>
+                        {{ $storeSection->label() }}
+                    </option>
+                @endforeach
+            </x-select-input>
+            <x-input-error :messages="$errors->get('formSection')" class="mt-2" />
+
+            @if ($editingId !== null)
+                <p class="mt-1 text-xs text-gris-calido">Un producto no cambia de género.</p>
+            @endif
+        </div>
 
         <div
             x-data="{ tab: 'datos' }"
@@ -350,18 +368,6 @@
                         @endforeach
                     </x-select-input>
                     <x-input-error :messages="$errors->get('categoryId')" class="mt-2" />
-                </div>
-
-                <div>
-                    <x-input-label for="product-description" value="Descripción" />
-                    <textarea
-                        id="product-description"
-                        wire:model="description"
-                        rows="4"
-                        placeholder="Detalles de la prenda, tejidos, cuidados…"
-                        class="mt-1 block w-full resize-y rounded-none border-0 border-b border-arena bg-transparent px-0 py-2 text-sm text-tinta placeholder:text-gris-calido/70 shadow-none focus:border-verde focus:outline-none focus:ring-0"
-                    ></textarea>
-                    <x-input-error :messages="$errors->get('description')" class="mt-2" />
                 </div>
 
                 <div>
