@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Actions\ProductDetails\Concerns;
+namespace App\Support\Concerns;
 
 use Illuminate\Support\Str;
 

@@ -2,10 +2,10 @@
 
 namespace App\Actions\ProductDetails;
 
-use App\Actions\ProductDetails\Concerns\NormalizesNames;
 use App\Exceptions\DuplicateSizeNameException;
 use App\Models\Category;
 use App\Models\Size;
+use App\Support\Concerns\NormalizesNames;
 
 /**
  * Add a size to what a category sells garments in.

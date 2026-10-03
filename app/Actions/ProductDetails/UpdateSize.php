@@ -2,10 +2,10 @@
 
 namespace App\Actions\ProductDetails;
 
-use App\Actions\ProductDetails\Concerns\NormalizesNames;
 use App\Exceptions\DuplicateSizeNameException;
 use App\Exceptions\SizeNameLockedException;
 use App\Models\Size;
+use App\Support\Concerns\NormalizesNames;
 use Illuminate\Support\Facades\DB;
 
 /**

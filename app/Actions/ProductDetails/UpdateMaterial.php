@@ -2,9 +2,9 @@
 
 namespace App\Actions\ProductDetails;
 
-use App\Actions\ProductDetails\Concerns\NormalizesNames;
 use App\Exceptions\DuplicateMaterialNameException;
 use App\Models\Material;
+use App\Support\Concerns\NormalizesNames;
 use Illuminate\Support\Facades\DB;
 
 /**

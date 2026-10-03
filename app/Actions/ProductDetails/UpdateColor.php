@@ -4,11 +4,11 @@ namespace App\Actions\ProductDetails;
 
 use App\Actions\ProductDetails\Concerns\DerivesColorCodes;
 use App\Actions\ProductDetails\Concerns\NormalizesColorHex;
-use App\Actions\ProductDetails\Concerns\NormalizesNames;
 use App\Exceptions\ColorCodeLockedException;
 use App\Exceptions\DuplicateColorCodeException;
 use App\Exceptions\DuplicateColorNameException;
 use App\Models\Color;
+use App\Support\Concerns\NormalizesNames;
 use Illuminate\Support\Facades\DB;
 
 /**
