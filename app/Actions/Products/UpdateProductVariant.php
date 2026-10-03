@@ -6,6 +6,7 @@ use App\Actions\Products\Concerns\GuardsVariantSize;
 use App\Models\Color;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Models\Size;
 use Illuminate\Support\Facades\DB;
 
 class UpdateProductVariant
@@ -26,19 +27,19 @@ class UpdateProductVariant
     public function __invoke(
         Product $product,
         int $variantId,
-        string $size,
+        int $sizeId,
         Color $color,
         ?string $price = null,
     ): ProductVariant {
-        $size = $this->normalizeSize($size);
-
-        return DB::transaction(function () use ($product, $variantId, $size, $color, $price): ProductVariant {
+        return DB::transaction(function () use ($product, $variantId, $sizeId, $color, $price): ProductVariant {
             $variant = $product->variants()->lockForUpdate()->findOrFail($variantId);
+            $size = Size::query()->findOrFail($sizeId);
 
+            $this->guardSizeIsSettable($product, $size, $variant);
             $this->guardCombinationIsFree($product, $size, $color, $variant);
 
             $variant->update([
-                'size' => $size,
+                'size_id' => $size->getKey(),
                 'color_id' => $color->getKey(),
                 'price_override' => $price,
             ]);

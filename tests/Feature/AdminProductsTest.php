@@ -534,6 +534,143 @@ test('editing a product keeps it inside the section of its own category', functi
         ->and($producto->section)->toBe(StoreSection::Mujer);
 });
 
+/**
+ * A product that already sells something cannot be moved to another category of its
+ * section: its sizes are rows of the category it is in, and the new index forbids a
+ * variant whose size belongs elsewhere. The whole form is refused, so the data the
+ * admin typed alongside the new category is not written either.
+ */
+test('a product with variants cannot be moved to another category of its section', function () {
+    $this->seed(RoleSeeder::class);
+
+    $polos = numberedCategory('PL', 'Polos');
+    $camisetas = numberedCategory('CM', 'Camisetas');
+
+    $producto = Product::factory()->for($polos)->create([
+        'name' => 'Polo clásico',
+        'slug' => 'polo-clasico',
+        'reference' => 'PL-001',
+        'base_price' => '1990.00',
+        'description' => 'Piqué de algodón.',
+    ]);
+
+    ProductVariant::factory()->for($producto)->create();
+
+    Livewire::actingAs(adminForPanel())
+        ->test(Index::class)
+        ->call('edit', $producto->id)
+        ->set('categoryId', $camisetas->id)
+        ->set('name', 'Polo de algodón')
+        ->set('basePrice', '2990')
+        ->set('description', 'Otra descripción.')
+        ->set('status', 'inactive')
+        ->call('save')
+        ->assertHasErrors(['categoryId'])
+        ->assertSee('No puedes cambiar la categoría de un producto que ya tiene variantes: sus tallas pertenecen a la categoría actual');
+
+    // Ni la categoría se mueve ni se guarda el resto del formulario: el rechazo es
+    // del formulario entero, no de un campo.
+    expect($producto->refresh())
+        ->category_id->toBe($polos->id)
+        ->name->toBe('Polo clásico')
+        ->base_price->toEqual('1990.00')
+        ->description->toBe('Piqué de algodón.')
+        ->status->toBe('active')
+        ->and($producto->variants()->count())->toBe(1);
+
+    // El aviso de éxito no aparece: la fila sigue siendo la de antes, con su nombre.
+    Livewire::actingAs(adminForPanel())
+        ->test(Index::class)
+        ->assertSeeHtml('wire:key="product-'.$producto->id.'"')
+        ->assertSee('Polo clásico')
+        ->assertDontSeeHtml('Polo de algodón')
+        ->assertDontSeeHtml('Otra descripción.');
+});
+
+/**
+ * The regression of the rule above: refusing a category change must not stop a product
+ * that has variants from being edited, since staying in its category while changing its
+ * name, its price or its status is the ordinary case, not a special one.
+ */
+test('a product with variants is still edited while it stays in its category', function () {
+    $this->seed(RoleSeeder::class);
+
+    $polos = numberedCategory('PL', 'Polos');
+
+    $producto = Product::factory()->for($polos)->create([
+        'name' => 'Polo clásico',
+        'slug' => 'polo-clasico',
+        'reference' => 'PL-001',
+        'base_price' => '1990.00',
+    ]);
+
+    ProductVariant::factory()->for($producto)->create();
+
+    Livewire::actingAs(adminForPanel())
+        ->test(Index::class)
+        ->call('edit', $producto->id)
+        // La categoría se vuelve a poner la misma: es lo que hace el formulario cuando
+        // se abre, y aun así tiene que guardarse.
+        ->set('categoryId', $polos->id)
+        ->set('name', 'Polo clásico piqué')
+        ->set('basePrice', '2490')
+        ->set('description', 'Piqué de algodón peinado.')
+        ->set('status', 'inactive')
+        ->call('save')
+        ->assertHasNoErrors()
+        ->assertSet('notice', 'Producto actualizado correctamente.');
+
+    expect($producto->refresh())
+        ->category_id->toBe($polos->id)
+        ->name->toBe('Polo clásico piqué')
+        // El slug se deja a propósito al editar, así que sigue siendo el de antes.
+        ->slug->toBe('polo-clasico')
+        ->base_price->toEqual('2490.00')
+        ->description->toBe('Piqué de algodón peinado.')
+        ->status->toBe('inactive')
+        // La referencia no se toca, así que las variantes que ya tiene siguen siendo
+        // las mismas y con el mismo SKU.
+        ->reference->toBe('PL-001')
+        ->and($producto->variants()->count())->toBe(1);
+});
+
+/**
+ * The other side of the rule: a product that sells nothing has no sizes pointing at
+ * its category, so moving it is allowed. It is born without variants and the tab that
+ * fills them is what stops the category from moving afterwards.
+ */
+test('a product without variants can be moved to another category of its section', function () {
+    $this->seed(RoleSeeder::class);
+
+    $polos = numberedCategory('PL', 'Polos');
+    $camisetas = numberedCategory('CM', 'Camisetas');
+
+    $producto = Product::factory()->for($polos)->create([
+        'name' => 'Polo clásico',
+        'slug' => 'polo-clasico',
+        'reference' => 'PL-001',
+    ]);
+
+    Livewire::actingAs(adminForPanel())
+        ->test(Index::class)
+        ->call('edit', $producto->id)
+        ->set('categoryId', $camisetas->id)
+        ->call('save')
+        ->assertHasNoErrors()
+        ->assertSet('notice', 'Producto actualizado correctamente.');
+
+    expect($producto->refresh())
+        ->category_id->toBe($camisetas->id)
+        ->name->toBe('Polo clásico')
+        ->and($producto->variants()->count())->toBe(0);
+
+    // La fila del listado lleva la categoría nueva.
+    Livewire::actingAs(adminForPanel())
+        ->test(Index::class)
+        ->assertSeeHtml('wire:key="product-'.$producto->id.'"')
+        ->assertSee('Camisetas');
+});
+
 test('the status toggle alternates active and inactive and notifies', function () {
     $this->seed(RoleSeeder::class);
 

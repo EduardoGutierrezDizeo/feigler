@@ -8,6 +8,7 @@ use App\Actions\Products\DeleteProductVariant;
 use App\Actions\Products\ToggleProductVariant;
 use App\Actions\Products\UpdateProductVariant;
 use App\Exceptions\DuplicateProductVariantException;
+use App\Exceptions\InactiveVariantSizeException;
 use App\Exceptions\InsufficientStockException;
 use App\Exceptions\InvalidStockAdjustmentException;
 use App\Exceptions\InvalidVariantSizeException;
@@ -16,7 +17,9 @@ use App\Livewire\Concerns\Notifies;
 use App\Models\Color;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Models\Size;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
@@ -37,7 +40,14 @@ class Variants extends Component
 
     public ?int $editingId = null;
 
-    public string $size = '';
+    /**
+     * The size the form is writing, as the id of the row in `sizes`.
+     *
+     * It is an id and not a name because the names are not unique in the store: `S`
+     * of a category of shirts is not the same size as `S` of a category of anything
+     * else, and the size a variant carries has to be the one of its own category.
+     */
+    public ?int $sizeId = null;
 
     public ?int $colorId = null;
 
@@ -99,7 +109,7 @@ class Variants extends Component
         $variant = $this->variant($variantId);
 
         $this->resetForm();
-        $this->size = $variant->size;
+        $this->sizeId = $variant->size_id;
         $this->colorId = $variant->color_id;
         $this->showForm = true;
     }
@@ -111,7 +121,7 @@ class Variants extends Component
         $this->resetForm();
         $this->editingId = $variant->getKey();
         $this->editingSku = $variant->sku;
-        $this->size = $variant->size;
+        $this->sizeId = $variant->size_id;
         $this->colorId = $variant->color_id;
         $this->showForm = true;
     }
@@ -123,13 +133,24 @@ class Variants extends Component
 
     public function save(): void
     {
+        $product = $this->product();
+
+        // The sizes belong to a category, so the only sizes this form can offer are
+        // the ones of the category of this product. A size id of another category
+        // therefore never reaches the actions: the field is already refused here, with
+        // a message under the select instead of a driver error about a foreign key.
         $validated = $this->validate([
-            'size' => ['required', Rule::in(ProductVariant::SIZES)],
+            'sizeId' => [
+                'required',
+                'integer',
+                Rule::exists('sizes', 'id')->where('category_id', $product->category_id),
+            ],
             'colorId' => ['required', 'integer', Rule::exists('colors', 'id')],
             'initialStock' => ['nullable', 'integer', 'min:0'],
         ], [
-            'size.required' => 'Selecciona una talla.',
-            'size.in' => 'La talla seleccionada no es válida.',
+            'sizeId.required' => 'Selecciona una talla.',
+            'sizeId.integer' => 'La talla seleccionada no es válida.',
+            'sizeId.exists' => 'La talla seleccionada no pertenece a la categoría del producto.',
             'colorId.required' => 'Selecciona un color.',
             'colorId.integer' => 'El color seleccionado no es válido.',
             'colorId.exists' => 'El color seleccionado no existe.',
@@ -137,7 +158,6 @@ class Variants extends Component
             'initialStock.min' => 'El stock inicial no puede ser negativo.',
         ]);
 
-        $product = $this->product();
         $color = Color::query()->findOrFail($validated['colorId']);
 
         try {
@@ -145,7 +165,7 @@ class Variants extends Component
                 (new UpdateProductVariant)(
                     $product,
                     $this->editingId,
-                    $validated['size'],
+                    (int) $validated['sizeId'],
                     $color,
                     // La tienda vende todas sus variantes al precio del producto,
                     // así que el panel no escribe `price_override`: una variante
@@ -158,7 +178,7 @@ class Variants extends Component
             } else {
                 (new CreateProductVariant)(
                     $product,
-                    $validated['size'],
+                    (int) $validated['sizeId'],
                     $color,
                     null,
                     (int) ($validated['initialStock'] ?? 0),
@@ -167,8 +187,8 @@ class Variants extends Component
 
                 $message = 'Variante creada correctamente.';
             }
-        } catch (DuplicateProductVariantException|InvalidVariantSizeException $exception) {
-            $this->addError('size', $exception->getMessage());
+        } catch (DuplicateProductVariantException|InvalidVariantSizeException|InactiveVariantSizeException $exception) {
+            $this->addError('sizeId', $exception->getMessage());
 
             return;
         } catch (InvalidStockAdjustmentException $exception) {
@@ -265,41 +285,71 @@ class Variants extends Component
     {
         $product = $this->product();
 
-        // The variants come in a single query with their colors already loaded,
-        // and the order is settled in memory over that loaded relation: reading a
-        // color per variant would be the N+1 this tab must not have.
+        // The variants come in a single query with their color and their size already
+        // loaded, and the order is settled in memory over those loaded relations:
+        // reading a color or a size per variant would be the N+1 this tab must not
+        // have. `size` is read for the order of the rows and for their label.
         $variants = $product->variants()
-            ->with('color')
+            ->with(['color', 'size'])
             ->get();
 
         return view('livewire.admin.products.variants', [
             'product' => $product,
             'variants' => $this->sortVariants($variants),
             'colors' => Color::query()->orderBy('name')->orderBy('id')->get(),
-            'sizes' => ProductVariant::SIZES,
+            'sizes' => $this->sizesForTheForm($product),
         ]);
     }
 
     /**
-     * Variants in the order the catalog reads them: the sizes in the order of
-     * `ProductVariant::SIZES` instead of alphabetically, then the color by name,
-     * and the id to break the tie between two rows of the same combination.
+     * The sizes the form may write, which are the ones the category of this product
+     * still offers.
      *
-     * A size that is not in the list anymore goes to the end rather than making
-     * the comparison fail, so a variant created before a size was dropped still
-     * has a place in the tab.
+     * A variant being edited also sees the size it is already in, even when that size
+     * is turned off: the variant has to be editable without being moved, and a select
+     * that does not carry the value it is holding would silently write something else.
+     * The actions are the ones that decide whether a size may be taken, so the select
+     * is not where that rule lives.
+     *
+     * @return Collection<int, Size>
+     */
+    private function sizesForTheForm(Product $product): Collection
+    {
+        $currentSizeId = $this->editingId === null ? null : $this->variant($this->editingId)->size_id;
+
+        return $product->category->sizes()
+            ->when(
+                $currentSizeId === null,
+                fn (Builder $query): Builder => $query->active(),
+                fn (Builder $query): Builder => $query->where(
+                    fn (Builder $query): Builder => $query
+                        ->where('is_active', true)
+                        ->orWhere('id', $currentSizeId)
+                ),
+            )
+            ->get();
+    }
+
+    /**
+     * Variants in the order the catalog reads them: the sizes in the order the
+     * category carries them instead of alphabetically, then the color by name, and
+     * the id to break the tie between two rows of the same combination.
+     *
+     * The order is the `order` column of the size, which is what the panel lets the
+     * store settle, and the id of the size breaks the tie between two sizes that
+     * share it.
      *
      * @param  Collection<int, ProductVariant>  $variants
      * @return Collection<int, ProductVariant>
      */
     private function sortVariants(Collection $variants): Collection
     {
-        $positions = array_flip(ProductVariant::SIZES);
-
         return $variants
             ->sortBy([
-                fn (ProductVariant $a, ProductVariant $b): int => ($positions[$a->size] ?? PHP_INT_MAX)
-                    <=> ($positions[$b->size] ?? PHP_INT_MAX),
+                fn (ProductVariant $a, ProductVariant $b): int => ($a->size->order ?? PHP_INT_MAX)
+                    <=> ($b->size->order ?? PHP_INT_MAX),
+                fn (ProductVariant $a, ProductVariant $b): int => ($a->size_id ?? 0)
+                    <=> ($b->size_id ?? 0),
                 fn (ProductVariant $a, ProductVariant $b): string => ($a->color->name ?? '')
                     <=> ($b->color->name ?? ''),
                 fn (ProductVariant $a, ProductVariant $b): int => $a->getKey() <=> $b->getKey(),
@@ -348,9 +398,9 @@ class Variants extends Component
         $this->showForm = false;
         $this->editingId = null;
         $this->editingSku = null;
-        $this->size = '';
+        $this->sizeId = null;
         $this->colorId = null;
         $this->initialStock = '0';
-        $this->resetValidation(['size', 'colorId', 'initialStock']);
+        $this->resetValidation(['sizeId', 'colorId', 'initialStock']);
     }
 }

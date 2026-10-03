@@ -27,6 +27,7 @@ class DatabaseSeeder extends Seeder
             AdminUserSeeder::class,
             CategorySeeder::class,
             ColorSeeder::class,
+            MaterialSeeder::class,
         ]);
     }
 }

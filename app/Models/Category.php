@@ -55,6 +55,21 @@ class Category extends Model
     }
 
     /**
+     * The sizes the garments of this category are sold in, smallest first.
+     *
+     * The order is the one the catalog reads them in, and the id breaks the ties of
+     * two sizes that share it, so the same list never changes between two reads.
+     *
+     * @return HasMany<Size>
+     */
+    public function sizes(): HasMany
+    {
+        return $this->hasMany(Size::class)
+            ->orderBy('order')
+            ->orderBy('id');
+    }
+
+    /**
      * Only the categories of one store section.
      *
      * @param  Builder<Category>  $query

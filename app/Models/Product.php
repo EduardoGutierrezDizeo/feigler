@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -104,6 +105,24 @@ class Product extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
+    }
+
+    /**
+     * The materials this garment is made of, in the order the catalog reads them.
+     *
+     * The order is settled by the material itself and the id breaks the ties of two
+     * materials that share it, so the same product never swaps two materials between
+     * two reads. `percentage` comes along with the relation: a garment made of
+     * several materials has to say how much of each.
+     *
+     * @return BelongsToMany<Material, $this>
+     */
+    public function materials(): BelongsToMany
+    {
+        return $this->belongsToMany(Material::class)
+            ->withPivot('percentage')
+            ->orderBy('materials.order')
+            ->orderBy('materials.id');
     }
 
     /**

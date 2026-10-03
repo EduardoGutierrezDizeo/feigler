@@ -8,6 +8,7 @@ use App\Models\InventoryMovement;
 use App\Models\Product;
 use App\Models\ProductImage;
 use App\Models\ProductVariant;
+use App\Models\Size;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 
@@ -90,10 +91,13 @@ test('the sku of a variant is the reference, the size and the color code', funct
     $product = Product::factory()->for(categoryWithPrefix('PL', 'Polos'))->create();
     $color = Color::factory()->create(['code' => 'AZU']);
 
-    expect(ProductVariant::makeSku($product, 'M', $color))->toBe('PL-001-M-AZU')
-        ->and(ProductVariant::makeSku($product, 'm', $color))->toBe('PL-001-M-AZU')
-        ->and(ProductVariant::makeSku($product, '  extra large ', $color))->toBe('PL-001-EXTRALARGE-AZU')
-        ->and(ProductVariant::makeSku($product, '42', $color))->toBe('PL-001-42-AZU');
+    // `makeSku()` reads the name of the size and nothing else, so the sizes here are
+    // not written to the database: what is under test is the normalization of the name,
+    // which has to stay the same one the text column used to go through.
+    expect(ProductVariant::makeSku($product, new Size(['name' => 'M']), $color))->toBe('PL-001-M-AZU')
+        ->and(ProductVariant::makeSku($product, new Size(['name' => 'm']), $color))->toBe('PL-001-M-AZU')
+        ->and(ProductVariant::makeSku($product, new Size(['name' => '  extra large ']), $color))->toBe('PL-001-EXTRALARGE-AZU')
+        ->and(ProductVariant::makeSku($product, new Size(['name' => '42']), $color))->toBe('PL-001-42-AZU');
 });
 
 test('a sku cannot be built for a product without a reference', function (?string $reference) {
@@ -102,7 +106,7 @@ test('a sku cannot be built for a product without a reference', function (?strin
 
     DB::table('products')->where('id', $product->id)->update(['reference' => $reference]);
 
-    expect(fn () => ProductVariant::makeSku($product->fresh(), 'M', $color))
+    expect(fn () => ProductVariant::makeSku($product->fresh(), sizeOfProduct($product, 'M'), $color))
         ->toThrow(LogicException::class, 'El producto «Polo Clásico» no tiene referencia; no se puede generar el SKU.');
 })->with([
     'referencia nula' => [null],
@@ -237,9 +241,9 @@ test('the displayed status reads the loaded variants instead of querying them', 
 test('the total stock leaves out the inactive variants', function () {
     $product = Product::factory()->create();
 
-    ProductVariant::factory()->for($product)->create(['size' => 'S', 'stock' => 4]);
-    ProductVariant::factory()->for($product)->create(['size' => 'M', 'stock' => 6]);
-    ProductVariant::factory()->for($product)->inactive()->create(['size' => 'L', 'stock' => 99]);
+    ProductVariant::factory()->for($product)->create(['stock' => 4]);
+    ProductVariant::factory()->for($product)->create(['stock' => 6]);
+    ProductVariant::factory()->for($product)->inactive()->create(['stock' => 99]);
 
     expect($product->refresh()->stock_total)->toBe(10);
 });
@@ -249,9 +253,9 @@ test('every size of a color shares the same gallery', function () {
     $azul = Color::factory()->create(['code' => 'AZU']);
     $rojo = Color::factory()->create(['code' => 'ROJ']);
 
-    $mediana = ProductVariant::factory()->for($product)->create(['size' => 'M', 'color_id' => $azul->id]);
-    $grande = ProductVariant::factory()->for($product)->create(['size' => 'XL', 'color_id' => $azul->id]);
-    $medianaRoja = ProductVariant::factory()->for($product)->create(['size' => 'M', 'color_id' => $rojo->id]);
+    $mediana = ProductVariant::factory()->for($product)->create(['size_id' => sizeOfProduct($product, 'M'), 'color_id' => $azul->id]);
+    $grande = ProductVariant::factory()->for($product)->create(['size_id' => sizeOfProduct($product, 'XL'), 'color_id' => $azul->id]);
+    $medianaRoja = ProductVariant::factory()->for($product)->create(['size_id' => sizeOfProduct($product, 'M'), 'color_id' => $rojo->id]);
 
     $primera = ProductImage::factory()->for($product)->for($azul, 'color')->create(['order' => 1]);
     $segunda = ProductImage::factory()->for($product)->for($azul, 'color')->create(['order' => 0]);
@@ -274,9 +278,9 @@ test('a product lists each of its colors once', function () {
     $azul = Color::factory()->create();
     $rojo = Color::factory()->create();
 
-    ProductVariant::factory()->for($product)->create(['size' => 'S', 'color_id' => $azul->id]);
-    ProductVariant::factory()->for($product)->create(['size' => 'M', 'color_id' => $azul->id]);
-    ProductVariant::factory()->for($product)->create(['size' => 'S', 'color_id' => $rojo->id]);
+    ProductVariant::factory()->for($product)->create(['size_id' => sizeOfProduct($product, 'S'), 'color_id' => $azul->id]);
+    ProductVariant::factory()->for($product)->create(['size_id' => sizeOfProduct($product, 'M'), 'color_id' => $azul->id]);
+    ProductVariant::factory()->for($product)->create(['size_id' => sizeOfProduct($product, 'S'), 'color_id' => $rojo->id]);
 
     expect($product->colors()->modelKeys())->toBe([$azul->id, $rojo->id]);
 });

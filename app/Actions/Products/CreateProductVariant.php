@@ -7,6 +7,7 @@ use App\Exceptions\InvalidStockAdjustmentException;
 use App\Models\Color;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Models\Size;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
@@ -43,12 +44,12 @@ class CreateProductVariant
      * at the price of its product.
      *
      * The variant comes back active. It is written down instead of left to the
-     * default of the column so the object handed to the caller says the same as
-     * the row behind it.
+     * default of the column so the object handed to the caller says the same as the
+     * row behind it.
      */
     public function __invoke(
         Product $product,
-        string $size,
+        int $sizeId,
         Color $color,
         ?string $price = null,
         int $stock = 0,
@@ -58,13 +59,14 @@ class CreateProductVariant
             throw InvalidStockAdjustmentException::negativeStock();
         }
 
-        $size = $this->normalizeSize($size);
+        return DB::transaction(function () use ($product, $sizeId, $color, $price, $stock, $user): ProductVariant {
+            $size = Size::query()->findOrFail($sizeId);
 
-        return DB::transaction(function () use ($product, $size, $color, $price, $stock, $user): ProductVariant {
+            $this->guardSizeIsSettable($product, $size);
             $this->guardCombinationIsFree($product, $size, $color);
 
             $variant = $product->variants()->create([
-                'size' => $size,
+                'size_id' => $size->getKey(),
                 'color_id' => $color->getKey(),
                 'sku' => $this->freeSkuFor($product, $size, $color),
                 'stock' => 0,
@@ -96,7 +98,7 @@ class CreateProductVariant
      * The search is over every variant and not only the ones of this product,
      * because the SKU column is unique in the whole store.
      */
-    private function freeSkuFor(Product $product, string $size, Color $color): string
+    private function freeSkuFor(Product $product, Size $size, Color $color): string
     {
         $base = ProductVariant::makeSku($product, $size, $color);
         $sku = $base;

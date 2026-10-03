@@ -22,7 +22,6 @@ function productoConMiniaturas(Color ...$colores): Product
 
     foreach ($colores as $color) {
         ProductVariant::factory()->for($producto)->create([
-            'size' => 'M',
             'color_id' => $color->getKey(),
         ]);
     }

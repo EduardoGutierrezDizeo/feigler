@@ -4,6 +4,7 @@ use App\Models\Color;
 use App\Models\Product;
 use App\Models\ProductImage;
 use App\Models\ProductVariant;
+use App\Models\Size;
 use Illuminate\Database\QueryException;
 
 test('a variant belongs to its product and shows the gallery of its color', function () {
@@ -29,12 +30,13 @@ test('a variant cannot reuse the sku of another variant', function () {
 test('a product cannot repeat the same size and color in two variants', function () {
     $product = Product::factory()->create();
     $color = Color::factory()->create();
+    $size = Size::factory()->for($product->category)->create(['name' => 'M']);
 
-    ProductVariant::factory()->for($product)->create(['size' => 'M', 'color_id' => $color->id]);
+    ProductVariant::factory()->for($product)->create(['size_id' => $size->id, 'color_id' => $color->id]);
 
     $this->expectException(QueryException::class);
 
-    ProductVariant::factory()->for($product)->create(['size' => 'M', 'color_id' => $color->id]);
+    ProductVariant::factory()->for($product)->create(['size_id' => $size->id, 'color_id' => $color->id]);
 });
 
 test('a variant has no stock and stays active until it says otherwise', function () {

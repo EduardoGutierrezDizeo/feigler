@@ -2,6 +2,8 @@
 
 use App\Enums\StoreSection;
 use App\Models\Category;
+use App\Models\Product;
+use App\Models\Size;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -75,4 +77,20 @@ function adminForPanel(): User
     $admin->assignRole('admin');
 
     return $admin;
+}
+
+/**
+ * A size of the category of this product, created when the category does not carry it
+ * yet.
+ *
+ * It lives here and not in a test file because several of them need one: a size only
+ * means something inside a category, so a test cannot make one up out of thin air,
+ * and the panel offers the sizes the category has rather than a free list.
+ */
+function sizeOfProduct(Product $product, string $name = 'M'): Size
+{
+    return Size::query()->firstOrCreate([
+        'category_id' => $product->category_id,
+        'name' => $name,
+    ]);
 }

@@ -9,6 +9,7 @@ use App\Livewire\Admin\Products\Variants;
 use App\Models\Color;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Models\Size;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Support\Facades\DB;
@@ -106,7 +107,7 @@ test('an admin who loses the role can no longer act on the tab', function (strin
 
     $panel
         ->call('startCreating')
-        ->set('size', 'M')
+        ->set('sizeId', sizeOfProduct($producto, 'M')->getKey())
         ->set('colorId', $color->getKey())
         ->set('initialStock', '5')
         ->call('save')
@@ -123,7 +124,7 @@ test('an admin who loses the role can no longer act on the tab', function (strin
 
     // Y nada de eso tocó la base: ni una variante más, ni el stock, ni el estado.
     expect($producto->variants()->count())->toBe(1)
-        ->and($variante->refresh()->size)->toBe('M')
+        ->and($variante->refresh()->size->name)->toBe('M')
         ->and($variante->stock)->toBe(5)
         ->and($variante->is_active)->toBeTrue()
         ->and($variante->inventoryMovements()->count())->toBe(1)
@@ -160,7 +161,7 @@ test('creates a variant with a built sku and an initial stock movement', functio
 
     variantPanel($producto)
         ->call('startCreating')
-        ->set('size', 'M')
+        ->set('sizeId', sizeOfProduct($producto, 'M')->getKey())
         ->set('colorId', $color->getKey())
         ->set('initialStock', '12')
         ->call('save')
@@ -171,7 +172,7 @@ test('creates a variant with a built sku and an initial stock movement', functio
 
     $variante = $producto->variants()->sole();
 
-    expect($variante->size)->toBe('M')
+    expect($variante->size->name)->toBe('M')
         ->and($variante->color_id)->toBe($color->getKey())
         ->and($variante->price_override)->toBeNull()
         ->and($variante->stock)->toBe(12)
@@ -202,7 +203,7 @@ test('the tab asks for no price and the variant sells at the price of its produc
         ->call('startCreating')
         ->assertDontSee('Precio propio')
         ->assertSee('El precio lo hereda la variante del producto: $89.900.')
-        ->set('size', 'L')
+        ->set('sizeId', sizeOfProduct($producto, 'L')->getKey())
         ->set('colorId', $color->getKey())
         ->call('save')
         ->assertHasNoErrors()
@@ -215,11 +216,11 @@ test('the tab asks for no price and the variant sells at the price of its produc
         ->call('startEditing', $variante->getKey())
         ->assertDontSee('Precio propio')
         ->assertDontSeeHtml('wire:model="price"')
-        ->set('size', 'XL')
+        ->set('sizeId', sizeOfProduct($producto, 'XL')->getKey())
         ->call('save')
         ->assertHasNoErrors();
 
-    expect($variante->refresh()->size)->toBe('XL')
+    expect($variante->refresh()->size->name)->toBe('XL')
         ->and($variante->price_override)->toBeNull()
         ->and((float) $producto->base_price)->toEqual(89900.0);
 });
@@ -237,18 +238,18 @@ test('editing a variant leaves a price it already had alone', function () {
     $color = Color::factory()->create();
     $otroColor = Color::factory()->create();
 
-    $variante = (new CreateProductVariant)($producto, 'M', $color, '64900', 5, adminForPanel());
+    $variante = (new CreateProductVariant)($producto, sizeOfProduct($producto)->getKey(), $color, '64900', 5, adminForPanel());
 
     variantPanel($producto)
         ->call('startEditing', $variante->getKey())
-        ->set('size', 'XL')
+        ->set('sizeId', sizeOfProduct($producto, 'XL')->getKey())
         ->set('colorId', $otroColor->getKey())
         ->call('save')
         ->assertHasNoErrors();
 
     $variante->refresh();
 
-    expect($variante->size)->toBe('XL')
+    expect($variante->size->name)->toBe('XL')
         ->and($variante->color_id)->toBe($otroColor->getKey())
         ->and((float) $variante->price_override)->toEqual(64900.0);
 });
@@ -260,7 +261,7 @@ test('a color that does not exist is refused and nothing is written', function (
 
     variantPanel($producto)
         ->call('startCreating')
-        ->set('size', 'M')
+        ->set('sizeId', sizeOfProduct($producto, 'M')->getKey())
         ->set('colorId', 987654)
         ->call('save')
         ->assertHasErrors(['colorId'])
@@ -269,7 +270,7 @@ test('a color that does not exist is refused and nothing is written', function (
     expect($producto->variants()->count())->toBe(0);
 });
 
-test('refuses a size that is not offered and a combination already taken', function () {
+test('refuses a combination already taken and a size of another category', function () {
     $this->seed(RoleSeeder::class);
 
     $producto = Product::factory()->create();
@@ -277,7 +278,7 @@ test('refuses a size that is not offered and a combination already taken', funct
 
     variantPanel($producto)
         ->call('startCreating')
-        ->set('size', 'M')
+        ->set('sizeId', sizeOfProduct($producto)->getKey())
         ->set('colorId', $color->getKey())
         ->call('save')
         ->assertHasNoErrors();
@@ -286,21 +287,66 @@ test('refuses a size that is not offered and a combination already taken', funct
 
     variantPanel($producto)
         ->call('startCreating')
-        ->set('size', 'M')
+        ->set('sizeId', sizeOfProduct($producto)->getKey())
         ->set('colorId', $color->getKey())
         ->call('save')
-        ->assertHasErrors(['size'])
+        ->assertHasErrors(['sizeId'])
         ->assertSet('showForm', true);
+
+    // Una talla de otra categoría nunca es una opción del formulario: el select sólo
+    // ofrece las de la categoría del producto, así que si aun así llega un id ajeno,
+    // la validación lo corta aquí y no en la llave foránea.
+    $ajena = Size::factory()->create(['name' => '42']);
 
     variantPanel($producto)
         ->call('startCreating')
-        ->set('size', '42')
+        ->set('sizeId', $ajena->getKey())
         ->set('colorId', $color->getKey())
         ->call('save')
-        ->assertHasErrors(['size']);
+        ->assertHasErrors(['sizeId'])
+        ->assertSet('sizeId', $ajena->getKey());
 
     expect($producto->variants()->count())->toBe(1)
         ->and($variante->stock)->toBe(0);
+});
+
+test('refuses a size that is turned off and keeps the one the variant already has', function () {
+    $this->seed(RoleSeeder::class);
+
+    $producto = Product::factory()->create();
+    $color = Color::factory()->create();
+    $mediana = sizeOfProduct($producto);
+    $grande = sizeOfProduct($producto, 'XL');
+    $grande->update(['is_active' => false]);
+
+    variantPanel($producto)
+        ->call('startCreating')
+        ->set('sizeId', $mediana->getKey())
+        ->set('colorId', $color->getKey())
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $variante = $producto->variants()->sole();
+
+    // Desactivada no quiere decir borrada: sigue en el catálogo de la categoría, pero
+    // el formulario no la ofrece para variantes nuevas y así se comporta.
+    variantPanel($producto)
+        ->call('startCreating')
+        ->assertDontSeeHtml('<option value="'.$grande->getKey().'"')
+        ->set('sizeId', $grande->getKey())
+        ->set('colorId', $color->getKey())
+        ->call('save')
+        ->assertHasErrors(['sizeId']);
+
+    // La variante que ya está en ella sí se puede seguir editando.
+    variantPanel($producto)
+        ->call('startEditing', $variante->getKey())
+        ->set('sizeId', $mediana->getKey())
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect($producto->variants()->count())->toBe(1)
+        ->and($variante->refresh()->size_id)->toBe($mediana->getKey());
 });
 
 test('editing a variant changes its data but neither its sku nor its stock', function () {
@@ -312,7 +358,7 @@ test('editing a variant changes its data but neither its sku nor its stock', fun
 
     variantPanel($producto)
         ->call('startCreating')
-        ->set('size', 'S')
+        ->set('sizeId', sizeOfProduct($producto, 'S')->getKey())
         ->set('colorId', $colorInicial->getKey())
         ->set('initialStock', '5')
         ->call('save')
@@ -323,9 +369,9 @@ test('editing a variant changes its data but neither its sku nor its stock', fun
 
     variantPanel($producto)
         ->call('startEditing', $variante->getKey())
-        ->assertSet('size', 'S')
+        ->assertSet('sizeId', sizeOfProduct($producto, 'S')->getKey())
         ->assertSet('editingSku', $skuOriginal)
-        ->set('size', 'XL')
+        ->set('sizeId', sizeOfProduct($producto, 'XL')->getKey())
         ->set('colorId', $colorNuevo->getKey())
         ->call('save')
         ->assertHasNoErrors()
@@ -334,7 +380,7 @@ test('editing a variant changes its data but neither its sku nor its stock', fun
 
     $variante->refresh();
 
-    expect($variante->size)->toBe('XL')
+    expect($variante->size->name)->toBe('XL')
         ->and($variante->color_id)->toBe($colorNuevo->getKey())
         ->and($variante->price_override)->toBeNull()
         ->and($variante->sku)->toBe($skuOriginal)
@@ -351,21 +397,21 @@ test('refuses to edit a variant into a combination the product already has', fun
     foreach (['S', 'M'] as $talla) {
         variantPanel($producto)
             ->call('startCreating')
-            ->set('size', $talla)
+            ->set('sizeId', sizeOfProduct($producto, $talla)->getKey())
             ->set('colorId', $color->getKey())
             ->call('save')
             ->assertHasNoErrors();
     }
 
-    $mediana = $producto->variants()->where('size', 'M')->sole();
+    $mediana = $producto->variants()->where('size_id', sizeOfProduct($producto, 'M')->getKey())->sole();
 
     variantPanel($producto)
         ->call('startEditing', $mediana->getKey())
-        ->set('size', 'S')
+        ->set('sizeId', sizeOfProduct($producto, 'S')->getKey())
         ->call('save')
-        ->assertHasErrors(['size']);
+        ->assertHasErrors(['sizeId']);
 
-    expect($mediana->fresh()->size)->toBe('M');
+    expect($mediana->fresh()->size->name)->toBe('M');
 });
 
 test('starting a new one from an existing one keeps its size and color', function () {
@@ -376,7 +422,7 @@ test('starting a new one from an existing one keeps its size and color', functio
 
     variantPanel($producto)
         ->call('startCreating')
-        ->set('size', 'M')
+        ->set('sizeId', sizeOfProduct($producto, 'M')->getKey())
         ->set('colorId', $color->getKey())
         ->call('save')
         ->assertHasNoErrors();
@@ -387,7 +433,7 @@ test('starting a new one from an existing one keeps its size and color', functio
         ->call('startCreatingFrom', $variante->getKey())
         ->assertSet('showForm', true)
         ->assertSet('editingId', null)
-        ->assertSet('size', 'M')
+        ->assertSet('sizeId', sizeOfProduct($producto, 'M')->getKey())
         ->assertSet('colorId', $color->getKey());
 });
 
@@ -399,7 +445,7 @@ test('adjusts the stock in both directions and writes the reason down', function
 
     variantPanel($producto, $admin)
         ->call('startCreating')
-        ->set('size', 'M')
+        ->set('sizeId', sizeOfProduct($producto, 'M')->getKey())
         ->set('colorId', Color::factory()->create()->getKey())
         ->set('initialStock', '10')
         ->call('save')
@@ -443,7 +489,7 @@ test('refuses an adjustment that would leave the stock below zero', function () 
 
     variantPanel($producto)
         ->call('startCreating')
-        ->set('size', 'M')
+        ->set('sizeId', sizeOfProduct($producto, 'M')->getKey())
         ->set('colorId', Color::factory()->create()->getKey())
         ->set('initialStock', '2')
         ->call('save')
@@ -472,7 +518,7 @@ test('an adjustment needs a reason and a non zero amount', function () {
 
     variantPanel($producto)
         ->call('startCreating')
-        ->set('size', 'M')
+        ->set('sizeId', sizeOfProduct($producto, 'M')->getKey())
         ->set('colorId', Color::factory()->create()->getKey())
         ->call('save')
         ->assertHasNoErrors();
@@ -501,7 +547,7 @@ test('turning a variant off takes it out of the catalog without deleting it', fu
 
     variantPanel($producto)
         ->call('startCreating')
-        ->set('size', 'M')
+        ->set('sizeId', sizeOfProduct($producto, 'M')->getKey())
         ->set('colorId', Color::factory()->create()->getKey())
         ->set('initialStock', '4')
         ->call('save')
@@ -530,7 +576,7 @@ test('deletes a variant nobody has touched', function () {
 
     variantPanel($producto)
         ->call('startCreating')
-        ->set('size', 'M')
+        ->set('sizeId', sizeOfProduct($producto, 'M')->getKey())
         ->set('colorId', Color::factory()->create()->getKey())
         ->call('save')
         ->assertHasNoErrors();
@@ -553,7 +599,7 @@ test('a variant with movements stays in place and says why', function () {
 
     variantPanel($producto)
         ->call('startCreating')
-        ->set('size', 'M')
+        ->set('sizeId', sizeOfProduct($producto, 'M')->getKey())
         ->set('colorId', Color::factory()->create()->getKey())
         ->set('initialStock', '5')
         ->call('save')
@@ -598,7 +644,7 @@ test('the listing moves from no variants to active and back to out of stock', fu
 
     variantPanel($producto)
         ->call('startCreating')
-        ->set('size', 'M')
+        ->set('sizeId', sizeOfProduct($producto, 'M')->getKey())
         ->set('colorId', $color->getKey())
         ->set('initialStock', '7')
         ->call('save')
@@ -643,7 +689,7 @@ test('the stored status of a product is never left as out of stock', function ()
 
     variantPanel($producto)
         ->call('startCreating')
-        ->set('size', 'M')
+        ->set('sizeId', sizeOfProduct($producto, 'M')->getKey())
         ->set('colorId', $color->getKey())
         ->set('initialStock', '4')
         ->call('save')
@@ -679,14 +725,14 @@ test('the stored status of a product is never left as out of stock', function ()
     // movimientos ya no se puede eliminar y esa regla es de otra prueba.
     variantPanel($producto)
         ->call('startCreating')
-        ->set('size', 'L')
+        ->set('sizeId', sizeOfProduct($producto, 'L')->getKey())
         ->set('colorId', $otroColor->getKey())
         ->set('initialStock', '0')
         ->call('save')
         ->assertHasNoErrors();
 
     variantPanel($producto)
-        ->call('delete', $producto->variants()->where('size', 'L')->sole()->getKey())
+        ->call('delete', $producto->variants()->where('size_id', sizeOfProduct($producto, 'L')->getKey())->sole()->getKey())
         ->assertHasNoErrors();
 
     expect($estadoGuardado())->toBe('active')
@@ -732,7 +778,7 @@ test('the listing the filter and the model agree on the state of a product', fun
 
     variantPanel($producto)
         ->call('startCreating')
-        ->set('size', 'M')
+        ->set('sizeId', sizeOfProduct($producto, 'M')->getKey())
         ->set('colorId', $color->getKey())
         ->set('initialStock', '2')
         ->call('save')
@@ -776,7 +822,7 @@ test('the listing is refreshed when the tab says its variants changed', function
     Livewire::actingAs(adminForPanel())
         ->test(Variants::class, ['productId' => $producto->getKey()])
         ->call('startCreating')
-        ->set('size', 'M')
+        ->set('sizeId', sizeOfProduct($producto, 'M')->getKey())
         ->set('colorId', Color::factory()->create()->getKey())
         ->set('initialStock', '3')
         ->call('save')
@@ -794,7 +840,7 @@ test('the number of queries does not grow with the number of variants', function
 
         $combinaciones = [];
 
-        foreach (ProductVariant::SIZES as $talla) {
+        foreach (Size::STANDARD_NAMES as $talla) {
             foreach ($colores as $color) {
                 $combinaciones[] = [$talla, $color->getKey()];
             }
@@ -802,7 +848,7 @@ test('the number of queries does not grow with the number of variants', function
 
         foreach (array_slice($combinaciones, 0, $variantes) as $indice => [$talla, $colorId]) {
             ProductVariant::factory()->for($producto)->for($colores->firstWhere('id', $colorId), 'color')->create([
-                'size' => $talla,
+                'size_id' => sizeOfProduct($producto, $talla)->getKey(),
                 'sku' => "SKU-{$producto->getKey()}-{$indice}",
             ]);
         }
@@ -830,20 +876,31 @@ test('the number of queries does not grow with the number of variants', function
     expect($conQuince)->toBe($conTres);
 });
 
-test('the variants of a product are listed in size order and then by color', function () {
+test('the variants of a product are listed in the order of their size and then by color', function () {
     $this->seed(RoleSeeder::class);
 
     $producto = Product::factory()->create();
     $azul = Color::factory()->create(['name' => 'Azul']);
     $rojo = Color::factory()->create(['name' => 'Rojo']);
 
-    ProductVariant::factory()->for($producto)->for($rojo, 'color')->create(['size' => 'XL', 'sku' => 'A-XL-ROJO']);
-    ProductVariant::factory()->for($producto)->for($azul, 'color')->create(['size' => 'S', 'sku' => 'B-S-AZUL']);
-    ProductVariant::factory()->for($producto)->for($rojo, 'color')->create(['size' => 'M', 'sku' => 'C-M-ROJO']);
-    ProductVariant::factory()->for($producto)->for($azul, 'color')->create(['size' => 'M', 'sku' => 'D-M-AZUL']);
+    // Las tallas se leen en el orden que la categoría lleva, no en el alfabético de su
+    // nombre: por eso aquí el orden se dice de antemano y no sale de crear las tallas.
+    $chica = sizeOfProduct($producto, 'S');
+    $mediana = sizeOfProduct($producto, 'M');
+    $grande = sizeOfProduct($producto, 'XL');
+    $chica->update(['order' => 1]);
+    $mediana->update(['order' => 2]);
+    $grande->update(['order' => 3]);
+
+    ProductVariant::factory()->for($producto)->for($rojo, 'color')->create(['size_id' => $grande->getKey(), 'sku' => 'A-XL-ROJO']);
+    ProductVariant::factory()->for($producto)->for($azul, 'color')->create(['size_id' => $chica->getKey(), 'sku' => 'B-S-AZUL']);
+    ProductVariant::factory()->for($producto)->for($rojo, 'color')->create(['size_id' => $mediana->getKey(), 'sku' => 'C-M-ROJO']);
+    ProductVariant::factory()->for($producto)->for($azul, 'color')->create(['size_id' => $mediana->getKey(), 'sku' => 'D-M-AZUL']);
 
     $vista = variantPanel($producto)->html();
 
+    // Y dentro de una misma talla manda el nombre del color, no el orden en que se
+    // crearon las variantes: «Azul» va antes que «Rojo».
     $orden = ['B-S-AZUL', 'D-M-AZUL', 'C-M-ROJO', 'A-XL-ROJO'];
 
     $posiciones = array_map(fn (string $sku): int => strpos($vista, $sku), $orden);

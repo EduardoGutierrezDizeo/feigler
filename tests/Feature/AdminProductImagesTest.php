@@ -41,7 +41,6 @@ function productoVendidoEn(int $colores = 2): Product
         ]);
 
         ProductVariant::factory()->for($producto)->create([
-            'size' => 'M',
             'color_id' => $color->getKey(),
         ]);
     }

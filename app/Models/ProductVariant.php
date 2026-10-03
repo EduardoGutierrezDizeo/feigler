@@ -37,25 +37,13 @@ class ProductVariant extends Model
     public const STOCK_ADDING_TYPES = ['ajuste_entrada', 'devolucion'];
 
     /**
-     * The sizes a variant can be sold in, from the smallest to the largest.
-     *
-     * They are stored uppercased and without spaces, the same way `makeSku`
-     * normalizes a size, so `m`, ` m ` and `M` are one size and not three: the
-     * database would refuse two of them anyway, since the unique index on
-     * (product_id, size, color_id) compares them as equal.
-     *
-     * @var list<string>
-     */
-    public const SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', 'ÚNICA'];
-
-    /**
      * The attributes that are mass assignable.
      *
      * @var list<string>
      */
     protected $fillable = [
         'product_id',
-        'size',
+        'size_id',
         'color_id',
         'sku',
         'stock',
@@ -91,6 +79,20 @@ class ProductVariant extends Model
     public function color(): BelongsTo
     {
         return $this->belongsTo(Color::class);
+    }
+
+    /**
+     * The size this variant is sold in, among the sizes the category of its product
+     * offers.
+     *
+     * The relation took the name of the column it replaced: while `size` was a free
+     * text column this could not be called `size`, because a relation of that name
+     * would collide with the attribute of the same name and one of the two would
+     * always read the wrong thing.
+     */
+    public function size(): BelongsTo
+    {
+        return $this->belongsTo(Size::class, 'size_id');
     }
 
     /**
@@ -144,9 +146,12 @@ class ProductVariant extends Model
      * The SKU of a size/color combination: the reference of the product, the size
      * and the code of the color, e.g. `PL-001-M-AZU`.
      *
-     * The size is normalized because it reaches this method from wherever the
-     * store typed it: `m`, ` m ` and `M` are the same size and have to produce the
-     * same SKU, or the same garment would end up with two different codes.
+     * The name of the size is normalized because it reaches this method from the
+     * database, where the store typed it: `m`, ` m ` and `M` are the same size and
+     * have to produce the same SKU, or the same garment would end up with two
+     * different codes. The normalization is left exactly as it was when the size
+     * arrived as free text, so the SKU of a variant created before the sizes moved
+     * into their own table is the SKU of one created after.
      *
      * The reference is required and is never invented here. A reference that does
      * not exist yet means the product was never persisted, and numbering it on the
@@ -155,13 +160,13 @@ class ProductVariant extends Model
      *
      * @throws LogicException when the product has no reference
      */
-    public static function makeSku(Product $product, string $size, Color $color): string
+    public static function makeSku(Product $product, Size $size, Color $color): string
     {
         if (blank($product->reference)) {
             throw new LogicException("El producto «{$product->name}» no tiene referencia; no se puede generar el SKU.");
         }
 
-        $normalizedSize = Str::upper(preg_replace('/\s+/', '', $size) ?? $size);
+        $normalizedSize = Str::upper(preg_replace('/\s+/', '', $size->name) ?? $size->name);
 
         return "{$product->reference}-{$normalizedSize}-{$color->code}";
     }

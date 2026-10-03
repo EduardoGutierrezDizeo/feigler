@@ -60,13 +60,18 @@
             <div class="grid gap-5 sm:grid-cols-2">
                 <div>
                     <x-input-label for="variant-size" value="Talla" />
-                    <x-select-input id="variant-size" wire:model="size" class="mt-1 block w-full" required>
+                    <x-select-input id="variant-size" wire:model="sizeId" class="mt-1 block w-full" required>
                         <option value="">— Selecciona una talla —</option>
-                        @foreach ($sizes as $option)
-                            <option value="{{ $option }}">{{ $option }}</option>
+                        @foreach ($sizes as $size)
+                            {{-- La talla que la variante ya tiene se ofrece aunque esté
+                                 desactivada: quitarla del select obligaría a mover la
+                                 variante a otra talla para poder guardarla. --}}
+                            <option value="{{ $size->id }}">
+                                {{ $size->name }}{{ $size->is_active ? '' : ' (inactiva)' }}
+                            </option>
                         @endforeach
                     </x-select-input>
-                    <x-input-error :messages="$errors->get('size')" class="mt-2" />
+                    <x-input-error :messages="$errors->get('sizeId')" class="mt-2" />
                 </div>
 
                 <div>
@@ -187,7 +192,7 @@
                     <div class="flex flex-wrap items-start justify-between gap-3">
                         <div class="min-w-0">
                             <div class="flex flex-wrap items-center gap-2">
-                                <span class="etiqueta">{{ $variant->size }}</span>
+                                <span class="etiqueta">{{ $variant->size->name }}</span>
 
                                 <span class="text-sm font-semibold text-tinta">
                                     {{ $variant->color->name ?? '—' }}

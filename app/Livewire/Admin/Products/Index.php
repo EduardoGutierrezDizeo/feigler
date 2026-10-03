@@ -318,6 +318,17 @@ class Index extends Component
     {
         $product = Product::query()->findOrFail($this->editingId);
 
+        // A product that already sells something cannot be moved to another category:
+        // its sizes belong to the category it is in, and a garment of one category
+        // cannot be offered in the sizes of another. The form is refused whole, so the
+        // category the admin just picked does not leave the variant list behind a
+        // category the product is not in.
+        if ($this->categoryChangeIsRefused($product, $category)) {
+            $this->addError('categoryId', 'No puedes cambiar la categoría de un producto que ya tiene variantes: sus tallas pertenecen a la categoría actual');
+
+            return;
+        }
+
         $product->update([
             'name' => trim($validated['name']),
             'category_id' => $category->getKey(),
@@ -330,6 +341,15 @@ class Index extends Component
 
         $this->notifySuccess('Producto actualizado correctamente.');
         $this->resetForm();
+    }
+
+    /**
+     * Whether this product cannot be moved to the category the form is asking for.
+     */
+    private function categoryChangeIsRefused(Product $product, Category $category): bool
+    {
+        return (int) $product->category_id !== (int) $category->getKey()
+            && $product->variants()->exists();
     }
 
     /**

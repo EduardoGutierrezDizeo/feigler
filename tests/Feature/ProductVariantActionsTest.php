@@ -7,6 +7,7 @@ use App\Actions\Products\ToggleProductVariant;
 use App\Actions\Products\UpdateProductVariant;
 use App\Enums\StoreSection;
 use App\Exceptions\DuplicateProductVariantException;
+use App\Exceptions\InactiveVariantSizeException;
 use App\Exceptions\InsufficientStockException;
 use App\Exceptions\InvalidStockAdjustmentException;
 use App\Exceptions\InvalidVariantSizeException;
@@ -17,6 +18,7 @@ use App\Models\InventoryMovement;
 use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Models\Size;
 use App\Models\User;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\QueryException;
@@ -65,15 +67,37 @@ function rojo(): Color
     return color('Rojo', 'ROJ');
 }
 
+/**
+ * The id of a size of the category of this product, created when the category does
+ * not carry it yet. The name is stored exactly as it comes, because the catalogue is
+ * the one that normalizes; the actions only read it.
+ */
+function talla(Product $product, string $name = 'M'): int
+{
+    return Size::query()->firstOrCreate([
+        'category_id' => $product->category_id,
+        'name' => $name,
+    ])->getKey();
+}
+
+/**
+ * A size of a category of its own, which no product may point at.
+ */
+function tallaAjena(string $name = 'M'): Size
+{
+    return Size::factory()->create(['name' => $name]);
+}
+
 test('a variant is created with a sku built from the reference of the product', function () {
     $product = productFor();
     $azul = azul();
 
-    $variant = (new CreateProductVariant)($product, 'M', $azul);
+    $variant = (new CreateProductVariant)($product, talla($product), $azul);
 
     expect($variant->sku)->toBe('PL-001-M-AZU')
         ->and($variant->product_id)->toBe($product->id)
-        ->and($variant->size)->toBe('M')
+        ->and($variant->size->name)->toBe('M')
+        ->and($variant->size->category_id)->toBe($product->category_id)
         ->and($variant->color_id)->toBe($azul->id)
         ->and($variant->is_active)->toBeTrue()
         ->and($product->variants()->count())->toBe(1);
@@ -85,7 +109,7 @@ test('a sku already taken gets a number appended', function () {
 
     ProductVariant::factory()->for($product)->create(['sku' => 'PL-001-M-AZU']);
 
-    $variant = (new CreateProductVariant)($product, 'M', $azul);
+    $variant = (new CreateProductVariant)($product, talla($product), $azul);
 
     expect($variant->sku)->toBe('PL-001-M-AZU-2');
 });
@@ -97,7 +121,7 @@ test('a second collision keeps counting from a two', function () {
     ProductVariant::factory()->for($product)->create(['sku' => 'PL-001-M-AZU']);
     ProductVariant::factory()->for($product)->create(['sku' => 'PL-001-M-AZU-2']);
 
-    $variant = (new CreateProductVariant)($product, 'M', $azul);
+    $variant = (new CreateProductVariant)($product, talla($product), $azul);
 
     expect($variant->sku)->toBe('PL-001-M-AZU-3');
 });
@@ -106,21 +130,21 @@ test('the sku never changes when the variant is edited', function () {
     $product = productFor();
     $azul = azul();
     $rojo = rojo();
-    $variant = (new CreateProductVariant)($product, 'M', $azul);
+    $variant = (new CreateProductVariant)($product, talla($product), $azul);
 
-    $edited = (new UpdateProductVariant)($product, $variant->id, 'XL', $rojo);
+    $edited = (new UpdateProductVariant)($product, $variant->id, talla($product, 'XL'), $rojo);
 
     expect($edited->sku)->toBe($variant->sku)
         ->and($edited->sku)->toBe('PL-001-M-AZU')
         ->and($edited->refresh()->sku)->toBe('PL-001-M-AZU')
-        ->and($edited->size)->toBe('XL')
+        ->and($edited->size->name)->toBe('XL')
         ->and($edited->color_id)->toBe($rojo->id);
 });
 
 test('a variant without a price is sold at the price of its product', function () {
     $product = productFor();
 
-    $variant = (new CreateProductVariant)($product, 'L', azul());
+    $variant = (new CreateProductVariant)($product, talla($product, 'L'), azul());
 
     expect($variant->price_override)->toBeNull()
         ->and($product->base_price)->toEqual('250.00');
@@ -129,7 +153,7 @@ test('a variant without a price is sold at the price of its product', function (
 test('a variant with a price keeps it', function () {
     $product = productFor();
 
-    $variant = (new CreateProductVariant)($product, 'L', azul(), '199.90');
+    $variant = (new CreateProductVariant)($product, talla($product, 'L'), azul(), '199.90');
 
     expect($variant->refresh()->price_override)->toEqual('199.90');
 });
@@ -138,9 +162,9 @@ test('a product cannot have two variants in the same size and color', function (
     $product = productFor();
     $azul = azul();
 
-    (new CreateProductVariant)($product, 'M', $azul);
+    (new CreateProductVariant)($product, talla($product), $azul);
 
-    expect(fn () => (new CreateProductVariant)($product, 'M', $azul))
+    expect(fn () => (new CreateProductVariant)($product, talla($product), $azul))
         ->toThrow(DuplicateProductVariantException::class);
 
     expect($product->variants()->count())->toBe(1);
@@ -151,8 +175,8 @@ test('the same size and color can be repeated in another product', function () {
     $first = productFor('PL-001');
     $second = productFor('PL-002');
 
-    (new CreateProductVariant)($first, 'M', $azul);
-    (new CreateProductVariant)($second, 'M', $azul);
+    (new CreateProductVariant)($first, talla($first), $azul);
+    (new CreateProductVariant)($second, talla($second), $azul);
 
     expect($first->variants()->count())->toBe(1)
         ->and($second->variants()->count())->toBe(1)
@@ -162,18 +186,18 @@ test('the same size and color can be repeated in another product', function () {
 test('a size that does not exist is refused', function () {
     $product = productFor();
 
-    expect(fn () => (new CreateProductVariant)($product, 'TLL', azul()))
-        ->toThrow(InvalidVariantSizeException::class);
+    expect(fn () => (new CreateProductVariant)($product, 987654, azul()))
+        ->toThrow(ModelNotFoundException::class);
 
     expect($product->variants()->count())->toBe(0);
 });
 
-test('a size is stored the same way no matter how it is typed', function () {
+test('the sku normalizes the name of the size it points at', function () {
     $product = productFor();
 
-    $variant = (new CreateProductVariant)($product, ' m ', azul());
+    $variant = (new CreateProductVariant)($product, talla($product, ' m '), azul());
 
-    expect($variant->size)->toBe('M')
+    expect($variant->size->name)->toBe(' m ')
         ->and($variant->sku)->toBe('PL-001-M-AZU');
 });
 
@@ -181,11 +205,11 @@ test('an edited variant cannot move onto a combination that is taken', function 
     $product = productFor();
     $azul = azul();
     $rojo = rojo();
-    $editada = (new CreateProductVariant)($product, 'M', $azul);
+    $editada = (new CreateProductVariant)($product, talla($product), $azul);
 
-    (new CreateProductVariant)($product, 'M', $rojo);
+    (new CreateProductVariant)($product, talla($product), $rojo);
 
-    expect(fn () => (new UpdateProductVariant)($product, $editada->id, 'M', $rojo))
+    expect(fn () => (new UpdateProductVariant)($product, $editada->id, talla($product), $rojo))
         ->toThrow(DuplicateProductVariantException::class);
 
     expect($editada->refresh()->color_id)->toBe($azul->id);
@@ -194,9 +218,9 @@ test('an edited variant cannot move onto a combination that is taken', function 
 test('a variant can be edited without changing its size and color', function () {
     $product = productFor();
     $azul = azul();
-    $variant = (new CreateProductVariant)($product, 'M', $azul);
+    $variant = (new CreateProductVariant)($product, talla($product), $azul);
 
-    $edited = (new UpdateProductVariant)($product, $variant->id, 'M', $azul, '175.00');
+    $edited = (new UpdateProductVariant)($product, $variant->id, talla($product), $azul, '175.00');
 
     expect($edited->id)->toBe($variant->id)
         ->and($edited->price_override)->toEqual('175.00')
@@ -206,9 +230,9 @@ test('a variant can be edited without changing its size and color', function () 
 test('editing a variant leaves its stock alone', function () {
     $product = productFor();
     $azul = azul();
-    $variant = (new CreateProductVariant)($product, 'M', $azul, null, 7);
+    $variant = (new CreateProductVariant)($product, talla($product), $azul, null, 7);
 
-    $edited = (new UpdateProductVariant)($product, $variant->id, 'XL', rojo());
+    $edited = (new UpdateProductVariant)($product, $variant->id, talla($product, 'XL'), rojo());
 
     expect($edited->refresh()->stock)->toBe(7)
         ->and($variant->inventoryMovements()->count())->toBe(1);
@@ -218,7 +242,7 @@ test('initial stock leaves a movement with the user and the reason behind it', f
     $product = productFor();
     $user = User::factory()->create();
 
-    $variant = (new CreateProductVariant)($product, 'M', azul(), null, 4, $user);
+    $variant = (new CreateProductVariant)($product, talla($product), azul(), null, 4, $user);
 
     $movement = $variant->inventoryMovements()->sole();
 
@@ -233,7 +257,7 @@ test('initial stock leaves a movement with the user and the reason behind it', f
 test('a variant created with no stock leaves no movement', function () {
     $product = productFor();
 
-    $variant = (new CreateProductVariant)($product, 'M', azul());
+    $variant = (new CreateProductVariant)($product, talla($product), azul());
 
     expect($variant->stock)->toBe(0)
         ->and($variant->inventoryMovements()->count())->toBe(0);
@@ -242,7 +266,7 @@ test('a variant created with no stock leaves no movement', function () {
 test('an adjustment moves the stock and leaves a movement saying why', function () {
     $product = productFor();
     $user = User::factory()->create();
-    $variant = (new CreateProductVariant)($product, 'M', azul(), null, 5, $user);
+    $variant = (new CreateProductVariant)($product, talla($product), azul(), null, 5, $user);
     $adjust = new AdjustProductVariantStock;
 
     $adjust($product, $variant->id, 6, 'Recepción de mercancía', $user);
@@ -270,7 +294,7 @@ test('an adjustment moves the stock and leaves a movement saying why', function 
 
 test('an adjustment that would leave the stock below zero is refused', function () {
     $product = productFor();
-    $variant = (new CreateProductVariant)($product, 'M', azul(), null, 3);
+    $variant = (new CreateProductVariant)($product, talla($product), azul(), null, 3);
     $adjust = new AdjustProductVariantStock;
 
     expect(fn () => $adjust($product, $variant->id, -4, 'Merma'))
@@ -282,7 +306,7 @@ test('an adjustment that would leave the stock below zero is refused', function 
 
 test('an adjustment of zero units is refused', function () {
     $product = productFor();
-    $variant = (new CreateProductVariant)($product, 'M', azul(), null, 3);
+    $variant = (new CreateProductVariant)($product, talla($product), azul(), null, 3);
     $adjust = new AdjustProductVariantStock;
 
     expect(fn () => $adjust($product, $variant->id, 0, 'Nada que contar'))
@@ -294,7 +318,7 @@ test('an adjustment of zero units is refused', function () {
 
 test('an adjustment without a reason is refused', function () {
     $product = productFor();
-    $variant = (new CreateProductVariant)($product, 'M', azul(), null, 3);
+    $variant = (new CreateProductVariant)($product, talla($product), azul(), null, 3);
     $adjust = new AdjustProductVariantStock;
 
     expect(fn () => $adjust($product, $variant->id, 2, '   '))
@@ -306,7 +330,7 @@ test('an adjustment without a reason is refused', function () {
 
 test('a reason longer than the note column is refused', function () {
     $product = productFor();
-    $variant = (new CreateProductVariant)($product, 'M', azul(), null, 3);
+    $variant = (new CreateProductVariant)($product, talla($product), azul(), null, 3);
     $adjust = new AdjustProductVariantStock;
 
     expect(fn () => $adjust($product, $variant->id, 2, str_repeat('a', 256)))
@@ -318,7 +342,7 @@ test('a reason longer than the note column is refused', function () {
 test('a negative initial stock is refused', function () {
     $product = productFor();
 
-    expect(fn () => (new CreateProductVariant)($product, 'M', azul(), null, -1))
+    expect(fn () => (new CreateProductVariant)($product, talla($product), azul(), null, -1))
         ->toThrow(InvalidStockAdjustmentException::class);
 
     expect($product->variants()->count())->toBe(0);
@@ -327,7 +351,7 @@ test('a negative initial stock is refused', function () {
 test('deactivating a variant takes it out of the catalog without deleting it', function () {
     $product = productFor();
     $user = User::factory()->create();
-    $variant = (new CreateProductVariant)($product, 'M', azul(), null, 5, $user);
+    $variant = (new CreateProductVariant)($product, talla($product), azul(), null, 5, $user);
     $toggle = new ToggleProductVariant;
 
     $toggle($product, $variant->id);
@@ -344,7 +368,7 @@ test('deactivating a variant takes it out of the catalog without deleting it', f
 
 test('an inactive variant is not counted as stock', function () {
     $product = productFor();
-    $variant = (new CreateProductVariant)($product, 'M', azul(), null, 12);
+    $variant = (new CreateProductVariant)($product, talla($product), azul(), null, 12);
 
     expect($product->load('variants')->stock_total)->toBe(12);
 
@@ -359,7 +383,7 @@ test('the status shown by a product follows the stock of its variants', function
 
     expect($product->display_status)->toBe('no_variants');
 
-    $variant = (new CreateProductVariant)($product, 'M', azul(), null, 4);
+    $variant = (new CreateProductVariant)($product, talla($product), azul(), null, 4);
 
     expect($product->display_status)->toBe('active');
 
@@ -372,7 +396,7 @@ test('the status shown by a product follows the stock of its variants', function
 test('a variant that was never touched can be deleted', function () {
     $product = productFor();
     $user = User::factory()->create();
-    $variant = (new CreateProductVariant)($product, 'M', azul(), null, 5, $user);
+    $variant = (new CreateProductVariant)($product, talla($product), azul(), null, 5, $user);
 
     (new DeleteProductVariant)($product, $variant->id);
 
@@ -383,7 +407,7 @@ test('a variant that was never touched can be deleted', function () {
 
 test('a variant created with no stock can be deleted', function () {
     $product = productFor();
-    $variant = (new CreateProductVariant)($product, 'M', azul());
+    $variant = (new CreateProductVariant)($product, talla($product), azul());
 
     (new DeleteProductVariant)($product, $variant->id);
 
@@ -392,7 +416,7 @@ test('a variant created with no stock can be deleted', function () {
 
 test('a variant that was sold cannot be deleted', function () {
     $product = productFor();
-    $variant = (new CreateProductVariant)($product, 'M', azul());
+    $variant = (new CreateProductVariant)($product, talla($product), azul());
     OrderItem::factory()->for($variant, 'productVariant')->create();
 
     expect(fn () => (new DeleteProductVariant)($product, $variant->id))
@@ -403,7 +427,7 @@ test('a variant that was sold cannot be deleted', function () {
 
 test('a variant whose stock was adjusted cannot be deleted', function () {
     $product = productFor();
-    $variant = (new CreateProductVariant)($product, 'M', azul(), null, 5);
+    $variant = (new CreateProductVariant)($product, talla($product), azul(), null, 5);
 
     (new AdjustProductVariantStock)($product, $variant->id, -5, 'Todo vendido');
 
@@ -416,7 +440,7 @@ test('a variant whose stock was adjusted cannot be deleted', function () {
 
 test('a variant with a movement that is not its initial stock cannot be deleted', function () {
     $product = productFor();
-    $variant = (new CreateProductVariant)($product, 'M', azul());
+    $variant = (new CreateProductVariant)($product, talla($product), azul());
     InventoryMovement::factory()->for($variant, 'variant')->create([
         'type' => 'devolucion',
         'quantity' => 1,
@@ -431,7 +455,7 @@ test('a variant with a movement that is not its initial stock cannot be deleted'
 
 test('a variant whose initial stock no longer matches cannot be deleted', function () {
     $product = productFor();
-    $variant = (new CreateProductVariant)($product, 'M', azul(), null, 5);
+    $variant = (new CreateProductVariant)($product, talla($product), azul(), null, 5);
     InventoryMovement::query()->where('product_variant_id', $variant->id)->delete();
 
     $variant->update(['stock' => 5]);
@@ -441,11 +465,12 @@ test('a variant whose initial stock no longer matches cannot be deleted', functi
 });
 
 test('no action can touch a variant of another product', function () {
-    $ajena = (new CreateProductVariant)(productFor('PL-002'), 'M', rojo(), null, 5);
+    $ajeno = productFor('PL-002');
+    $ajena = (new CreateProductVariant)($ajeno, talla($ajeno), rojo(), null, 5);
     $producto = productFor('PL-001');
 
     $acciones = [
-        'update' => fn () => (new UpdateProductVariant)($producto, $ajena->id, 'XL', azul()),
+        'update' => fn () => (new UpdateProductVariant)($producto, $ajena->id, talla($producto, 'XL'), azul()),
         'adjust' => fn () => (new AdjustProductVariantStock)($producto, $ajena->id, 1, 'Ajuste indebido'),
         'toggle' => fn () => (new ToggleProductVariant)($producto, $ajena->id),
         'delete' => fn () => (new DeleteProductVariant)($producto, $ajena->id),
@@ -455,7 +480,7 @@ test('no action can touch a variant of another product', function () {
         expect(fn () => $accion(), $nombre)->toThrow(ModelNotFoundException::class);
     }
 
-    expect($ajena->refresh()->size)->toBe('M')
+    expect($ajena->refresh()->size->name)->toBe('M')
         ->and($ajena->stock)->toBe(5)
         ->and($ajena->is_active)->toBeTrue()
         ->and($ajena->inventoryMovements()->count())->toBe(1);
@@ -465,9 +490,9 @@ test('a variant is not left behind when creating it fails halfway', function () 
     $product = productFor();
     $azul = azul();
     $user = User::factory()->create();
-    (new CreateProductVariant)($product, 'M', $azul);
+    (new CreateProductVariant)($product, talla($product), $azul);
 
-    expect(fn () => (new CreateProductVariant)($product, 'M', $azul, null, 4, $user))
+    expect(fn () => (new CreateProductVariant)($product, talla($product), $azul, null, 4, $user))
         ->toThrow(DuplicateProductVariantException::class);
 
     expect($product->variants()->count())->toBe(1)
@@ -476,7 +501,7 @@ test('a variant is not left behind when creating it fails halfway', function () 
 
 test('a failed deletion leaves the variant and its movements alone', function () {
     $product = productFor();
-    $variant = (new CreateProductVariant)($product, 'M', azul(), null, 5);
+    $variant = (new CreateProductVariant)($product, talla($product), azul(), null, 5);
     OrderItem::factory()->for($variant, 'productVariant')->create();
 
     expect(fn () => (new DeleteProductVariant)($product, $variant->id))
@@ -504,7 +529,7 @@ test('a variant cannot be saved against a color that does not exist', function (
     $product = productFor();
 
     expect(fn () => $product->variants()->create([
-        'size' => 'M',
+        'size_id' => talla($product),
         'color_id' => 987654,
         'sku' => 'PL-001-M-XXX',
     ]))->toThrow(QueryException::class);
@@ -528,9 +553,98 @@ test('a creation that fails after the insert leaves nothing behind', function ()
         throw new RuntimeException('Fallo simulado a mitad del alta');
     });
 
-    expect(fn () => (new CreateProductVariant)($product, 'M', $color, null, 5, $user))
+    expect(fn () => (new CreateProductVariant)($product, talla($product), $color, null, 5, $user))
         ->toThrow(RuntimeException::class);
 
     expect($product->variants()->count())->toBe(0)
         ->and(InventoryMovement::query()->count())->toBe(0);
+});
+
+/**
+ * A size belongs to the category it was created for, and a product can only be
+ * built out of the sizes of its own category: otherwise a variant would carry a
+ * size that the rest of the catalogue does not sell in that section.
+ */
+test('a size of another category is refused when a variant is created', function () {
+    $product = productFor();
+    $ajena = tallaAjena();
+
+    expect(fn () => (new CreateProductVariant)($product, $ajena->getKey(), azul()))
+        ->toThrow(InvalidVariantSizeException::class);
+
+    expect($product->variants()->count())->toBe(0);
+});
+
+test('a size of another category is refused when a variant is edited', function () {
+    $product = productFor();
+    $azul = azul();
+    $variant = (new CreateProductVariant)($product, talla($product), $azul);
+
+    expect(fn () => (new UpdateProductVariant)($product, $variant->id, tallaAjena()->getKey(), $azul))
+        ->toThrow(InvalidVariantSizeException::class);
+
+    expect($variant->refresh()->size->name)->toBe('M');
+});
+
+test('the refusal names the category the size belongs to', function () {
+    $product = productFor();
+    $ajena = tallaAjena();
+
+    expect(fn () => (new CreateProductVariant)($product, $ajena->getKey(), azul()))
+        ->toThrow(
+            InvalidVariantSizeException::class,
+            'La talla «M» pertenece a la categoría «'.$ajena->category->name.
+            '» y no a «'.$product->category->name.'», que es la del producto.',
+        );
+});
+
+/**
+ * A size that is switched off stays readable for the variants that already exist
+ * in it, so an old variant can still be edited; what is refused is the choice.
+ */
+test('an inactive size cannot be chosen for a new variant', function () {
+    $product = productFor();
+    $inactiva = Size::factory()->for($product->category, 'category')->inactive()->create(['name' => 'M']);
+
+    expect(fn () => (new CreateProductVariant)($product, $inactiva->getKey(), azul()))
+        ->toThrow(InactiveVariantSizeException::class);
+
+    expect($product->variants()->count())->toBe(0);
+});
+
+test('an inactive size cannot be moved onto by an edit', function () {
+    $product = productFor();
+    $azul = azul();
+    $variant = (new CreateProductVariant)($product, talla($product), $azul);
+    $inactiva = Size::factory()->for($product->category, 'category')->inactive()->create(['name' => 'XL']);
+
+    expect(fn () => (new UpdateProductVariant)($product, $variant->id, $inactiva->getKey(), $azul))
+        ->toThrow(InactiveVariantSizeException::class);
+
+    expect($variant->refresh()->size->name)->toBe('M');
+});
+
+test('the refusal names the size that is switched off', function () {
+    $product = productFor();
+    $inactiva = Size::factory()->for($product->category, 'category')->inactive()->create(['name' => 'XL']);
+
+    expect(fn () => (new CreateProductVariant)($product, $inactiva->getKey(), azul()))
+        ->toThrow(
+            InactiveVariantSizeException::class,
+            'La talla «XL» está desactivada y no admite variantes nuevas.',
+        );
+});
+
+test('a variant in an inactive size can still be edited on other fields', function () {
+    $product = productFor();
+    $azul = azul();
+    $talla = talla($product);
+    $variant = (new CreateProductVariant)($product, $talla, $azul);
+    Size::query()->whereKey($talla)->update(['is_active' => false]);
+
+    $edited = (new UpdateProductVariant)($product, $variant->id, $talla, $azul, '175.00');
+
+    expect($edited->price_override)->toEqual('175.00')
+        ->and($edited->size_id)->toBe($talla)
+        ->and($edited->refresh()->sku)->toBe($variant->sku);
 });

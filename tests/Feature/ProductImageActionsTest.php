@@ -29,7 +29,6 @@ function productSoldIn(Color ...$colors): Product
 
     foreach ($colors as $color) {
         ProductVariant::factory()->for($product)->create([
-            'size' => 'M',
             'color_id' => $color->getKey(),
         ]);
     }
