@@ -55,6 +55,16 @@ class Sizes extends Component
     public string $name = '';
 
     /**
+     * Whether the name of the size being edited is already part of a SKU.
+     *
+     * It is read once, when the form is opened, so the panel can show the name as it
+     * is instead of offering a field the catalog is going to refuse. It does not decide
+     * anything: a request written by hand still arrives at the action, which is what
+     * refuses it.
+     */
+    public bool $nameIsLocked = false;
+
+    /**
      * The page this component renders sits behind `role:admin`, but a Livewire request
      * is not that page's request: `/livewire/update` reopens the component on its own,
      * so every public method here is reachable by anyone who reaches that endpoint,
@@ -109,6 +119,7 @@ class Sizes extends Component
         $this->resetForm();
         $this->editingId = $size->getKey();
         $this->name = $size->name;
+        $this->nameIsLocked = $size->variants_count > 0;
         $this->showForm = true;
     }
 
@@ -250,6 +261,10 @@ class Sizes extends Component
     {
         return Size::query()
             ->where('category_id', $this->categoryId)
+            // El contador de variantes viaja en la misma consulta porque `edit()` lo
+            // necesita para saber si el nombre está libre, y pedirlo después sería
+            // una segunda vuelta por la fila que ya se está abriendo.
+            ->withCount('variants')
             ->findOrFail($sizeId);
     }
 
@@ -306,6 +321,7 @@ class Sizes extends Component
         $this->showForm = false;
         $this->editingId = null;
         $this->name = '';
+        $this->nameIsLocked = false;
         $this->resetValidation();
     }
 }

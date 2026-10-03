@@ -200,23 +200,53 @@ test('the category selector groups the categories by the section the panel lists
         ->assertSeeHtml('<optgroup label="Mujer">');
 });
 
-test('a size of another category cannot be edited, deleted or moved from this tab', function (string $metodo) {
-    $esta = numberedCategory('PL', 'Polos');
-    $otra = numberedCategory('PA', 'Pantalones');
+test('a size of another category cannot be edited, saved, deleted, toggled or moved from this tab', function (string $metodo) {
+    // La categoría de la talla se crea antes que la que se muestra, así que el selector
+    // tiene que abrirse en `Polos` a propósito: si se dejara caer al primero, la pestaña
+    // caería en `Pantalones` y el 404 no probaría nada.
+    $enPantalones = numberedCategory('PA', 'Pantalones');
+    $enPolos = numberedCategory('PL', 'Polos');
 
     $size = Size::query()->create([
-        'category_id' => $otra->getKey(),
+        'category_id' => $enPantalones->getKey(),
         'name' => 'M',
-        'order' => 0,
+        'order' => 7,
         'is_active' => true,
     ]);
 
-    panelDeTallas()
-        ->call($metodo, $size->getKey())
-        ->assertNotFound();
+    // Tallas a su alrededor: una llamada que llegara a la acción movería esta fila de
+    // sitio, y una que no llega no tiene nada que reordenar.
+    foreach (['S' => 5, 'L' => 9] as $name => $order) {
+        Size::query()->create([
+            'category_id' => $enPantalones->getKey(),
+            'name' => $name,
+            'order' => $order,
+            'is_active' => true,
+        ]);
+    }
 
-    expect($size->fresh()->name)->toBe('M')->and($size->fresh()->is_active)->toBeTrue();
-})->with(['edit', 'delete', 'toggleActive', 'moveUp', 'moveDown']);
+    $panel = panelDeTallas()->set('categoryId', $enPolos->getKey());
+
+    if ($metodo === 'save') {
+        // `save` no lleva el id: lo lee de `editingId`, así que la petición llega
+        // escrita a mano, como la haría alguien que ya no tiene el campo delante.
+        $panel->set('editingId', $size->getKey())
+            ->set('name', 'L')
+            ->call('save')
+            ->assertNotFound();
+    } else {
+        $panel->call($metodo, $size->getKey())->assertNotFound();
+    }
+
+    // Y nada de eso tocó la fila de la otra categoría: ni el nombre, ni el estado, ni
+    // la posición, ni siquiera que siga existiendo.
+    $intacta = Size::query()->find($size->getKey());
+
+    expect($intacta)->not->toBeNull()
+        ->and($intacta->name)->toBe('M')
+        ->and($intacta->is_active)->toBeTrue()
+        ->and($intacta->order)->toBe(7);
+})->with(['edit', 'save', 'delete', 'toggleActive', 'moveUp', 'moveDown']);
 
 test('creates a size in the selected category and announces it', function () {
     $categoria = numberedCategory('PL', 'Polos');
@@ -269,7 +299,7 @@ test('the same name can be used in another category', function () {
     expect($primera->sizes()->count())->toBe(1)->and($segunda->sizes()->count())->toBe(1);
 });
 
-test('a size name that is part of a sku is refused as it arrived', function () {
+test('the name of a size in use is shown and not offered as a field to edit', function () {
     $categoria = numberedCategory('PL', 'Polos');
     $size = sizeOfProductInto($categoria, 'M');
 
@@ -279,6 +309,45 @@ test('a size name that is part of a sku is refused as it arrived', function () {
     panelDeTallas()
         ->set('categoryId', $categoria->getKey())
         ->call('edit', $size->getKey())
+        ->assertSet('nameIsLocked', true)
+        // El nombre sigue en la propiedad aunque no haya campo: es lo que `save()` manda
+        // a la acción, y por eso guardar no cambia nada y no tropieza con el bloqueo.
+        ->assertSet('name', 'M')
+        ->assertSee('M')
+        ->assertDontSeeHtml('wire:model="name"')
+        ->call('save')
+        ->assertHasNoErrors()
+        ->assertDispatched('toast', message: 'Talla actualizada correctamente.', tone: 'success');
+
+    expect($size->fresh()->name)->toBe('M');
+});
+
+test('a size nobody sells in keeps its name as a field to edit', function () {
+    $categoria = numberedCategory('PL', 'Polos');
+    $size = sizeOfProductInto($categoria, 'M');
+
+    panelDeTallas()
+        ->set('categoryId', $categoria->getKey())
+        ->call('edit', $size->getKey())
+        ->assertSet('nameIsLocked', false)
+        ->assertSeeHtml('wire:model="name"');
+});
+
+test('a size name that is part of a sku is refused when the request is written by hand', function () {
+    $categoria = numberedCategory('PL', 'Polos');
+    $size = sizeOfProductInto($categoria, 'M');
+
+    $producto = Product::factory()->for($categoria)->create();
+    ProductVariant::factory()->for($producto)->create(['size_id' => $size->getKey()]);
+
+    // El formulario ya no trae el campo del nombre, así que la única forma de pedir un
+    // cambio es escribir la petición entera a mano, y `set()` es quien la compone.
+    // `nameIsLocked` es sólo lo que la vista lee: no saca el `name` del snapshot, así
+    // que el nombre nuevo llega a la acción… y la acción es la que lo rechaza.
+    panelDeTallas()
+        ->set('categoryId', $categoria->getKey())
+        ->call('edit', $size->getKey())
+        ->assertSet('nameIsLocked', true)
         ->set('name', 'L')
         ->call('save')
         ->assertHasNoErrors()

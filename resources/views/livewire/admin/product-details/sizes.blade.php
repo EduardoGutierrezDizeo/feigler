@@ -141,29 +141,42 @@
     >
         <div>
             <x-input-label for="size-name" value="Nombre" />
-            <x-text-input
-                id="size-name"
-                wire:model="name"
-                type="text"
-                maxlength="20"
-                class="mt-1 block w-full"
-                placeholder="Ej. XXL"
-                data-modal-autofocus
-            />
-            <x-input-error :messages="$errors->get('name')" class="mt-2" />
+
+            @if ($nameIsLocked)
+                {{-- El nombre de una talla con variantes viaja dentro del SKU de esas
+                     variantes. Se muestra, no se escribe: ofrecer un campo que el catálogo
+                     va a rechazar es peor que decir por qué no se puede cambiar. --}}
+                <p class="mt-2 rounded-lg border border-arena bg-hueso/60 px-3 py-2 font-mono text-sm uppercase tracking-wider text-gris-calido">
+                    {{ $name }}
+                </p>
+            @else
+                <x-text-input
+                    id="size-name"
+                    wire:model="name"
+                    type="text"
+                    maxlength="20"
+                    class="mt-1 block w-full"
+                    placeholder="Ej. XXL"
+                    data-modal-autofocus
+                />
+
+                <x-input-error :messages="$errors->get('name')" class="mt-2" />
+            @endif
         </div>
 
-        <p class="text-sm text-gris-calido">
-            @if ($editingId === null)
+        @if ($editingId === null)
+            <p class="text-sm text-gris-calido">
                 La talla se añade al final de
                 <span class="font-medium text-verde">{{ $category->name ?? '—' }}</span>
                 y queda activa.
-            @else
+            </p>
+        @elseif ($nameIsLocked)
+            <p class="text-sm text-gris-calido">
                 El nombre de una talla que ya tiene variantes forma parte del SKU de
                 esas variantes, así que el catálogo no deja cambiarlo: desactiva la talla
                 y añade otra.
-            @endif
-        </p>
+            </p>
+        @endif
 
         <x-slot:footer>
             <x-secondary-button type="button" wire:click="closeForm">
