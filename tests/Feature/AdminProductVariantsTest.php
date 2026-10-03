@@ -357,6 +357,16 @@ test('refuses a color that is turned off and keeps the one the variant already h
     $apagado = Color::factory()->inactive()->create(['name' => 'Verde']);
     $mediana = sizeOfProduct($producto);
 
+    // Un color apagado ni siquiera se ofrece, así que el id escrito a mano no llega a
+    // la acción: se rechaza con el aviso del campo, como ya pasaba con la talla.
+    variantPanel($producto)
+        ->call('startCreating')
+        ->set('sizeId', $mediana->getKey())
+        ->set('colorId', $apagado->getKey())
+        ->call('save')
+        ->assertHasErrors(['colorId' => 'El color seleccionado no está disponible.'])
+        ->assertSet('showForm', true);
+
     variantPanel($producto)
         ->call('startCreating')
         ->set('sizeId', $mediana->getKey())
@@ -368,22 +378,61 @@ test('refuses a color that is turned off and keeps the one the variant already h
 
     // Desactivado no quiere decir borrado: el mismo trato que una talla apagada, con el
     // aviso bajo su propio select porque son dos campos con dos motivos distintos.
-    variantPanel($producto)
-        ->call('startCreating')
-        ->set('sizeId', $mediana->getKey())
-        ->set('colorId', $apagado->getKey())
-        ->call('save')
-        ->assertHasErrors(['colorId' => 'El color «Verde» está desactivado y no admite variantes nuevas.'])
-        ->assertSet('showForm', true);
+    // La variante que ya está en él sí se puede seguir editando sin moverla de color.
+    $apagado->update(['name' => 'Verde']);
+    $variante->update(['color_id' => $apagado->getKey()]);
 
-    // La variante que ya está en él sí se puede seguir editando.
     variantPanel($producto)
         ->call('startEditing', $variante->getKey())
+        ->assertSet('colorId', $apagado->getKey())
         ->call('save')
         ->assertHasNoErrors();
 
     expect($producto->variants()->count())->toBe(1)
-        ->and($variante->refresh()->color_id)->toBe($color->getKey());
+        ->and($variante->refresh()->color_id)->toBe($apagado->getKey());
+});
+
+test('the select of colors only offers the ones the store still sells, and the color of the variant is always in it', function () {
+    $this->seed(RoleSeeder::class);
+
+    $producto = Product::factory()->create();
+    $mediana = sizeOfProduct($producto);
+
+    // El orden es el que lleva el catálogo (`order`, `id`), no el alfabético del
+    // nombre: es el mismo orden que usa el resto del panel.
+    $tercero = Color::factory()->create(['name' => 'Zafiro', 'order' => 3]);
+    $primero = Color::factory()->create(['name' => 'Amarillo', 'order' => 1]);
+    $segundo = Color::factory()->create(['name' => 'Blanco', 'order' => 2]);
+    $apagado = Color::factory()->inactive()->create(['name' => 'Verde', 'order' => 4]);
+
+    // Al crear no hay variante propia, así que el apagado no aparece.
+    variantPanel($producto)
+        ->call('startCreating')
+        ->assertSeeHtmlInOrder([
+            '<option value="'.$primero->getKey().'">',
+            '<option value="'.$segundo->getKey().'">',
+            '<option value="'.$tercero->getKey().'">',
+        ])
+        ->assertDontSeeHtml('<option value="'.$apagado->getKey().'">');
+
+    $apagado->update(['name' => 'Verde', 'is_active' => true]);
+    $variante = (new CreateProductVariant)($producto, $mediana->getKey(), $apagado);
+    $apagado->update(['is_active' => false]);
+
+    // Al editar, el color que la variante ya tiene se ofrece aunque esté apagado, y
+    // marcado como tal para que se vea que no es una opción normal del catálogo.
+    variantPanel($producto)
+        ->call('startEditing', $variante->getKey())
+        ->assertSet('colorId', $apagado->getKey())
+        ->assertSeeHtml($apagado->name.' (inactivo)')
+        ->assertSeeHtmlInOrder([
+            '<option value="'.$primero->getKey().'">',
+            '<option value="'.$segundo->getKey().'">',
+            '<option value="'.$tercero->getKey().'">',
+            '<option value="'.$apagado->getKey().'">',
+        ]);
+
+    expect($variante->color_id)->toBe($apagado->getKey());
 });
 
 test('editing a variant changes its data but neither its sku nor its stock', function () {

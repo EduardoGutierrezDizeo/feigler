@@ -17,6 +17,12 @@ use App\Models\Size;
 const MIGRATION_THAT_DROPS_THE_SIZE_TEXT = '2026_10_03_021113_replace_product_variants_size_with_size_id.php';
 
 /**
+ * The migration that took `products.material` away, for the same reason and in the same
+ * way as the one above: these tests read a text column the schema no longer has.
+ */
+const MIGRATION_THAT_DROPS_THE_MATERIAL_TEXT = '2026_10_03_192936_drop_material_from_products.php';
+
+/**
  * A variant as the store carried it before the sizes moved into a table: free text
  * and no row behind it.
  *
@@ -55,7 +61,7 @@ describe('con la columna de texto todavia en su sitio', function () {
         // esquema de antes de ella, que es el unico donde la copia tiene algo
         // que hacer; el resto del archivo, sobre el esquema de ahora.
         test()->artisan('migrate:rollback', [
-            '--step' => 1,
+            '--batch' => 1,
             '--path' => 'database/migrations/'.MIGRATION_THAT_DROPS_THE_SIZE_TEXT,
         ])->assertSuccessful();
     });
@@ -199,75 +205,86 @@ test('numbering the colors twice keeps the numbers already given', function () {
         ->and($azul->refresh()->order)->toBe(1);
 });
 
-test('materials that differ only in writing are catalogued as one material', function () {
-    $sinAcento = Product::factory()->create(['material' => 'Algodon']);
-    $conAcento = Product::factory()->create(['material' => 'algodón']);
-    $conEspacios = Product::factory()->create(['material' => '  ALGODÓN  ']);
+describe('con la columna de texto del material todavia en su sitio', function () {
+    beforeEach(function (): void {
+        // La accion lee el texto del producto, y ese texto vive en la columna que la
+        // ultima migracion se llevo, por el mismo motivo que arriba.
+        test()->artisan('migrate:rollback', [
+            '--batch' => 1,
+            '--path' => 'database/migrations/'.MIGRATION_THAT_DROPS_THE_MATERIAL_TEXT,
+        ])->assertSuccessful();
+    });
 
-    app(BackfillProductDetails::class)->materials();
+    test('materials that differ only in writing are catalogued as one material', function () {
+        $sinAcento = Product::factory()->create(['material' => 'Algodon']);
+        $conAcento = Product::factory()->create(['material' => 'algodón']);
+        $conEspacios = Product::factory()->create(['material' => '  ALGODÓN  ']);
 
-    expect(Material::count())->toBe(1)
-        ->and(Material::sole()->name)->toBe('Algodon')
-        ->and($sinAcento->materials()->count())->toBe(1)
-        ->and($conAcento->materials()->get()[0]->is(Material::sole()))->toBeTrue()
-        ->and($conEspacios->materials()->get()[0]->is(Material::sole()))->toBeTrue();
-});
+        app(BackfillProductDetails::class)->materials();
 
-test('a product that names two materials is copied whole and reported for review', function () {
-    $product = Product::factory()->create(['material' => 'Algodón/Poliéster']);
+        expect(Material::count())->toBe(1)
+            ->and(Material::sole()->name)->toBe('Algodon')
+            ->and($sinAcento->materials()->count())->toBe(1)
+            ->and($conAcento->materials()->get()[0]->is(Material::sole()))->toBeTrue()
+            ->and($conEspacios->materials()->get()[0]->is(Material::sole()))->toBeTrue();
+    });
 
-    $report = app(BackfillProductDetails::class)->materials();
+    test('a product that names two materials is copied whole and reported for review', function () {
+        $product = Product::factory()->create(['material' => 'Algodón/Poliéster']);
 
-    expect($product->materials()->pluck('name')->all())->toBe(['Algodón/Poliéster'])
-        ->and($report['listed'])->toBe(['Algodón/Poliéster'])
-        ->and($report['created'])->toBe(1);
-});
+        $report = app(BackfillProductDetails::class)->materials();
 
-test('a product whose material carries its own percentages is reported for review', function () {
-    Product::factory()->create(['material' => '80% algodón, 20% poliéster']);
+        expect($product->materials()->pluck('name')->all())->toBe(['Algodón/Poliéster'])
+            ->and($report['listed'])->toBe(['Algodón/Poliéster'])
+            ->and($report['created'])->toBe(1);
+    });
 
-    $report = app(BackfillProductDetails::class)->materials();
+    test('a product whose material carries its own percentages is reported for review', function () {
+        Product::factory()->create(['material' => '80% algodón, 20% poliéster']);
 
-    expect($report['listed'])->toBe(['80% algodón, 20% poliéster']);
-});
+        $report = app(BackfillProductDetails::class)->materials();
 
-test('a product that names no material is left out', function () {
-    Product::factory()->create(['material' => '   ']);
+        expect($report['listed'])->toBe(['80% algodón, 20% poliéster']);
+    });
 
-    $report = app(BackfillProductDetails::class)->materials();
+    test('a product that names no material is left out', function () {
+        Product::factory()->create(['material' => '   ']);
 
-    expect(Material::count())->toBe(0)
-        ->and($report['assigned'])->toBe(0);
-});
+        $report = app(BackfillProductDetails::class)->materials();
 
-test('every product carries its whole material', function () {
-    $denim = Product::factory()->create(['material' => 'Denim']);
+        expect(Material::count())->toBe(0)
+            ->and($report['assigned'])->toBe(0);
+    });
 
-    app(BackfillProductDetails::class)->materials();
+    test('every product carries its whole material', function () {
+        $denim = Product::factory()->create(['material' => 'Denim']);
 
-    expect($denim->materials()->sole()->name)->toBe('Denim')
-        ->and($denim->materials()->sole()->pivot->percentage)->toBe(100);
-});
+        app(BackfillProductDetails::class)->materials();
 
-test('copying the materials twice attaches each one a single time', function () {
-    $product = Product::factory()->create(['material' => 'Denim']);
+        expect($denim->materials()->sole()->name)->toBe('Denim')
+            ->and($denim->materials()->sole()->pivot->percentage)->toBe(100);
+    });
 
-    app(BackfillProductDetails::class)->materials();
-    $second = app(BackfillProductDetails::class)->materials();
+    test('copying the materials twice attaches each one a single time', function () {
+        $product = Product::factory()->create(['material' => 'Denim']);
 
-    expect(Material::count())->toBe(1)
-        ->and($product->materials()->count())->toBe(1)
-        ->and($second['created'])->toBe(0)
-        ->and($second['assigned'])->toBe(0);
-});
+        app(BackfillProductDetails::class)->materials();
+        $second = app(BackfillProductDetails::class)->materials();
 
-test('a product that already carries a material keeps the share it was given', function () {
-    $linen = Material::factory()->create(['name' => 'Lino']);
-    $product = Product::factory()->create(['material' => 'Lino']);
-    $product->materials()->attach($linen->id, ['percentage' => 40]);
+        expect(Material::count())->toBe(1)
+            ->and($product->materials()->count())->toBe(1)
+            ->and($second['created'])->toBe(0)
+            ->and($second['assigned'])->toBe(0);
+    });
 
-    app(BackfillProductDetails::class)->materials();
+    test('a product that already carries a material keeps the share it was given', function () {
+        $linen = Material::factory()->create(['name' => 'Lino']);
+        $product = Product::factory()->create(['material' => 'Lino']);
+        $product->materials()->attach($linen->id, ['percentage' => 40]);
 
-    expect($product->materials()->count())->toBe(1)
-        ->and($product->materials()->sole()->pivot->percentage)->toBe(40);
+        app(BackfillProductDetails::class)->materials();
+
+        expect($product->materials()->count())->toBe(1)
+            ->and($product->materials()->sole()->pivot->percentage)->toBe(40);
+    });
 });

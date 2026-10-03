@@ -209,6 +209,20 @@ class BackfillProductDetails
     }
 
     /**
+     * Whether the free text of `products.material` is still there to be read.
+     *
+     * The column is dropped once every product describes its composition, and this copy
+     * has to stay runnable after that: it is called again by the migration that drops
+     * it, and a `migrate:fresh` replays it from the top. Reading a column that is gone
+     * would turn a no-op into a driver error, so the copy asks first and attributes
+     * nothing when there is no text left to read.
+     */
+    private function materialTextIsStillReadable(): bool
+    {
+        return Schema::hasColumn('products', 'material');
+    }
+
+    /**
      * The number of `sizes` rows written for the standard sizes.
      *
      * The list itself is not repeated here: every category is asked for the eight
@@ -341,6 +355,10 @@ class BackfillProductDetails
      */
     private function materialGroups(): array
     {
+        if (! $this->materialTextIsStillReadable()) {
+            return [];
+        }
+
         $groups = [];
 
         $rows = DB::table('products')

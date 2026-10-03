@@ -94,3 +94,36 @@ function sizeOfProduct(Product $product, string $name = 'M'): Size
         'name' => $name,
     ]);
 }
+
+/**
+ * Roll one migration back, so the schema is the one that was there before it ran.
+ *
+ * It goes by batch instead of by step on purpose. `--step` counts migrations and not
+ * batches, so `--step 1` rolls back whichever migration ran last, which stops being
+ * the one being asked about the moment a newer migration is added. `--batch` takes
+ * the whole batch — the tests run on a schema built by a single `migrate`, so it is
+ * batch 1 — and the path leaves every migration it was not asked about alone. That is
+ * what lets a test that needs a dropped column back not depend on how many migrations
+ * came after it.
+ *
+ * @param  string  $file  the file name of the migration, which is also its name.
+ */
+function rollbackMigration(string $file): void
+{
+    test()->artisan('migrate:rollback', [
+        '--batch' => 1,
+        '--path' => 'database/migrations/'.$file,
+    ])->assertSuccessful();
+}
+
+/**
+ * Run one migration again, on top of the schema its rollback just put back.
+ *
+ * @param  string  $file  the file name of the migration, which is also its name.
+ */
+function migrateAgain(string $file): void
+{
+    test()->artisan('migrate', [
+        '--path' => 'database/migrations/'.$file,
+    ])->assertSuccessful();
+}

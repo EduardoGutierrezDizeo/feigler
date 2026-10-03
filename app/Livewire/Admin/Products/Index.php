@@ -2,14 +2,23 @@
 
 namespace App\Livewire\Admin\Products;
 
+use App\Actions\ProductDetails\SyncProductMaterials;
 use App\Actions\Products\CreateProduct;
 use App\Enums\StoreSection;
+use App\Exceptions\InactiveProductMaterialException;
+use App\Exceptions\IncompleteMaterialCompositionException;
+use App\Exceptions\InvalidMaterialPercentageException;
 use App\Exceptions\InvalidProductNameException;
 use App\Exceptions\InvalidProductStatusException;
+use App\Exceptions\MaterialNotFoundException;
+use App\Exceptions\RepeatedProductMaterialException;
 use App\Livewire\Concerns\Notifies;
 use App\Models\Category;
+use App\Models\Material;
 use App\Models\Product;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
@@ -93,7 +102,19 @@ class Index extends Component
 
     public string $brand = '';
 
-    public string $material = '';
+    /**
+     * The composition the form is writing: one row per material, with how much of the
+     * garment each one is.
+     *
+     * It is a plain list of ids and percentages instead of models because a public
+     * Livewire property has to survive the round trip to the browser as data. The
+     * materials themselves are not held here on purpose: the panel shows a product
+     * page of the catalog, not a product of a garment's materials, and keeping them
+     * would mean a query per keystroke.
+     *
+     * @var list<array{material_id: string, percentage: string}>
+     */
+    public array $composition = [];
 
     public string $basePrice = '';
 
@@ -139,7 +160,10 @@ class Index extends Component
         $this->categoryId = $product->category_id;
         $this->description = $product->description ?? '';
         $this->brand = $product->brand ?? '';
-        $this->material = $product->material ?? '';
+        // Los materiales se leen sólo del producto que se está editando: el listado
+        // no los muestra, así que cargarlos aquí es una consulta para el producto
+        // abierto en vez de una por fila de la página.
+        $this->composition = $this->rowsFor($product->loadMissing('materials')->materials);
         $this->basePrice = (string) $product->base_price;
         $this->status = $product->status === 'inactive' ? 'inactive' : 'active';
         $this->showForm = true;
@@ -150,6 +174,41 @@ class Index extends Component
     {
         $this->showForm = false;
         $this->resetValidation();
+    }
+
+    /**
+     * Add a row to the composition for the admin to fill in.
+     *
+     * The percentage it starts with is what the composition still has to reach: a
+     * garment nobody has described yet is usually a garment made of one thing, so an
+     * empty list gets a full row. A list that is already partly filled gets the rest,
+     * because that is the only share of it this row can honestly be. A share has to be
+     * at least one, so that is the floor when there is nothing left to reach.
+     */
+    public function addMaterialRow(): void
+    {
+        $this->composition[] = [
+            'material_id' => '',
+            'percentage' => (string) max(1, 100 - $this->compositionTotal()),
+        ];
+    }
+
+    /**
+     * Take a row out of the composition, keeping the remaining ones in order.
+     *
+     * The rows are renumbered because their positions are their names in the form:
+     * `composition.0`, `composition.1`, and so on. A hole in the middle would leave the
+     * rest of the form pointing at rows that are no longer there.
+     */
+    public function removeMaterialRow(int $index): void
+    {
+        if (! array_key_exists($index, $this->composition)) {
+            return;
+        }
+
+        unset($this->composition[$index]);
+
+        $this->composition = array_values($this->composition);
     }
 
     public function mount(): void
@@ -168,6 +227,11 @@ class Index extends Component
         // creating. Either way the chosen category has to belong to it.
         $section = $this->sectionForTheForm();
 
+        // The composition is only asked to be well formed here: a whole number of
+        // shares of a material the store has. Whether the shares add up to the whole
+        // garment, whether one of them is repeated and whether a material is turned
+        // off is not decided by the form: that is the action, which is also the only
+        // place that knows a material the product already carries may be kept.
         $validated = $this->validate([
             'name' => ['required', 'max:255'],
             'categoryId' => [
@@ -177,7 +241,9 @@ class Index extends Component
             ],
             'description' => ['nullable', 'max:2000'],
             'brand' => ['nullable', 'max:100'],
-            'material' => ['nullable', 'max:100'],
+            'composition' => ['array'],
+            'composition.*.material_id' => ['required', 'integer', Rule::exists('materials', 'id')],
+            'composition.*.percentage' => ['required', 'integer', 'min:1', 'max:100'],
             'basePrice' => ['required', 'numeric', 'min:0', 'max:99999999.99'],
             'status' => ['required', Rule::in(self::WRITABLE_STATUSES)],
         ], [
@@ -188,7 +254,13 @@ class Index extends Component
             'categoryId.exists' => 'La categoría seleccionada no existe en esta sección.',
             'description.max' => 'La descripción no puede superar los 2000 caracteres.',
             'brand.max' => 'La marca no puede superar los 100 caracteres.',
-            'material.max' => 'El material no puede superar los 100 caracteres.',
+            'composition.*.material_id.required' => 'Selecciona un material.',
+            'composition.*.material_id.integer' => 'El material seleccionado no es válido.',
+            'composition.*.material_id.exists' => 'El material seleccionado no existe.',
+            'composition.*.percentage.required' => 'El porcentaje es obligatorio.',
+            'composition.*.percentage.integer' => 'El porcentaje debe ser un número entero.',
+            'composition.*.percentage.min' => 'El porcentaje no puede ser menor que 1.',
+            'composition.*.percentage.max' => 'El porcentaje no puede superar 100.',
             'basePrice.required' => 'El precio base es obligatorio.',
             'basePrice.numeric' => 'El precio base debe ser un número.',
             'basePrice.min' => 'El precio base no puede ser negativo.',
@@ -306,6 +378,11 @@ class Index extends Component
             'formSection' => $formSection,
             'formCategories' => $formCategories,
             'statusFilters' => self::STATUS_FILTERS,
+            // Los materiales solo se piden con el formulario abierto: el listado no
+            // los muestra, así que pedirlos en cada tecla del buscador sería una
+            // consulta por tecla para nada.
+            'materials' => $this->showForm ? $this->materialsForTheForm() : new Collection,
+            'compositionSummary' => $this->compositionSummary(),
         ]);
     }
 
@@ -313,6 +390,10 @@ class Index extends Component
      * Only the general data of a product is edited here. Its slug and its reference
      * are left alone on purpose: the reference is part of every SKU already built
      * from it, and the slug is the address the storefront links to.
+     *
+     * The row and its composition are written in one transaction, so a composition the
+     * action refuses leaves the product with the name it already had instead of with
+     * a new name and the old materials.
      */
     private function update(Category $category, array $validated): void
     {
@@ -329,15 +410,33 @@ class Index extends Component
             return;
         }
 
-        $product->update([
-            'name' => trim($validated['name']),
-            'category_id' => $category->getKey(),
-            'description' => $validated['description'] !== null ? trim($validated['description']) : null,
-            'brand' => $this->brandOrDefault($validated['brand']),
-            'material' => $validated['material'] !== null ? trim($validated['material']) : null,
-            'base_price' => $validated['basePrice'],
-            'status' => $validated['status'],
-        ]);
+        try {
+            DB::transaction(function () use ($product, $category, $validated): void {
+                $product->update([
+                    'name' => trim($validated['name']),
+                    'category_id' => $category->getKey(),
+                    'description' => $validated['description'] !== null ? trim($validated['description']) : null,
+                    'brand' => $this->brandOrDefault($validated['brand']),
+                    'base_price' => $validated['basePrice'],
+                    'status' => $validated['status'],
+                ]);
+
+                (new SyncProductMaterials)($product, $this->compositionAsLines());
+            });
+        } catch (
+            RepeatedProductMaterialException|
+            InvalidMaterialPercentageException|
+            MaterialNotFoundException|
+            InactiveProductMaterialException|
+            IncompleteMaterialCompositionException $exception
+        ) {
+            // Las reglas de la composición son las de la acción y sus motivos son
+            // distintos entre sí, así que el motivo llega tal cual y no se reescribe
+            // por cada campo: el admin lee por qué no se guardó.
+            $this->addError('composition', $exception->getMessage());
+
+            return;
+        }
 
         $this->notifySuccess('Producto actualizado correctamente.');
         $this->resetForm();
@@ -362,8 +461,9 @@ class Index extends Component
      *
      * The row is written by the action, which is also where the reference is
      * reserved and where the name, the brand and the status are put in the form
-     * the catalog keeps. What it refuses is shown under the field it belongs to,
-     * the same way the messages of the form come out.
+     * the catalog keeps, and where the composition is written next to it. What it
+     * refuses is shown under the field it belongs to, the same way the messages of
+     * the form come out.
      */
     private function createProduct(Category $category, array $validated): void
     {
@@ -372,16 +472,25 @@ class Index extends Component
                 'name' => $validated['name'],
                 'description' => $validated['description'],
                 'brand' => $validated['brand'],
-                'material' => $validated['material'],
                 'base_price' => $validated['basePrice'],
                 'status' => $validated['status'],
-            ]);
+            ], $this->compositionAsLines());
         } catch (InvalidProductNameException $exception) {
             $this->addError('name', $exception->getMessage());
 
             return;
         } catch (InvalidProductStatusException $exception) {
             $this->addError('status', $exception->getMessage());
+
+            return;
+        } catch (
+            RepeatedProductMaterialException|
+            InvalidMaterialPercentageException|
+            MaterialNotFoundException|
+            InactiveProductMaterialException|
+            IncompleteMaterialCompositionException $exception
+        ) {
+            $this->addError('composition', $exception->getMessage());
 
             return;
         }
@@ -392,6 +501,150 @@ class Index extends Component
 
         $this->notifySuccess('Producto creado correctamente.');
         $this->dispatch(self::EVENT_OPEN_VARIANTS_TAB);
+    }
+
+    /**
+     * The composition as the action reads it.
+     *
+     * A row of the form is `material_id` + `percentage` and a line the action reads is
+     * `id` + `percentage`: the form names the field after what the select holds, and the
+     * action after the column of the pivot. The percentages are handed over as they
+     * arrived, as text, so the action is the one that asks whether they are whole
+     * numbers instead of this quietly rounding a value the form never checked.
+     *
+     * @return list<array{id: int, percentage: string}>
+     */
+    private function compositionAsLines(): array
+    {
+        return array_values(array_map(
+            fn (array $row): array => [
+                'id' => (int) $row['material_id'],
+                'percentage' => $row['percentage'],
+            ],
+            $this->composition,
+        ));
+    }
+
+    /**
+     * The rows of a composition that is already stored, in the order the catalog reads
+     * materials in, so the form opens with them where the admin expects to find them.
+     *
+     * @param  Collection<int, Material>  $materials
+     * @return list<array{material_id: string, percentage: string}>
+     */
+    private function rowsFor(Collection $materials): array
+    {
+        return $materials
+            ->map(fn (Material $material): array => [
+                'material_id' => (string) $material->getKey(),
+                'percentage' => (string) $material->pivot->percentage,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * What the rows of the composition add up to right now.
+     *
+     * It is read the way the action reads a percentage: only whole numbers count and
+     * anything else is left out. That is what keeps the indicator honest while a
+     * percentage is being typed, instead of counting the `5` of a `50` that is on its
+     * way and telling the admin the garment is already complete.
+     */
+    private function compositionTotal(): int
+    {
+        $total = 0;
+
+        foreach ($this->composition as $row) {
+            $wholeShare = filter_var($row['percentage'] ?? null, FILTER_VALIDATE_INT);
+
+            if ($wholeShare !== false) {
+                $total += $wholeShare;
+            }
+        }
+
+        return $total;
+    }
+
+    /**
+     * The composition as one line to show under its rows: how much of the garment it
+     * accounts for, what is left to reach it, and whether it already does.
+     *
+     * A composition that adds up to more than a hundred is not one that is still
+     * missing something, it is one that cannot be saved, so it is reported as going
+     * over instead of as a negative remainder.
+     *
+     * @return array{total: int, detail: string, complete: bool, exceeds: bool}
+     */
+    private function compositionSummary(): array
+    {
+        $total = $this->compositionTotal();
+
+        return [
+            'total' => $total,
+            'detail' => match (true) {
+                $total > 100 => 'se pasa por '.($total - 100).' %',
+                $total === 100 => 'completa',
+                default => 'faltan '.(100 - $total).' %',
+            },
+            'complete' => $total === 100,
+            'exceeds' => $total > 100,
+        ];
+    }
+
+    /**
+     * The materials the open form may write: the ones `Material::listedActive()` would
+     * give, plus the ones this product already carries even when they are turned off.
+     *
+     * The query is spelled out instead of merged onto the collection that
+     * `listedActive()` returns, because that call is the end of the line: it cannot be
+     * widened afterwards, and ordering the two sets together has to happen in the
+     * database for the rows to come back in catalog order.
+     *
+     * Turning a material off is how the store stops giving it to new products without
+     * taking it away from the products that already say they are made of it, and a
+     * select that does not carry the value it is holding would silently write
+     * something else, so a product has to stay savable without changing its
+     * composition. The action is the one that decides whether a material may be taken,
+     * so this is not where that rule lives; it only refuses ids that are not in the
+     * store, which is what the rows are validated against.
+     *
+     * @return Collection<int, Material>
+     */
+    private function materialsForTheForm(): Collection
+    {
+        $assignedIds = $this->assignedMaterialIds();
+
+        return Material::query()
+            ->when(
+                $assignedIds === [],
+                fn (Builder $query): Builder => $query->active(),
+                fn (Builder $query): Builder => $query->where(
+                    fn (Builder $query): Builder => $query
+                        ->where('is_active', true)
+                        ->orWhereIn('id', $assignedIds)
+                ),
+            )
+            ->ordered()
+            ->get();
+    }
+
+    /**
+     * The ids of the materials this product already carries.
+     *
+     * @return list<int>
+     */
+    private function assignedMaterialIds(): array
+    {
+        if ($this->editingId === null) {
+            return [];
+        }
+
+        return Product::query()
+            ->findOrFail($this->editingId)
+            ->materials()
+            ->pluck('materials.id')
+            ->all();
     }
 
     /**
@@ -479,7 +732,7 @@ class Index extends Component
         $this->categoryId = null;
         $this->description = '';
         $this->brand = self::DEFAULT_BRAND;
-        $this->material = '';
+        $this->composition = [];
         $this->basePrice = '';
         $this->status = 'active';
         $this->resetValidation();

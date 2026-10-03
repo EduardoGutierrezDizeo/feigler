@@ -1,8 +1,10 @@
 <?php
 
 use App\Actions\Products\CreateProduct;
+use App\Exceptions\IncompleteMaterialCompositionException;
 use App\Exceptions\InvalidProductNameException;
 use App\Exceptions\InvalidProductStatusException;
+use App\Models\Material;
 use App\Models\Product;
 use Illuminate\Support\Facades\DB;
 
@@ -116,13 +118,55 @@ test('a sentence left empty is stored as no value at all', function () {
         'name' => 'Polo piqué',
         'base_price' => '89900',
         'description' => '  Piqué de algodón peinado.  ',
-        'material' => ' Algodón piqué ',
+        'brand' => '  Feigler  ',
     ]);
 
     expect($vacia->description)->toBeNull()
-        ->and($vacia->material)->toBeNull()
         ->and($conTextos->description)->toBe('Piqué de algodón peinado.')
-        ->and($conTextos->material)->toBe('Algodón piqué');
+        ->and($conTextos->brand)->toBe('Feigler');
+});
+
+/**
+ * La composición no es un dato más de la fila: se escribe dentro de la transacción que
+ * la crea, así que una prenda nunca queda en el catálogo diciendo unos materiales que la
+ * acción acaba de rechazar.
+ */
+test('a product is created with the composition it is given, and none at all when it is given none', function () {
+    $polos = numberedCategory('PL', 'Polos');
+    $algodon = Material::factory()->create(['name' => 'Algodón']);
+    $poliester = Material::factory()->create(['name' => 'Poliéster']);
+
+    $compuesta = (new CreateProduct)(
+        $polos,
+        ['name' => 'Polo piqué', 'base_price' => '89900'],
+        [
+            ['id' => $algodon->getKey(), 'percentage' => 80],
+            ['id' => $poliester->getKey(), 'percentage' => 20],
+        ],
+    );
+
+    $sinMateriales = (new CreateProduct)($polos, ['name' => 'Polo básico', 'base_price' => '79900']);
+
+    expect($compuesta->materials()->orderBy('materials.id')->pluck('materials.name')->all())->toBe(['Algodón', 'Poliéster'])
+        ->and(array_map(
+            fn (Material $material): int => $material->pivot->percentage,
+            $compuesta->materials()->orderBy('materials.id')->get()->all(),
+        ))->toBe([80, 20])
+        ->and($sinMateriales->materials()->count())->toBe(0);
+});
+
+test('a composition the action refuses leaves no product behind', function () {
+    $polos = numberedCategory('PL', 'Polos');
+    $algodon = Material::factory()->create(['name' => 'Algodón']);
+
+    expect(fn () => (new CreateProduct)(
+        $polos,
+        ['name' => 'Polo piqué', 'base_price' => '89900'],
+        [['id' => $algodon->getKey(), 'percentage' => 80]],
+    ))->toThrow(IncompleteMaterialCompositionException::class);
+
+    expect(Product::query()->count())->toBe(0)
+        ->and($algodon->products()->count())->toBe(0);
 });
 
 /**

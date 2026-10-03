@@ -2,6 +2,7 @@
 
 namespace App\Actions\Products;
 
+use App\Actions\ProductDetails\SyncProductMaterials;
 use App\Exceptions\InvalidProductNameException;
 use App\Exceptions\InvalidProductStatusException;
 use App\Models\Category;
@@ -44,6 +45,10 @@ class CreateProduct
      * brand of the store when the one typed is blank, a status the column can
      * hold, and a reference of its own.
      *
+     * The composition is not checked here either: it is passed straight to
+     * `SyncProductMaterials`, which is the one that knows what a garment made of
+     * several materials is.
+     *
      * The reference is reserved inside the transaction that writes the row, which
      * is what keeps the lock `nextReferenceFor` takes on the category alive until
      * the product exists. Outside of it, two products created at the same time
@@ -57,16 +62,21 @@ class CreateProduct
      * and no images: a product is born as a row of general data, and everything
      * hanging off it is added afterwards.
      *
+     * The composition is written inside the transaction that creates the row, so a
+     * product is never left in the catalog describing materials it refused. The empty
+     * list is the default and is a composition too: a garment nobody has described
+     * yet is a garment with no materials, not a garment with a wrong one.
+     *
      * @param  array{
      *     name: string,
      *     description?: string|null,
      *     brand?: string|null,
-     *     material?: string|null,
      *     base_price: string|int|float,
      *     status?: string|null
      * }  $data
+     * @param  list<array{id: int, percentage: int|string|float}>  $composition
      */
-    public function __invoke(Category $category, array $data): Product
+    public function __invoke(Category $category, array $data, array $composition = []): Product
     {
         $slug = $this->uniqueSlugFor($data['name']);
 
@@ -74,18 +84,23 @@ class CreateProduct
 
         $this->guardStatusIsWritable($status);
 
-        return DB::transaction(function () use ($category, $data, $slug, $status): Product {
-            return Product::create([
+        return DB::transaction(function () use ($category, $data, $slug, $status, $composition): Product {
+            $product = Product::create([
                 'category_id' => $category->getKey(),
                 'name' => trim($data['name']),
                 'slug' => $slug,
                 'reference' => Product::nextReferenceFor($category),
                 'description' => $this->textOrNull($data['description'] ?? null),
                 'brand' => $this->brandOrDefault($data['brand'] ?? null),
-                'material' => $this->textOrNull($data['material'] ?? null),
                 'base_price' => $data['base_price'],
                 'status' => $status,
             ]);
+
+            // El sync abre su propia transacción, que aquí anida como savepoint: la
+            // fila y su composición se escriben juntas o no se escribe ninguna.
+            (new SyncProductMaterials)($product, $composition);
+
+            return $product;
         });
     }
 

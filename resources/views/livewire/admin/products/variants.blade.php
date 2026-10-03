@@ -79,7 +79,12 @@
                     <x-select-input id="variant-color" wire:model="colorId" class="mt-1 block w-full" required>
                         <option value="">— Selecciona un color —</option>
                         @foreach ($colors as $color)
-                            <option value="{{ $color->id }}">{{ $color->name }}</option>
+                            {{-- El color que la variante ya tiene se ofrece aunque esté
+                                 desactivado: quitarla del select obligaría a mover la
+                                 variante a otro color para poder guardarla. --}}
+                            <option value="{{ $color->id }}">
+                                {{ $color->name }}{{ $color->is_active ? '' : ' (inactivo)' }}
+                            </option>
                         @endforeach
                     </x-select-input>
                     <x-input-error :messages="$errors->get('colorId')" class="mt-2" />

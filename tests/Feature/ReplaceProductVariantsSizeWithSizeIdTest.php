@@ -20,10 +20,7 @@ const MIGRATION_UNDER_TEST = '2026_10_03_021113_replace_product_variants_size_wi
  */
 function rollbackDelEsquema(): void
 {
-    test()->artisan('migrate:rollback', [
-        '--step' => 1,
-        '--path' => 'database/migrations/'.MIGRATION_UNDER_TEST,
-    ])->assertSuccessful();
+    rollbackMigration(MIGRATION_UNDER_TEST);
 }
 
 /**
@@ -31,9 +28,7 @@ function rollbackDelEsquema(): void
  */
 function migrarDelEsquema(): void
 {
-    test()->artisan('migrate', [
-        '--path' => 'database/migrations/'.MIGRATION_UNDER_TEST,
-    ])->assertSuccessful();
+    migrateAgain(MIGRATION_UNDER_TEST);
 }
 
 /**

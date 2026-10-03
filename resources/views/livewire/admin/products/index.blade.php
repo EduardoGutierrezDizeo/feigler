@@ -364,30 +364,136 @@
                     <x-input-error :messages="$errors->get('description')" class="mt-2" />
                 </div>
 
-                <div class="grid gap-6 sm:grid-cols-2">
-                    <div>
-                        <x-input-label for="product-brand" value="Marca" />
-                        <x-text-input
-                            id="product-brand"
-                            wire:model="brand"
-                            type="text"
-                            class="mt-1 block w-full"
-                            placeholder="Ej. Feigler"
-                        />
-                        <x-input-error :messages="$errors->get('brand')" class="mt-2" />
+                <div>
+                    <x-input-label for="product-brand" value="Marca" />
+                    <x-text-input
+                        id="product-brand"
+                        wire:model="brand"
+                        type="text"
+                        class="mt-1 block w-full"
+                        placeholder="Ej. Feigler"
+                    />
+                    <x-input-error :messages="$errors->get('brand')" class="mt-2" />
+                </div>
+
+                {{-- La composición son filas y no un texto: un material y su porcentaje
+                     son dos datos distintos, el catálogo ya tiene la lista de los
+                     materiales que se pueden dar y la suma se comprueba sola mientras
+                     el admin escribe. Un producto sin ninguna fila es válido: es lo que
+                     se guarda cuando nadie ha dicho todavía de qué está hecho. --}}
+                <div>
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <x-input-label for="product-composition" value="Materiales" />
+
+                        <button
+                            type="button"
+                            wire:click="addMaterialRow"
+                            wire:loading.attr="disabled"
+                            class="inline-flex items-center justify-center gap-2 rounded-full border border-laton bg-transparent px-4 py-1.5 text-sm font-medium text-verde transition duration-150 ease-in-out hover:bg-laton/10 focus:outline-2 focus:outline-offset-2 focus:outline-verde active:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                            Agregar material
+                        </button>
                     </div>
 
-                    <div>
-                        <x-input-label for="product-material" value="Material" />
-                        <x-text-input
-                            id="product-material"
-                            wire:model="material"
-                            type="text"
-                            class="mt-1 block w-full"
-                            placeholder="Ej. Algodón piqué"
-                        />
-                        <x-input-error :messages="$errors->get('material')" class="mt-2" />
-                    </div>
+                    @if ($composition === [])
+                        <p class="mt-2 text-xs text-gris-calido">
+                            Este producto todavía no dice de qué está hecho. Puedes guardarlo así y completarlo más adelante.
+                        </p>
+                    @else
+                        <ul class="mt-3 space-y-3">
+                            @foreach ($composition as $indice => $fila)
+                                @php
+                                    // Un material no puede ocupar dos filas, y el pivote no
+                                    // tiene ninguna clave que lo impida: lo rechaza la acción.
+                                    // El selector lo adelanta quitando de esta fila los
+                                    // materiales que ya están en las otras.
+                                    $enOtrasFilas = [];
+                                    foreach ($composition as $otroIndice => $otraFila) {
+                                        if ($otroIndice !== $indice && ($otraFila['material_id'] ?? '') !== '') {
+                                            $enOtrasFilas[] = (int) $otraFila['material_id'];
+                                        }
+                                    }
+                                @endphp
+
+                                <li
+                                    wire:key="composition-{{ $indice }}"
+                                    class="grid items-end gap-3 sm:grid-cols-[minmax(0,1fr)_7rem_auto]"
+                                >
+                                    <div>
+                                        <x-input-label for="composition-{{ $indice }}-material" value="Material" />
+                                        <x-select-input
+                                            id="composition-{{ $indice }}-material"
+                                            wire:model="composition.{{ $indice }}.material_id"
+                                            class="mt-1 block w-full"
+                                            required
+                                        >
+                                            <option value="">— Selecciona un material —</option>
+                                            @foreach ($materials as $material)
+                                                @continue(in_array((int) $material->id, $enOtrasFilas, true))
+                                                {{-- El material que el producto ya tiene se ofrece aunque
+                                                     esté desactivado: quitarlo del selector obligaría a
+                                                     cambiar la composición para poder guardar el producto. --}}
+                                                <option
+                                                    value="{{ $material->id }}"
+                                                    @selected((string) $material->id === (string) ($fila['material_id'] ?? ''))
+                                                >
+                                                    {{ $material->name }}{{ $material->is_active ? '' : ' (inactivo)' }}
+                                                </option>
+                                            @endforeach
+                                        </x-select-input>
+                                        <x-input-error
+                                            :messages="$errors->get('composition.'.$indice.'.material_id')"
+                                            class="mt-2"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <x-input-label for="composition-{{ $indice }}-percentage" value="Porcentaje" />
+                                        <x-text-input
+                                            id="composition-{{ $indice }}-percentage"
+                                            wire:model.live="composition.{{ $indice }}.percentage"
+                                            type="number"
+                                            inputmode="numeric"
+                                            min="1"
+                                            max="100"
+                                            step="1"
+                                            class="mt-1 block w-full"
+                                            required
+                                        />
+                                        <x-input-error
+                                            :messages="$errors->get('composition.'.$indice.'.percentage')"
+                                            class="mt-2"
+                                        />
+                                    </div>
+
+                                    <x-secondary-button
+                                        type="button"
+                                        wire:click="removeMaterialRow({{ $indice }})"
+                                        wire:loading.attr="disabled"
+                                        title="Quitar este material"
+                                        class="mb-0.5"
+                                    >
+                                        Quitar
+                                    </x-secondary-button>
+                                </li>
+                            @endforeach
+                        </ul>
+                    @endif
+
+                    @if ($composition !== [])
+                        <p
+                            @class([
+                                'mt-3 text-xs font-medium',
+                                'text-verde' => $compositionSummary['complete'],
+                                'text-ladrillo' => $compositionSummary['exceeds'],
+                                'text-gris-calido' => ! $compositionSummary['complete'] && ! $compositionSummary['exceeds'],
+                            ])
+                        >
+                            Suma: {{ $compositionSummary['total'] }} % — {{ $compositionSummary['detail'] }}
+                        </p>
+                    @endif
+
+                    <x-input-error :messages="$errors->get('composition')" class="mt-2" />
                 </div>
 
                 <div class="grid gap-6 sm:grid-cols-2">

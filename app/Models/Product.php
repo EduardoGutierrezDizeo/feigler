@@ -31,7 +31,6 @@ class Product extends Model
         'reference',
         'description',
         'brand',
-        'material',
         'base_price',
         'status',
         'cover_color_id',

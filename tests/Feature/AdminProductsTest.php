@@ -3,6 +3,7 @@
 use App\Enums\StoreSection;
 use App\Livewire\Admin\Products\Index;
 use App\Models\Category;
+use App\Models\Material;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\User;
@@ -252,6 +253,8 @@ test('creates a product with a generated reference, slug, brand and status', fun
     $this->seed(RoleSeeder::class);
 
     $polos = numberedCategory('PL', 'Polos');
+    $algodon = Material::factory()->create(['name' => 'Algodón']);
+    $poliester = Material::factory()->create(['name' => 'Poliéster']);
 
     $creado = Livewire::actingAs(adminForPanel())
         ->test(Index::class)
@@ -259,7 +262,10 @@ test('creates a product with a generated reference, slug, brand and status', fun
         ->set('name', 'Polo clásico piqué')
         ->set('categoryId', $polos->id)
         ->set('description', 'Piqué de algodón peinado.')
-        ->set('material', 'Algodón piqué')
+        ->set('composition', [
+            ['material_id' => (string) $algodon->getKey(), 'percentage' => '80'],
+            ['material_id' => (string) $poliester->getKey(), 'percentage' => '20'],
+        ])
         ->set('basePrice', '89900')
         ->call('save')
         ->assertHasNoErrors()
@@ -280,7 +286,11 @@ test('creates a product with a generated reference, slug, brand and status', fun
         ->and($producto->status)->toBe('active')
         ->and($producto->status)->not->toBe('out_of_stock')
         ->and($producto->description)->toBe('Piqué de algodón peinado.')
-        ->and($producto->material)->toBe('Algodón piqué');
+        ->and($producto->materials()->orderBy('materials.id')->pluck('materials.name')->all())->toBe(['Algodón', 'Poliéster'])
+        ->and(array_map(
+            fn (Material $material): int => $material->pivot->percentage,
+            $producto->materials()->orderBy('materials.id')->get()->all(),
+        ))->toBe([80, 20]);
 
     Livewire::actingAs(adminForPanel())
         ->test(Index::class)
@@ -774,4 +784,248 @@ test('the listing runs the same number of queries with three products as with fi
     // más consultas: si el listado volviera a preguntar fila por fila, los dos
     // números se separarían.
     expect($conQuince)->toBe($conTres);
+});
+
+/*
+|-------------------------------------------------------------------------------
+| La composición de materiales
+|-------------------------------------------------------------------------------
+|
+| Un producto dice de qué está hecho con filas y no con una frase, así que lo que se
+| prueba aquí es que el formulario ofrezca lo que hace falta para llenarlas, que avise
+| de la suma mientras se escribe, y que no deje un producto a medio camino cuando la
+| composición es la que no cuadra.
+|
+*/
+
+describe('la composición de materiales', function () {
+    beforeEach(function (): void {
+        $this->seed(RoleSeeder::class);
+    });
+
+    test('la primera fila empieza en cien y las siguientes en lo que falta', function () {
+        Livewire::actingAs(adminForPanel())
+            ->test(Index::class)
+            ->call('create')
+            ->call('addMaterialRow')
+            ->assertSet('composition', [['material_id' => '', 'percentage' => '100']])
+            // Lo que falta nunca es cero: una fila con un 0 % no se puede guardar, y
+            // partir de ahí sólo cambiaría el mensaje de error por el mismo problema.
+            ->call('addMaterialRow')
+            ->assertSet('composition', [
+                ['material_id' => '', 'percentage' => '100'],
+                ['material_id' => '', 'percentage' => '1'],
+            ])
+            ->set('composition', [['material_id' => '', 'percentage' => '80']])
+            ->call('addMaterialRow')
+            ->assertSet('composition', [
+                ['material_id' => '', 'percentage' => '80'],
+                ['material_id' => '', 'percentage' => '20'],
+            ]);
+    });
+
+    test('quitar una fila deja las demás en orden y sin huecos', function () {
+        $algodon = Material::factory()->create(['name' => 'Algodón']);
+        $poliester = Material::factory()->create(['name' => 'Poliéster']);
+        $lino = Material::factory()->create(['name' => 'Lino']);
+
+        Livewire::actingAs(adminForPanel())
+            ->test(Index::class)
+            ->call('create')
+            ->call('addMaterialRow')
+            ->call('addMaterialRow')
+            ->call('addMaterialRow')
+            ->set('composition', [
+                ['material_id' => (string) $algodon->getKey(), 'percentage' => '60'],
+                ['material_id' => (string) $poliester->getKey(), 'percentage' => '30'],
+                ['material_id' => (string) $lino->getKey(), 'percentage' => '10'],
+            ])
+            ->call('removeMaterialRow', 1)
+            // Un hueco en medio dejaría `composition.2` apuntando a una fila que ya
+            // no existe, y el nombre del campo del error sería el equivocado.
+            ->assertSet('composition', [
+                ['material_id' => (string) $algodon->getKey(), 'percentage' => '60'],
+                ['material_id' => (string) $lino->getKey(), 'percentage' => '10'],
+            ]);
+    });
+
+    test('la suma se avisa mientras se escribe', function () {
+        $algodon = Material::factory()->create(['name' => 'Algodón']);
+        $poliester = Material::factory()->create(['name' => 'Poliéster']);
+
+        $composicion = [
+            ['material_id' => (string) $algodon->getKey(), 'percentage' => '80'],
+            ['material_id' => (string) $poliester->getKey(), 'percentage' => '20'],
+        ];
+
+        Livewire::actingAs(adminForPanel())
+            ->test(Index::class)
+            ->call('create')
+            ->set('composition', $composicion)
+            ->assertSee('Suma: 100 % — completa')
+            ->set('composition.1.percentage', '10')
+            ->assertSee('Suma: 90 % — faltan 10 %')
+            ->set('composition.1.percentage', '40')
+            ->assertSee('Suma: 120 % — se pasa por 20 %');
+    });
+
+    test('un producto sin ninguna fila se guarda igual', function () {
+        $polos = numberedCategory('PL', 'Polos');
+
+        Livewire::actingAs(adminForPanel())
+            ->test(Index::class)
+            ->call('create')
+            ->set('name', 'Polo sin materiales')
+            ->set('categoryId', $polos->id)
+            ->set('basePrice', '89900')
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertSet('notice', 'Producto creado correctamente.');
+
+        expect(Product::query()->sole()->materials()->count())->toBe(0);
+    });
+
+    test('una composición que no suma cien se rechaza y no deja el producto a medio guardar', function () {
+        $polos = numberedCategory('PL', 'Polos');
+        $algodon = Material::factory()->create(['name' => 'Algodón']);
+        $existente = Product::factory()->for($polos)->create(['name' => 'Polo existente']);
+        $existente->materials()->attach($algodon->getKey(), ['percentage' => 50]);
+
+        Livewire::actingAs(adminForPanel())
+            ->test(Index::class)
+            ->call('edit', $existente->getKey())
+            ->set('composition', [['material_id' => (string) $algodon->getKey(), 'percentage' => '80']])
+            ->call('save')
+            // El error va bajo «Materiales», que es donde el admin está mirando, y no
+            // bajo el campo de precio que sí se llegó a escribir.
+            ->assertHasErrors(['composition'])
+            ->assertSet('notice', null);
+
+        // Ni la fila del pivote ni el nombre del producto se han movido: la operación
+        // entera es o no es.
+        expect($existente->fresh()->materials()->sole()->pivot->percentage)->toBe(50)
+            ->and($existente->fresh()->name)->toBe('Polo existente')
+            ->and(Product::query()->count())->toBe(1);
+    });
+
+    test('un porcentaje que no es un número entero del uno al cien se rechaza en su fila', function (string $porcentaje, string $mensaje) {
+        $polos = numberedCategory('PL', 'Polos');
+        $algodon = Material::factory()->create(['name' => 'Algodón']);
+
+        Livewire::actingAs(adminForPanel())
+            ->test(Index::class)
+            ->call('create')
+            ->set('name', 'Polo clásico')
+            ->set('categoryId', $polos->id)
+            ->set('basePrice', '89900')
+            ->call('addMaterialRow')
+            ->set('composition', [['material_id' => (string) $algodon->getKey(), 'percentage' => $porcentaje]])
+            ->call('save')
+            ->assertHasErrors(['composition.0.percentage' => $mensaje]);
+    })->with([
+        ['0', 'El porcentaje no puede ser menor que 1.'],
+        ['101', 'El porcentaje no puede superar 100.'],
+        ['diez', 'El porcentaje debe ser un número entero.'],
+    ]);
+
+    test('un material repetido se rechaza en la fila que lo repite', function () {
+        $polos = numberedCategory('PL', 'Polos');
+        $algodon = Material::factory()->create(['name' => 'Algodón']);
+        $fila = (string) $algodon->getKey();
+
+        Livewire::actingAs(adminForPanel())
+            ->test(Index::class)
+            ->call('create')
+            ->set('name', 'Polo clásico')
+            ->set('categoryId', $polos->id)
+            ->set('basePrice', '89900')
+            ->call('addMaterialRow')
+            ->call('addMaterialRow')
+            ->set('composition', [
+                ['material_id' => $fila, 'percentage' => '50'],
+                ['material_id' => $fila, 'percentage' => '50'],
+            ])
+            ->call('save')
+            ->assertHasErrors('composition');
+
+        expect(Product::query()->count())->toBe(0);
+    });
+
+    test('un material desactivado que el producto no tiene se rechaza, y uno que sí tiene se conserva', function () {
+        $algodon = Material::factory()->create(['name' => 'Algodón']);
+        $lino = Material::factory()->create(['name' => 'Lino']);
+        $lino->update(['is_active' => false]);
+
+        $polos = numberedCategory('PL', 'Polos');
+        $existente = Product::factory()->for($polos)->create(['name' => 'Polo de lino']);
+        $existente->materials()->attach($lino->getKey(), ['percentage' => 100]);
+
+        $panel = Livewire::actingAs(adminForPanel())->test(Index::class);
+
+        // Guardar sin tocar nada tiene que servir: un material apagado no es motivo
+        // para obligar a cambiar la composición.
+        $panel->call('edit', $existente->getKey())
+            ->call('save')
+            ->assertHasNoErrors()
+            ->assertSet('notice', 'Producto actualizado correctamente.');
+
+        expect($existente->fresh()->materials()->sole()->pivot->percentage)->toBe(100);
+
+        // El mismo material en un producto que no lo tenía sí se rechaza.
+        $panel->call('create')
+            ->set('name', 'Polo nuevo')
+            ->set('categoryId', $polos->id)
+            ->set('basePrice', '89900')
+            ->call('addMaterialRow')
+            ->set('composition', [['material_id' => (string) $lino->getKey(), 'percentage' => '100']])
+            ->call('save')
+            ->assertHasErrors('composition');
+
+        expect(Product::query()->where('name', 'Polo nuevo')->exists())->toBeFalse();
+
+        // Y el selector lo ofrece cuando ya está asignado, marked as inactive.
+        $panel->call('edit', $existente->getKey())
+            ->assertSee('Lino (inactivo)')
+            ->assertDontSee('Algodón (inactivo)');
+    });
+
+    test('el selector ofrece los materiales activos más los del producto, sin repetir los de otras filas', function () {
+        $algodon = Material::factory()->create(['name' => 'Algodón', 'order' => 1]);
+        $poliester = Material::factory()->create(['name' => 'Poliéster', 'order' => 2]);
+        $lino = Material::factory()->create(['name' => 'Lino', 'order' => 3]);
+        $lino->update(['is_active' => false]);
+
+        $polos = numberedCategory('PL', 'Polos');
+        $existente = Product::factory()->for($polos)->create(['name' => 'Polo de lino']);
+        $existente->materials()->attach($lino->getKey(), ['percentage' => 100]);
+
+        $formulario = Livewire::actingAs(adminForPanel())
+            ->test(Index::class)
+            ->call('edit', $existente->getKey())
+            ->set('composition', [
+                ['material_id' => (string) $algodon->getKey(), 'percentage' => '60'],
+                ['material_id' => (string) $lino->getKey(), 'percentage' => '40'],
+            ])
+            ->html();
+
+        $selectorDe = function (int $indice) use ($formulario): string {
+            preg_match('/id="composition-'.$indice.'-material".*?<\/select>/s', $formulario, $encontrado);
+
+            return $encontrado[0] ?? '';
+        };
+
+        $primera = $selectorDe(0);
+        $segunda = $selectorDe(1);
+
+        // La primera fila lleva el Algodón, así que no puede ofrecerlo otra vez; la
+        // segunda lo quita de sus opciones aunque siga activo. El Lino está apagado,
+        // pero el producto lo tiene, así que sale en las dos marcadas como inactivo.
+        expect($primera)->toContain('value="'.$algodon->getKey().'"')
+            ->and($primera)->toContain('value="'.$poliester->getKey().'"')
+            ->and($primera)->not->toContain('value="'.$lino->getKey().'"')
+            ->and($segunda)->toContain('value="'.$poliester->getKey().'"')
+            ->and($segunda)->toContain('value="'.$lino->getKey().'"')
+            ->and($segunda)->not->toContain('value="'.$algodon->getKey().'"')
+            ->and($segunda)->toContain('Lino (inactivo)');
+    });
 });

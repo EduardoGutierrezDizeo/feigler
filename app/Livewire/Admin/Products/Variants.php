@@ -21,6 +21,7 @@ use App\Models\ProductVariant;
 use App\Models\Size;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
@@ -140,13 +141,33 @@ class Variants extends Component
         // the ones of the category of this product. A size id of another category
         // therefore never reaches the actions: the field is already refused here, with
         // a message under the select instead of a driver error about a foreign key.
+        //
+        // The color is refused the same way, but a color also stops being offered when
+        // it is turned off, and a variant that is already in a turned-off color has to
+        // stay savable without being moved. The rule is therefore any color the store
+        // still sells, plus the one this variant already carries: anything else never
+        // reaches the actions, and is reported under its own select.
+        $currentColorId = $this->currentColorId();
+
         $validated = $this->validate([
             'sizeId' => [
                 'required',
                 'integer',
                 Rule::exists('sizes', 'id')->where('category_id', $product->category_id),
             ],
-            'colorId' => ['required', 'integer', Rule::exists('colors', 'id')],
+            'colorId' => [
+                'required',
+                'integer',
+                Rule::exists('colors', 'id')->where(
+                    function (QueryBuilder $query) use ($currentColorId): void {
+                        $query->where('is_active', true);
+
+                        if ($currentColorId !== null) {
+                            $query->orWhere('id', $currentColorId);
+                        }
+                    },
+                ),
+            ],
             'initialStock' => ['nullable', 'integer', 'min:0'],
         ], [
             'sizeId.required' => 'Selecciona una talla.',
@@ -154,7 +175,7 @@ class Variants extends Component
             'sizeId.exists' => 'La talla seleccionada no pertenece a la categoría del producto.',
             'colorId.required' => 'Selecciona un color.',
             'colorId.integer' => 'El color seleccionado no es válido.',
-            'colorId.exists' => 'El color seleccionado no existe.',
+            'colorId.exists' => 'El color seleccionado no está disponible.',
             'initialStock.integer' => 'El stock inicial debe ser un número entero.',
             'initialStock.min' => 'El stock inicial no puede ser negativo.',
         ]);
@@ -303,9 +324,54 @@ class Variants extends Component
         return view('livewire.admin.products.variants', [
             'product' => $product,
             'variants' => $this->sortVariants($variants),
-            'colors' => Color::query()->orderBy('name')->orderBy('id')->get(),
+            'colors' => $this->colorsForTheForm(),
             'sizes' => $this->sizesForTheForm($product),
         ]);
+    }
+
+    /**
+     * The colors the form may write, which are the ones the store still sells.
+     *
+     * A variant being edited also sees the color it is already in, even when that color
+     * is turned off: the variant has to be editable without being moved, and a select
+     * that does not carry the value it is holding would silently write something else.
+     * The actions are the ones that decide whether a color may be taken, so the select
+     * is not where that rule lives; it only refuses ids that are not in the store, which
+     * is what `colorId` is validated against.
+     *
+     * The order is the one the catalog reads colors in, so the form offers the same list
+     * in the same order as the rest of the panel.
+     *
+     * @return Collection<int, Color>
+     */
+    private function colorsForTheForm(): Collection
+    {
+        $currentColorId = $this->currentColorId();
+
+        if ($currentColorId === null) {
+            return Color::listedActive();
+        }
+
+        return Color::query()
+            ->where(
+                fn (Builder $query): Builder => $query
+                    ->where('is_active', true)
+                    ->orWhere('id', $currentColorId)
+            )
+            ->ordered()
+            ->get();
+    }
+
+    /**
+     * The color the variant being edited already carries, or null while creating.
+     *
+     * It is read from the stored variant instead of from `$colorId`, because the value
+     * the form is holding is exactly what an id typed by hand could be trying to
+     * replace.
+     */
+    private function currentColorId(): ?int
+    {
+        return $this->editingId === null ? null : $this->variant($this->editingId)->color_id;
     }
 
     /**
