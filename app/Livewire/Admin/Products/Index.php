@@ -2,13 +2,14 @@
 
 namespace App\Livewire\Admin\Products;
 
+use App\Actions\Products\CreateProduct;
 use App\Enums\StoreSection;
+use App\Exceptions\InvalidProductNameException;
+use App\Exceptions\InvalidProductStatusException;
 use App\Livewire\Concerns\Notifies;
 use App\Models\Category;
 use App\Models\Product;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
@@ -22,13 +23,17 @@ class Index extends Component
     use Notifies;
 
     /**
-     * The stored states the panel may write. `out_of_stock` is deliberately absent:
-     * it is what `Product::display_status` computes when the stock runs out, and a
-     * stored copy would go stale on the next movement.
+     * The stored states the panel may write, which are the ones the column holds:
+     * `out_of_stock` is deliberately absent because it is what
+     * `Product::display_status` computes when the stock runs out, and a stored
+     * copy would go stale on the next movement.
+     *
+     * The list lives in the action that creates a product, because that is where
+     * the rule is enforced, and this form offers exactly what can be written.
      *
      * @var list<string>
      */
-    public const WRITABLE_STATUSES = ['active', 'inactive'];
+    public const WRITABLE_STATUSES = CreateProduct::WRITABLE_STATUSES;
 
     /**
      * The states the listing can be filtered by. Unlike the writable ones, these
@@ -38,7 +43,11 @@ class Index extends Component
      */
     public const STATUS_FILTERS = ['active', 'inactive', 'out_of_stock', 'no_variants'];
 
-    private const DEFAULT_BRAND = 'Feigler';
+    /**
+     * The brand the form opens with, which is the one a product with no brand of
+     * its own ends up stored with.
+     */
+    private const DEFAULT_BRAND = CreateProduct::DEFAULT_BRAND;
 
     public const PAGE_SIZE = 20;
 
@@ -324,35 +333,38 @@ class Index extends Component
     }
 
     /**
-     * The insert happens inside the transaction that `nextReferenceFor` opens, so
-     * the lock on the category row is still held when the row is written. Outside
-     * of it, two products created at the same time could both read the same
-     * counter and collide on the unique reference.
+     * Create the product the open form is describing, and leave the modal editing
+     * it.
      *
      * Unlike the update, the modal stays open and the panel switches to editing
      * the product that was just created: a product is born without variants, and
      * the tab that fills them is one click away only while the product exists.
+     *
+     * The row is written by the action, which is also where the reference is
+     * reserved and where the name, the brand and the status are put in the form
+     * the catalog keeps. What it refuses is shown under the field it belongs to,
+     * the same way the messages of the form come out.
      */
     private function createProduct(Category $category, array $validated): void
     {
-        $slug = $this->uniqueSlugFor($validated['name']);
-
-        if ($slug === null) {
-            return;
-        }
-
-        $product = DB::transaction(function () use ($category, $validated, $slug): Product {
-            return Product::create([
-                'category_id' => $category->getKey(),
-                'name' => trim($validated['name']),
-                'slug' => $slug,
-                'description' => $validated['description'] !== null ? trim($validated['description']) : null,
-                'brand' => $this->brandOrDefault($validated['brand']),
-                'material' => $validated['material'] !== null ? trim($validated['material']) : null,
+        try {
+            $product = (new CreateProduct)($category, [
+                'name' => $validated['name'],
+                'description' => $validated['description'],
+                'brand' => $validated['brand'],
+                'material' => $validated['material'],
                 'base_price' => $validated['basePrice'],
                 'status' => $validated['status'],
             ]);
-        });
+        } catch (InvalidProductNameException $exception) {
+            $this->addError('name', $exception->getMessage());
+
+            return;
+        } catch (InvalidProductStatusException $exception) {
+            $this->addError('status', $exception->getMessage());
+
+            return;
+        }
 
         $this->editingId = $product->getKey();
         $this->editingReference = $product->reference;
@@ -363,40 +375,17 @@ class Index extends Component
     }
 
     /**
-     * The blank the brand is allowed to be left in: the column is not nullable and
-     * the catalog is Feigler's own, so a product with no brand is a Feigler one.
+     * The blank the brand is allowed to be left in.
+     *
+     * It is the action that stores it, so both spellings of the same rule live
+     * together: the form offers the brand of the store and the row is written
+     * with it even when nobody typed anything.
      */
     private function brandOrDefault(?string $brand): string
     {
         $brand = $brand !== null ? trim($brand) : '';
 
         return $brand !== '' ? $brand : self::DEFAULT_BRAND;
-    }
-
-    /**
-     * The slug of a product name, with a numeric suffix when the name is already
-     * taken. Two products may well share a name, and `products.slug` is unique, so
-     * the second «Polo básico» becomes `polo-basico-2` instead of failing to save.
-     */
-    private function uniqueSlugFor(string $name): ?string
-    {
-        $base = Str::slug($name);
-
-        if ($base === '') {
-            $this->addError('name', 'El nombre debe contener letras o números.');
-
-            return null;
-        }
-
-        $slug = $base;
-        $suffix = 2;
-
-        while (Product::query()->where('slug', $slug)->exists()) {
-            $slug = "{$base}-{$suffix}";
-            $suffix++;
-        }
-
-        return $slug;
     }
 
     private function applyCategoryFilter(Builder $query): void
