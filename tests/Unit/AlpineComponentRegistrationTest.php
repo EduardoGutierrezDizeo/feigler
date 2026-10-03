@@ -183,6 +183,41 @@ function registeredAlpineComponents(string $projectPath): array
     return array_keys($registered);
 }
 
+/**
+ * Modulos de resources/js que usan el magic `$el` como identificador suelto.
+ *
+ * Los magics de Alpine (`$el`, `$refs`, `$store`, `$data`) solo existen como
+ * propiedades del componente dentro de una expresion evaluada por Alpine. En un
+ * metodo de `Alpine.data()` un `$el` a secas es un `ReferenceError`, porque el
+ * identificador no esta en el ambito del metodo.
+ *
+ * @return list<string>
+ */
+function modulesUsingBareElMagic(string $projectPath): array
+{
+    $files = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($projectPath.'/resources/js', RecursiveDirectoryIterator::SKIP_DOTS)
+    );
+
+    $offenders = [];
+
+    foreach ($files as $file) {
+        if ($file->getExtension() !== 'js') {
+            continue;
+        }
+
+        // Se lee sin comentarios para que un `$el` mencionado en un JSDoc no se
+        // cuente como uso real.
+        if (preg_match('/(?<![\w.$])\$el\b/', javascriptSource($file->getPathname()))) {
+            $offenders[] = str_replace('\\', '/', substr($file->getPathname(), strlen($projectPath) + 1));
+        }
+    }
+
+    sort($offenders);
+
+    return $offenders;
+}
+
 test('every javascript entry point reaches the Alpine barrel', function () {
     $projectPath = dirname(__DIR__, 2);
 
@@ -247,4 +282,19 @@ test('the admin form modal entangles showForm in the x-data object so it can ope
     $view = (string) file_get_contents($projectPath.'/resources/views/components/admin-modal.blade.php');
 
     expect($view)->toContain('x-data="adminModal($wire)"');
+});
+
+test('Alpine component methods reach the root element through this.$el', function () {
+    $projectPath = dirname(__DIR__, 2);
+
+    expect(modulesUsingBareElMagic($projectPath))->toBeEmpty();
+
+    // El dialogo de confirmacion es el que suffer el fallo: `focusables()` se llama
+    // desde un `$nextTick`, y un `ReferenceError` ahi no se queda en su componente.
+    // Aborta el bucle `releaseNextTicks()` de Alpine y, con el, la transicion que
+    // estaba invoking: el toast recien insertado se queda en su estado
+    // `enter-start` (`opacity-0`) y el panel no muestra ningun aviso aunque el
+    // servidor si lo haya despachado.
+    expect(javascriptSource($projectPath.'/resources/js/alpine/confirm-dialog.js'))
+        ->toMatch('/this\.\$el\.querySelectorAll\(selector\)/');
 });

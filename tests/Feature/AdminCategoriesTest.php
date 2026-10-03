@@ -283,11 +283,19 @@ test('blocks deleting a category that has products', function () {
 
     Livewire::test(Index::class)
         ->call('delete', $category->id)
+        ->assertSet('notice', "No se puede eliminar «{$category->name}» porque tiene productos asociados. Primero mueve esos productos a otra categoría o elimínalos.")
         ->assertSet('noticeType', 'error')
-        ->assertDispatched('toast', function (string $name, array $params) {
+        // El aviso no se lee del estado del componente, sino del evento `toast` que
+        // consume el puente de resources/js/admin.js. Se comprueba el payload
+        // entero y no solo el `tone`: si el nombre del evento o las claves viajan
+        // mal, el toast se descarta en silencio y el panel queda sin explicar por
+        // que la categoria no se borro.
+        ->assertDispatched('toast', function (string $name, array $params) use ($category) {
             return $name === 'toast'
-                && $params['tone'] === 'error'
-                && str_contains($params['message'], 'productos asociados');
+                && $params === [
+                    'message' => "No se puede eliminar «{$category->name}» porque tiene productos asociados. Primero mueve esos productos a otra categoría o elimínalos.",
+                    'tone' => 'error',
+                ];
         });
 
     $this->assertModelExists($category);

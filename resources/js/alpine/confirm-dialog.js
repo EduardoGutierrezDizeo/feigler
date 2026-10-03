@@ -50,7 +50,15 @@ document.addEventListener('alpine:init', () => {
         focusables() {
             const selector = 'a[href], button:not([disabled]), input:not([type="hidden"]), select, textarea, [tabindex]:not([tabindex="-1"])'
 
-            return [...$el.querySelectorAll(selector)].filter(
+            // `this.$el`, y no el magic suelto `$el`: dentro de un metodo de
+            // `Alpine.data()` los magics solo existen como propiedades del
+            // componente. Un `$el` a secas es un ReferenceError que Alpine
+            // ejecuta dentro de su cola de `nextTick`, y ahi el fallo no se queda
+            // en este componente: aborta `releaseNextTicks()`, el bucle que drena
+            // esa cola, y con el la transicion que la estaba invocando. Un toast
+            // recien insertado se queda en su estado `enter-start` (`opacity-0`),
+            // de modo que el aviso existe en el DOM pero nunca se ve.
+            return [...this.$el.querySelectorAll(selector)].filter(
                 (el) => el.offsetParent !== null || el === document.activeElement,
             )
         },
