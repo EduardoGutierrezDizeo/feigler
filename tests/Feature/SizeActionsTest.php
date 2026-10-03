@@ -117,7 +117,10 @@ test('the refusal explains that the name lives in the sku', function () {
     ProductVariant::factory()->for($product)->create(['size_id' => $size->id]);
 
     expect(fn () => (new UpdateSize)($size, 'G'))
-        ->toThrow(SizeNameLockedException::class, 'SKU de sus variantes');
+        ->toThrow(
+            SizeNameLockedException::class,
+            'El nombre de la talla «M» no se puede cambiar porque está en uso: forma parte del SKU de sus variantes. Desactívala y crea otra.'
+        );
 });
 
 test('a size sold in only by an inactive variant still cannot be renamed', function () {

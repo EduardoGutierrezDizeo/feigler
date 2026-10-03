@@ -19,8 +19,8 @@ class SizeNameLockedException extends RuntimeException
     public static function forSize(Size $size): self
     {
         return new self(
-            'El nombre de una talla en uso no se puede cambiar porque forma parte del SKU de sus variantes; '
-            ."desactívala y crea otra. La talla «{$size->name}» conserva el nombre que tiene."
+            "El nombre de la talla «{$size->name}» no se puede cambiar porque está en uso: "
+            .'forma parte del SKU de sus variantes. Desactívala y crea otra.'
         );
     }
 }

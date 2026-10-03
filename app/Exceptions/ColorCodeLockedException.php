@@ -18,8 +18,8 @@ class ColorCodeLockedException extends RuntimeException
     public static function forColor(Color $color): self
     {
         return new self(
-            'El código de un color en uso no se puede cambiar porque forma parte del SKU de sus variantes; '
-            ."crea otro color en su lugar. «{$color->name}» conserva el código «{$color->code}»."
+            "El código «{$color->code}» del color «{$color->name}» no se puede cambiar porque está en uso: "
+            .'forma parte del SKU de sus variantes. Desactiva el color y crea otro.'
         );
     }
 }

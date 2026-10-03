@@ -151,7 +151,10 @@ test('the refusal explains that the code lives in the sku', function () {
     ]);
 
     expect(fn () => (new UpdateColor)($color, 'Azul', '#1A2B3C', 'AZM'))
-        ->toThrow(ColorCodeLockedException::class, 'SKU de sus variantes');
+        ->toThrow(
+            ColorCodeLockedException::class,
+            'El código «AZU» del color «Azul» no se puede cambiar porque está en uso: forma parte del SKU de sus variantes. Desactiva el color y crea otro.'
+        );
 });
 
 test('editing the hex of a color a variant is sold in is allowed', function () {
