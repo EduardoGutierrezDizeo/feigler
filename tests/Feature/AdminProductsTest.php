@@ -295,7 +295,7 @@ test('creates a product with a generated reference, slug, brand and status', fun
     Livewire::actingAs(adminForPanel())
         ->test(Index::class)
         ->call('create')
-        ->set('name', 'Polo，一次 más')
+        ->set('name', 'Polo uno más')
         ->set('categoryId', $polos->id)
         ->set('basePrice', '59900')
         ->call('save')

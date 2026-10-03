@@ -78,7 +78,7 @@ class GenerateProductThumbnails extends Command
                     // El original va primero: sin él no hay nada que rehacer, y una
                     // fila que lo perdió dice algo roto del despliegue, del respaldo
                     // o de un borrado manual que el catálogo debe poder ver aunque la
-                    // miniatura que se le дела caso siga en su sitio.
+                    // miniatura que se le haga caso siga en su sitio.
                     if (! $this->existeEnDisco($image->path)) {
                         $sinOriginal++;
 
