@@ -77,11 +77,19 @@ class Color extends Model
     /**
      * Every color of the store, in the order the catalog reads them.
      *
+     * The counts are asked for here and not by the listing: a panel that shows how many
+     * variants and pictures a color holds would otherwise ask for them once per row,
+     * which is two queries per color over the whole store.
+     *
+     * @param  list<string>  $withCount  Relations to count along with the colors.
      * @return Collection<int, Color>
      */
-    public static function listed(): Collection
+    public static function listed(array $withCount = []): Collection
     {
-        return static::query()->ordered()->get();
+        return static::query()
+            ->when($withCount !== [], fn (Builder $query) => $query->withCount($withCount))
+            ->ordered()
+            ->get();
     }
 
     /**

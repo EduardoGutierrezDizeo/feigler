@@ -25,6 +25,7 @@ import './plugins.js';
 
 // Componentes Alpine.data.
 import './admin-modal.js';
+import './color-hex-input.js';
 import './confirm-dialog.js';
 import './page-enter.js';
 import './price-input.js';

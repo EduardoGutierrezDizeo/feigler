@@ -8,6 +8,7 @@ use App\Exceptions\CategoryInUseException;
 use App\Livewire\Concerns\Notifies;
 use App\Models\Category;
 use App\Models\Size;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -41,6 +42,19 @@ class Index extends Component
     public string $name = '';
 
     public string $skuPrefix = '';
+
+    /**
+     * The tab that contains this panel sits behind `role:admin`, but a Livewire request
+     * is not that page's request: `/livewire/update` reopens the component on its own,
+     * so every public method here is reachable by anyone who reaches that endpoint,
+     * with any id they please. The rule of the route is asked again here, on the mount
+     * and on every request after it, which is the only place the guard can still stop
+     * the call.
+     */
+    public function booted(): void
+    {
+        abort_unless($this->user()?->hasRole('admin'), 403);
+    }
 
     /**
      * Switch the section being managed, from the tab bar.
@@ -285,6 +299,11 @@ class Index extends Component
     private function activeSection(): StoreSection
     {
         return StoreSection::tryFrom($this->section) ?? StoreSection::Hombre;
+    }
+
+    private function user(): ?User
+    {
+        return auth()->user();
     }
 
     private function resetForm(): void

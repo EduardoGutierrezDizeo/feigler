@@ -10,12 +10,36 @@ use App\Models\User;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Support\Facades\Event;
 use Livewire\Livewire;
+use Spatie\Permission\PermissionRegistrar;
+
+/**
+ * The categories panel, as an administrator.
+ *
+ * The panel asks for the admin role again inside the component, not only on the route,
+ * so every test that opens it has to arrive as somebody who has that role. The role is
+ * the one thing all of these tests have in common and none of them is about, which is
+ * why it lives here instead of in a `beforeEach`: the HTTP tests below check what
+ * happens to a guest and to a `vendedor`, and a `beforeEach` would have them logging
+ * in only to log out again.
+ */
+function panelDeCategorias(mixed $admin = null): mixed
+{
+    return Livewire::actingAs($admin ?? adminForPanel())->test(Index::class);
+}
+
+/**
+ * The roles are a precondition of the fixture and not part of what any test here
+ * checks, so they are seeded once for the whole file rather than in each test.
+ */
+beforeEach(function (): void {
+    $this->seed(RoleSeeder::class);
+});
 
 test('lists only the categories of the active section', function () {
     $hombre = Category::factory()->section(StoreSection::Hombre)->create(['name' => 'Polos']);
     $mujer = Category::factory()->section(StoreSection::Mujer)->create(['name' => 'Vestidos']);
 
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->assertSet('section', StoreSection::Hombre->value)
         ->assertSeeHtml('wire:key="category-'.$hombre->id.'"')
         ->assertDontSeeHtml('wire:key="category-'.$mujer->id.'"')
@@ -30,7 +54,7 @@ test('offers the three sections as tabs and switches between them', function () 
     $hombre = Category::factory()->section(StoreSection::Hombre)->create(['name' => 'Polos']);
     $mujer = Category::factory()->section(StoreSection::Mujer)->create(['name' => 'Vestidos']);
 
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->assertSee('Hombre')
         ->assertSee('Mujer')
         ->assertSee('Niños')
@@ -46,7 +70,7 @@ test('offers the three sections as tabs and switches between them', function () 
 });
 
 test('falls back to hombre when the url holds a section that does not exist', function () {
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->set('section', 'invalida')
         ->call('setSection', 'invalida')
         ->assertSet('section', StoreSection::Hombre->value);
@@ -55,7 +79,7 @@ test('falls back to hombre when the url holds a section that does not exist', fu
 test('switching section discards the search and dismisses the form', function () {
     Category::factory()->create(['name' => 'Camisetas']);
 
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->set('search', 'cami')
         ->call('create')
         ->set('name', 'Pantalones')
@@ -68,7 +92,7 @@ test('switching section discards the search and dismisses the form', function ()
 });
 
 test('creates a category with a generated slug in the active section', function () {
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->call('create')
         ->set('name', 'Pantalones')
         ->set('skuPrefix', 'PA')
@@ -84,7 +108,7 @@ test('creates a category with a generated slug in the active section', function 
 });
 
 test('a created category belongs to the section that was active, not the default one', function () {
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->call('setSection', StoreSection::Ninos->value)
         ->call('create')
         ->set('name', 'Pantalones')
@@ -99,7 +123,7 @@ test('a created category belongs to the section that was active, not the default
 test('rejects a name already used in the same section', function () {
     Category::factory()->section(StoreSection::Hombre)->create(['name' => 'Camisetas']);
 
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->call('create')
         ->set('name', 'Camisetas')
         ->set('skuPrefix', 'CA')
@@ -113,7 +137,7 @@ test('rejects a name already used in the same section', function () {
 test('lets another section reuse a name already taken in the active one', function () {
     Category::factory()->section(StoreSection::Hombre)->create(['name' => 'Polos', 'slug' => 'polos', 'sku_prefix' => 'PLH']);
 
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->call('setSection', StoreSection::Mujer->value)
         ->call('create')
         ->set('name', 'Polos')
@@ -127,7 +151,7 @@ test('lets another section reuse a name already taken in the active one', functi
 test('generates a new slug when editing a category', function () {
     $category = Category::factory()->create(['name' => 'Sudaderas', 'slug' => 'sudaderas']);
 
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->call('edit', $category->id)
         ->assertSet('editingId', $category->id)
         ->assertSet('name', 'Sudaderas')
@@ -149,7 +173,7 @@ test('generates a new slug when editing a category', function () {
 test('editing a category never moves it to another section', function () {
     $category = Category::factory()->section(StoreSection::Mujer)->create(['name' => 'Vestidos']);
 
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->set('section', StoreSection::Mujer->value)
         ->call('edit', $category->id)
         ->set('name', 'Vestidos de fiesta')
@@ -161,7 +185,7 @@ test('editing a category never moves it to another section', function () {
 });
 
 test('requires a name to create a category', function () {
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->call('create')
         ->call('save')
         ->assertHasErrors(['name'])
@@ -171,7 +195,7 @@ test('requires a name to create a category', function () {
 });
 
 test('rejects a name without letters or numbers', function () {
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->call('create')
         ->set('name', '!!!')
         ->set('skuPrefix', 'XX')
@@ -185,7 +209,7 @@ test('rejects a name without letters or numbers', function () {
 test('rejects a name that collides with another category slug', function () {
     Category::factory()->create(['name' => 'Camisetas', 'slug' => 'camisetas']);
 
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->call('create')
         ->set('name', 'Camisetas!')
         ->set('skuPrefix', 'CA')
@@ -197,7 +221,7 @@ test('rejects a name that collides with another category slug', function () {
 });
 
 test('requires a SKU prefix to create a category', function () {
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->call('create')
         ->set('name', 'Pantalones')
         ->call('save')
@@ -208,7 +232,7 @@ test('requires a SKU prefix to create a category', function () {
 });
 
 test('rejects a SKU prefix that is not 2 to 4 uppercase letters or numbers', function (string $prefix) {
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->call('create')
         ->set('name', 'Pantalones')
         ->set('skuPrefix', $prefix)
@@ -222,7 +246,7 @@ test('rejects a SKU prefix that is not 2 to 4 uppercase letters or numbers', fun
 test('rejects a SKU prefix already used by another category anywhere in the store', function () {
     Category::factory()->section(StoreSection::Mujer)->create(['name' => 'Camisetas', 'slug' => 'camisetas', 'sku_prefix' => 'CA']);
 
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->call('create')
         ->set('name', 'Pantalones')
         ->set('skuPrefix', 'CA')
@@ -234,7 +258,7 @@ test('rejects a SKU prefix already used by another category anywhere in the stor
 });
 
 test('stores the SKU prefix uppercased and trimmed', function () {
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->call('create')
         ->set('name', 'Pantalones')
         ->set('skuPrefix', '  pl  ')
@@ -247,7 +271,7 @@ test('stores the SKU prefix uppercased and trimmed', function () {
 test('lets a category keep its own prefix when edited', function () {
     $category = Category::factory()->create(['name' => 'Pantalones', 'sku_prefix' => 'PA']);
 
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->call('edit', $category->id)
         ->call('save')
         ->assertHasNoErrors();
@@ -258,7 +282,7 @@ test('lets a category keep its own prefix when edited', function () {
 test('shows the prefix of every category next to its name', function () {
     Category::factory()->create(['name' => 'Camisetas', 'sku_prefix' => 'CMT']);
 
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->assertSee('Camisetas')
         ->assertSee('CMT');
 });
@@ -266,12 +290,12 @@ test('shows the prefix of every category next to its name', function () {
 test('toggles a category between active and inactive', function () {
     $category = Category::factory()->create();
 
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->call('toggleActive', $category->id);
 
     expect($category->fresh()->is_active)->toBeFalse();
 
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->call('toggleActive', $category->id);
 
     expect($category->fresh()->is_active)->toBeTrue();
@@ -281,7 +305,7 @@ test('blocks deleting a category that has products', function () {
     $category = Category::factory()->create();
     $product = Product::factory()->for($category)->create();
 
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->call('delete', $category->id)
         ->assertSet('notice', "No se puede eliminar «{$category->name}» porque tiene productos asociados. Primero mueve esos productos a otra categoría o elimínalos.")
         ->assertSet('noticeType', 'error')
@@ -305,7 +329,7 @@ test('blocks deleting a category that has products', function () {
 test('deletes a category without products', function () {
     $category = Category::factory()->create();
 
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->call('delete', $category->id)
         ->assertSet('noticeType', 'success');
 
@@ -325,7 +349,7 @@ test('deletes the sizes of a category that sells nothing', function () {
     expect($sizes)->toBe(8)
         ->and(Size::query()->where('category_id', $category->id)->count())->toBe(8);
 
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->call('delete', $category->id)
         ->assertSet('noticeType', 'success');
 
@@ -338,7 +362,7 @@ test('a refused category keeps its sizes', function () {
     Product::factory()->for($category)->create();
     Size::seedStandardSizesFor($category);
 
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->call('delete', $category->id)
         ->assertSet('noticeType', 'error');
 
@@ -358,7 +382,7 @@ test('the sizes of another category are not touched by a deletion', function () 
 });
 
 test('a category created from the panel starts with the eight sizes of the store', function () {
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->call('create')
         ->set('name', 'Pantalones')
         ->set('skuPrefix', 'PA')
@@ -372,7 +396,7 @@ test('a category created from the panel starts with the eight sizes of the store
 });
 
 test('the sizes of a new category come out active and in order', function () {
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->call('create')
         ->set('name', 'Camisetas')
         ->set('skuPrefix', 'CM')
@@ -395,7 +419,7 @@ test('a category is not left behind when writing its sizes fails', function () {
         throw new RuntimeException('Fallo simulado al escribir las tallas');
     });
 
-    expect(fn () => Livewire::test(Index::class)
+    expect(fn () => panelDeCategorias()
         ->call('create')
         ->set('name', 'Pantalones')
         ->set('skuPrefix', 'PA')
@@ -407,7 +431,7 @@ test('a category is not left behind when writing its sizes fails', function () {
 });
 
 test('announces a created category in the toast stack', function () {
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->call('create')
         ->set('name', 'Pantalones')
         ->set('skuPrefix', 'PA')
@@ -419,47 +443,103 @@ test('announces a created category in the toast stack', function () {
 test('asks for confirmation through the dialog instead of the native confirm', function () {
     Category::factory()->create(['name' => "Camiseta de John's"]);
 
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->assertSee('ask-confirm')
         ->assertDontSeeHtml('confirm(');
 });
 
-test('guests are redirected to the login screen from the categories page', function () {
-    $response = $this->get(route('admin.categories.index'));
+test('guests are redirected to the login screen from the product details page', function () {
+    $response = $this->get(route('admin.product-details.index'));
 
     $response->assertRedirect(route('login'));
 });
 
+/**
+ * The address of the panel is now one of four tabs, so the access rules are asked of
+ * the page as a whole rather than of the block of categories that used to have its own.
+ */
 test('returns 403 for authenticated users without the admin role', function () {
-    $this->seed(RoleSeeder::class);
-
     $user = User::factory()->create();
     $user->assignRole('vendedor');
 
-    $response = $this->actingAs($user)->get(route('admin.categories.index'));
+    $response = $this->actingAs($user)->get(route('admin.product-details.index'));
 
     $response->assertForbidden();
 });
 
-test('renders the categories page for users with the admin role', function () {
-    $this->seed(RoleSeeder::class);
-
-    $admin = User::factory()->create();
-    $admin->assignRole('admin');
-
-    $response = $this->actingAs($admin)->get(route('admin.categories.index'));
+test('renders the product details page for users with the admin role', function () {
+    $response = $this->actingAs(adminForPanel())->get(route('admin.product-details.index'));
 
     $response
         ->assertOk()
-        ->assertSee('Categorías')
+        ->assertSee('Detalles de productos')
         ->assertSee('Nueva categoría')
         ->assertDontSee("entered ? 'translate-y-0", false);
+});
+
+/**
+ * The block of categories moved inside the page of the four catalogs, but it is still
+ * its own Livewire component, and `/livewire/update` does not pass through the
+ * middleware of the page that rendered it. Without a guard inside the component, a
+ * `vendedor` who never saw the page could still open a snapshot of the block and call
+ * its methods by hand.
+ */
+test('a user without the admin role cannot mount the categories block', function () {
+    $user = User::factory()->create();
+    $user->assignRole('vendedor');
+
+    Livewire::actingAs($user)
+        ->test(Index::class)
+        ->assertForbidden();
+});
+
+/**
+ * The role is asked again on every request, not only on the mount.
+ *
+ * This is the request that carries the snapshot, so it is where a method call arrives:
+ * the panel was opened by an administrator who has since lost the role. Every method is
+ * checked on its own, because a 403 leaves no snapshot behind to chain the next call
+ * onto.
+ */
+test('an admin who loses the role can no longer act on the categories block', function (string $metodo, bool $conId) {
+    $admin = adminForPanel();
+
+    $categoria = Category::factory()->create(['name' => 'Camisetas']);
+    $otra = Category::factory()->create(['name' => 'Gorras']);
+
+    $panel = panelDeCategorias($admin);
+
+    // El rol se va con la página ya abierta, que es justo lo que un snapshot guardado
+    // en el navegador permite hacer.
+    $admin->syncRoles([]);
+    app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+    $panel->call($metodo, ...($conId ? [$categoria->getKey()] : []))->assertForbidden();
+
+    // Y nada de eso tocó la base.
+    expect($categoria->fresh()->name)->toBe('Camisetas')
+        ->and($otra->fresh()->name)->toBe('Gorras');
+})->with([
+    'setSection' => ['setSection', true],
+    'create' => ['create', false],
+    'save' => ['save', false],
+    'edit' => ['edit', true],
+    'closeForm' => ['closeForm', false],
+    'toggleActive' => ['toggleActive', true],
+    'delete' => ['delete', true],
+    'moveUp' => ['moveUp', true],
+    'moveDown' => ['moveDown', true],
+]);
+
+test('even a guest cannot mount the categories block', function () {
+    Livewire::test(Index::class)
+        ->assertForbidden();
 });
 
 test('the category form is a full-viewport modal that stays mounted so it can animate its exit', function () {
     $this->seed(RoleSeeder::class);
 
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->assertSet('showForm', false)
         // Con el formulario cerrado el modal sigue en el DOM. Su visibilidad la
         // gobierna Alpine y no un `@if` de Blade: por eso el cierre tiene un
@@ -491,7 +571,7 @@ test('the category form is a full-viewport modal that stays mounted so it can an
 });
 
 test('the form shows the active section instead of a selector', function () {
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->call('create')
         ->assertSee('Sección')
         ->assertSee('Hombre')
@@ -505,14 +585,14 @@ test('filters categories by name', function () {
     Category::factory()->create(['name' => 'Camisetas', 'slug' => 'camisetas']);
     Category::factory()->create(['name' => 'Pantalones', 'slug' => 'pantalones']);
 
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->set('search', 'cami')
         ->assertSee('Camisetas')
         ->assertDontSee('Pantalones');
 });
 
 test('escapes the search term when it has no results', function () {
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->set('search', '<script>alert(1)</script>')
         ->assertSee('<script>alert(1)</script>');
 });
@@ -521,7 +601,7 @@ test('moves a category up above its previous one and reindexes the section', fun
     $first = Category::factory()->create(['name' => 'Camisetas', 'order' => 1]);
     $second = Category::factory()->create(['name' => 'Pantalones', 'order' => 2]);
 
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->call('moveUp', $second->id);
 
     // La sección se reescribe a 0..n-1 en el orden mostrado, en vez de
@@ -536,7 +616,7 @@ test('moves a category down below its next one and reindexes the section', funct
     $first = Category::factory()->create(['name' => 'Camisetas', 'order' => 1]);
     $second = Category::factory()->create(['name' => 'Pantalones', 'order' => 2]);
 
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->call('moveDown', $first->id);
 
     expect(Category::query()->orderBy('order')->pluck('name')->all())
@@ -550,7 +630,7 @@ test('cannot move the first category up or the last one down', function () {
     $second = Category::factory()->create(['name' => 'Pantalones', 'order' => 2]);
     $third = Category::factory()->create(['name' => 'Zapatos', 'order' => 3]);
 
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->call('moveUp', $first->id)
         ->call('moveDown', $third->id);
 
@@ -564,7 +644,7 @@ test('moves a category down even when another one shares its order value', funct
     $first = Category::factory()->create(['name' => 'Camisetas', 'order' => 0]);
     $second = Category::factory()->create(['name' => 'Gorras', 'order' => 0]);
 
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->call('moveDown', $first->id);
 
     expect(Category::query()->orderBy('order')->pluck('name')->all())
@@ -577,7 +657,7 @@ test('moves a category up even when another one shares its order value', functio
     $first = Category::factory()->create(['name' => 'Camisetas', 'order' => 0]);
     $second = Category::factory()->create(['name' => 'Gorras', 'order' => 0]);
 
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->call('moveUp', $second->id);
 
     expect(Category::query()->orderBy('order')->pluck('name')->all())
@@ -592,7 +672,7 @@ test('reordering one section leaves the other sections untouched', function () {
     $mujerFirst = Category::factory()->section(StoreSection::Mujer)->create(['name' => 'Vestidos', 'order' => 1]);
     $mujerSecond = Category::factory()->section(StoreSection::Mujer)->create(['name' => 'Faldas', 'order' => 2]);
 
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->call('moveUp', $hombreSecond->id);
 
     expect($hombreFirst->fresh()->order)->toBe(1)
@@ -628,7 +708,7 @@ test('assigns consecutive order values when creating categories in sequence', fu
 test('starts the order of a new section from zero', function () {
     Category::factory()->section(StoreSection::Hombre)->create(['order' => 5]);
 
-    Livewire::test(Index::class)
+    panelDeCategorias()
         ->call('setSection', StoreSection::Ninos->value)
         ->call('create')
         ->set('name', 'Pantalones')

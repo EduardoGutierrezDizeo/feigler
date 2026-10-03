@@ -83,11 +83,19 @@ class Material extends Model
     /**
      * Every material of the store, in the order the catalog reads them.
      *
+     * The count is asked for here and not by the listing: a panel that shows how many
+     * garments a material describes would otherwise ask for it once per row, which is
+     * one query per material over the whole store.
+     *
+     * @param  list<string>  $withCount  Relations to count along with the materials.
      * @return Collection<int, Material>
      */
-    public static function listed(): Collection
+    public static function listed(array $withCount = []): Collection
     {
-        return static::query()->ordered()->get();
+        return static::query()
+            ->when($withCount !== [], fn (Builder $query) => $query->withCount($withCount))
+            ->ordered()
+            ->get();
     }
 
     /**

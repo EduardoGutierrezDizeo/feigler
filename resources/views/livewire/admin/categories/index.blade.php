@@ -2,14 +2,18 @@
     {{-- Una sola plantilla de columnas para la cabecera y para todas las filas, con la pista de
          acciones de ancho fijo: si fuera `auto`, cada grid la mediría con su propio contenido y
          las cabeceras se desplazarían respecto a sus celdas. Cabecera y filas deben declarar
-         el mismo `gap-x-*`, porque el hueco forma parte del ancho de las columnas. --}}
+         el mismo `gap-x-*`, porque el hueco forma parte del ancho de las columnas.
+
+         El título es un `h2` y no un `h1` porque esta vista ya no es una página: es la
+         pestaña «Categorías» dentro de «Detalles de productos», y el `h1` de la
+         pantalla lo lleva el contenedor. --}}
     @php($columns = 'gap-x-4 md:grid-cols-[minmax(0,1fr)_9rem_5.5rem_18rem]')
 
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-            <h1 class="font-display text-4xl font-medium text-tinta sm:text-5xl">
+            <h2 class="font-display text-3xl font-medium text-tinta sm:text-4xl">
                 Categorías
-            </h1>
+            </h2>
 
             <p class="mt-2 text-sm text-gris-calido">
                 Organiza el catálogo por secciones y define el prefijo de cada categoría.
@@ -73,11 +77,14 @@
                             <span class="rounded-full bg-hueso px-2.5 py-0.5 text-xs font-medium text-gris-calido">{{ $category->sku_prefix }}</span>
                         </div>
 
-                        @include('livewire.admin.categories.actions', [
-                            'category' => $category,
-                            'isFirst' => $row['isFirst'],
-                            'isLast' => $row['isLast'],
-                        ])
+                        <x-admin-row-actions
+                            :row-id="$category->id"
+                            :row-name="$category->name"
+                            type="categoría"
+                            :is-active="$category->is_active"
+                            :is-first="$row['isFirst']"
+                            :is-last="$row['isLast']"
+                        />
                     </div>
                 </div>
             @empty

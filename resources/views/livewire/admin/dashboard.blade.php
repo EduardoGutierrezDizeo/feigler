@@ -15,12 +15,12 @@
          the wood rule stretches a little — the only two motions on the page. --}}
     <div class="mt-12 grid gap-x-8 gap-y-10 sm:grid-cols-2">
         <a
-            href="{{ route('admin.categories.index') }}"
+            href="{{ route('admin.product-details.index') }}"
             class="group rounded-lg border border-sand bg-parchment p-8 transition-[border-color,box-shadow] duration-200 ease-in-out hover:border-brand-green/40 hover:shadow-lift focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-green"
         >
             <span class="inline-block h-px w-8 bg-wood transition-[width] duration-200 ease-in-out group-hover:w-12" aria-hidden="true"></span>
-            <span class="mt-4 block font-display text-xl font-semibold text-brand-green">Categorías</span>
-            <span class="mt-2 block text-sm text-clay">Organiza el catálogo por secciones.</span>
+            <span class="mt-4 block font-display text-xl font-semibold text-brand-green">Detalles de productos</span>
+            <span class="mt-2 block text-sm text-clay">Categorías, tallas, colores y materiales.</span>
         </a>
 
         <a

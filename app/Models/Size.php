@@ -109,12 +109,18 @@ class Size extends Model
     /**
      * The sizes of a category, in the order the catalog reads them.
      *
+     * The counts are asked for here and not by the listing: a panel that shows how
+     * many variants a size holds would otherwise ask for it once per row, which is
+     * one query per size on a category that has eight of them.
+     *
+     * @param  list<string>  $withCount  Relations to count along with the sizes.
      * @return Collection<int, Size>
      */
-    public static function listedForCategory(int $categoryId): Collection
+    public static function listedForCategory(int $categoryId, array $withCount = []): Collection
     {
         return static::query()
             ->where('category_id', $categoryId)
+            ->when($withCount !== [], fn (Builder $query) => $query->withCount($withCount))
             ->ordered()
             ->get();
     }
