@@ -15,6 +15,7 @@ use App\Models\Product;
 use App\Models\ProductImage;
 use App\Models\User;
 use Illuminate\Support\Collection;
+use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
@@ -201,6 +202,36 @@ class Images extends Component
     public function updatedCoverColorId(?int $colorId): void
     {
         $this->setCover($colorId);
+    }
+
+    /**
+     * A variant was created, edited, toggled or deleted: the colors this product
+     * is sold in may have moved, and the tab reads them again on its own next
+     * render, which is the automatic one this listener brings.
+     *
+     * The id names the product that changed, and it is the only thing this tab
+     * watches for: a color that stopped being sold is no longer where a cover
+     * could sit, so the cover it had is dropped without a word.
+     *
+     * An event with no id at all may arrive from other places, and is treated as
+     * if it were this product's own, in case it comes from a hand-built message.
+     */
+    #[On(Variants::CHANGED_EVENT)]
+    public function refreshColors(?int $productId = null): void
+    {
+        if ($productId !== null && $productId !== $this->productId) {
+            return;
+        }
+
+        if ($this->coverColorId === null) {
+            return;
+        }
+
+        $soldColors = $this->product()->variants()->pluck('color_id');
+
+        if (! $soldColors->contains($this->coverColorId)) {
+            $this->coverColorId = null;
+        }
     }
 
     /**

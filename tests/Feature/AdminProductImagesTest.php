@@ -1,8 +1,10 @@
 <?php
 
+use App\Actions\Products\CreateProductVariant;
 use App\Actions\Products\UploadProductImages;
 use App\Livewire\Admin\Products\Images;
 use App\Livewire\Admin\Products\Index;
+use App\Livewire\Admin\Products\Variants;
 use App\Models\Color;
 use App\Models\Product;
 use App\Models\ProductVariant;
@@ -616,4 +618,116 @@ test('every color of the product gets its own area to upload into', function () 
             ->assertSeeHtml('wire:model="uploads.'.$color->getKey().'"')
             ->assertSeeHtml('wire:click="uploadImages('.$color->getKey().')"');
     }
+});
+
+/**
+ * A variant born while the images tab is open must appear in it as a color to
+ * upload into without the tab being reopened: the change arrives through the
+ * event the variants tab broadcasts, and the tab re-renders on it instead of
+ * waiting for the admin to close and reopen the panel.
+ */
+test('a variant created elsewhere appears in the images tab without reopening it', function () {
+    $this->seed(RoleSeeder::class);
+
+    $producto = Product::factory()->create();
+
+    $panel = panelDeImagenes($producto);
+    $panel->assertSee('Este producto todavía no tiene variantes, así que no tiene colores donde colocar imágenes.', false);
+
+    $color = Color::factory()->create(['name' => 'Azul']);
+
+    (new CreateProductVariant)($producto, sizeOfProduct($producto, 'M')->getKey(), $color);
+
+    // El despacho que hizo la pestaña de variantes al guardar; el tab de imágenes
+    // lo recibe y vuelve a leer las variantes, que es donde aparece el color.
+    $panel
+        ->dispatch(Variants::CHANGED_EVENT, productId: $producto->getKey())
+        ->assertDontSee('Este producto todavía no tiene variantes, así que no tiene colores donde colocar imágenes.', false)
+        ->assertSeeHtml('wire:key="color-imagenes-'.$color->getKey().'"')
+        ->assertSeeHtml('wire:model="uploads.'.$color->getKey().'"');
+});
+
+/**
+ * The word the images tab listens for is also announced by the variants tab on
+ * every change that could move the colors: the creation is already covered by
+ * the listing test, and here it is the color edit and the deletion, because
+ * both leave the product sold in a different set of colors.
+ */
+test('the variants tab announces the change when a color moves or a variant is deleted', function () {
+    $this->seed(RoleSeeder::class);
+
+    $producto = Product::factory()->create();
+    $color = Color::factory()->create();
+    $otro = Color::factory()->create();
+
+    Livewire::actingAs(adminForPanel())
+        ->test(Variants::class, ['productId' => $producto->getKey()])
+        ->call('startCreating')
+        ->set('sizeId', sizeOfProduct($producto, 'M')->getKey())
+        ->set('colorId', $color->getKey())
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $variante = $producto->variants()->sole();
+
+    Livewire::actingAs(adminForPanel())
+        ->test(Variants::class, ['productId' => $producto->getKey()])
+        ->call('startEditing', $variante->getKey())
+        ->set('colorId', $otro->getKey())
+        ->call('save')
+        ->assertHasNoErrors()
+        ->assertDispatched('product-variants-changed', productId: $producto->getKey());
+
+    Livewire::actingAs(adminForPanel())
+        ->test(Variants::class, ['productId' => $producto->getKey()])
+        ->call('delete', $variante->fresh()->getKey())
+        ->assertDispatched('product-variants-changed', productId: $producto->getKey());
+});
+
+/**
+ * A color that stops being sold is also a color whose pictures have nowhere to
+ * hang: the tab reads the variants again on the announcement and drops the
+ * color, taking the cover away when it was the one carrying it.
+ */
+test('a color that stops being sold disappears from the tab and takes its cover along', function () {
+    $this->seed(RoleSeeder::class);
+    Storage::fake('public');
+
+    $producto = productoVendidoEn(1);
+    $color = $producto->colors()->first();
+
+    $panel = panelDeImagenes($producto);
+    $panel->set('uploads.'.$color->id, [foto()])->call('uploadImages', $color->id);
+
+    $panel->assertSet('coverColorId', $color->getKey());
+
+    $producto->variants()->delete();
+
+    $panel
+        ->dispatch(Variants::CHANGED_EVENT, productId: $producto->getKey())
+        ->assertSet('coverColorId', null)
+        ->assertDontSeeHtml('wire:key="color-imagenes-'.$color->getKey().'"');
+});
+
+/**
+ * The announcement names the product that moved and the tab only answers its
+ * own: a change in the variants of another product must not touch this one.
+ */
+test('an event announced for another product leaves the tab alone', function () {
+    $this->seed(RoleSeeder::class);
+
+    $producto = productoVendidoEn(1);
+    $color = $producto->colors()->first();
+
+    $panel = panelDeImagenes($producto);
+
+    $otro = Product::factory()->create();
+    $otroColor = Color::factory()->create();
+
+    (new CreateProductVariant)($otro, sizeOfProduct($otro)->getKey(), $otroColor);
+
+    $panel
+        ->dispatch(Variants::CHANGED_EVENT, productId: $otro->getKey())
+        ->assertDontSeeHtml('wire:key="color-imagenes-'.$otroColor->getKey().'"')
+        ->assertSeeHtml('wire:key="color-imagenes-'.$color->getKey().'"');
 });
