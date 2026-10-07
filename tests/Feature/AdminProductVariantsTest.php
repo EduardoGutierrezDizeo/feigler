@@ -523,6 +523,116 @@ test('starting a new one from an existing one keeps its size and color', functio
         ->assertSet('colorId', $color->getKey());
 });
 
+/**
+ * The stock of a variant is the one the form writes, and a form nobody wrote
+ * anything in must not be read as if it said zero: the creation treats a blank
+ * as a zero at save time, and until then the field stays empty, showing only
+ * the zero as a hint of what is expected.
+ */
+test('the creation form opens with an empty stock and only a hint of a zero', function () {
+    $this->seed(RoleSeeder::class);
+
+    $producto = Product::factory()->create();
+
+    // El valor por defecto se comprueba apenas montado, sin llamar a nada: es lo
+    // único que delata un «0» que el campo no escribió (cualquier apertura del
+    // formulario pasa por `resetForm()`, que también empieza en blanco).
+    variantPanel($producto)
+        ->assertSet('initialStock', '')
+        ->call('startCreating')
+        ->assertSet('initialStock', '')
+        ->assertSeeHtml('id="variant-stock"')
+        ->assertSeeHtml('placeholder="0"')
+        ->assertDontSeeHtml('value="0"');
+});
+
+/**
+ * The same blank applies when the form is opened from an existing variant: its
+ * size and color are copied, but its stock is not, because a changing stock
+ * belongs to the history of a variant while a new one always begins again.
+ */
+test('starting a new one from an existing one leaves the stock blank', function () {
+    $this->seed(RoleSeeder::class);
+
+    $producto = Product::factory()->create();
+    $color = Color::factory()->create();
+
+    variantPanel($producto)
+        ->call('startCreating')
+        ->set('sizeId', sizeOfProduct($producto, 'M')->getKey())
+        ->set('colorId', $color->getKey())
+        ->set('initialStock', '12')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $variante = $producto->variants()->sole();
+
+    variantPanel($producto)
+        ->call('startCreatingFrom', $variante->getKey())
+        ->assertSet('initialStock', '');
+});
+
+test('saving with an empty stock creates the variant with zero and no movement', function () {
+    $this->seed(RoleSeeder::class);
+
+    $producto = Product::factory()->create();
+    $color = Color::factory()->create();
+
+    variantPanel($producto)
+        ->call('startCreating')
+        ->set('sizeId', sizeOfProduct($producto, 'M')->getKey())
+        ->set('colorId', $color->getKey())
+        ->call('save')
+        ->assertHasNoErrors()
+        ->assertSet('notice', 'Variante creada correctamente.');
+
+    $variante = $producto->variants()->sole();
+
+    expect($variante->stock)->toBe(0)
+        ->and($variante->inventoryMovements()->count())->toBe(0);
+});
+
+test('saving with a written stock creates it and records the initial movement', function () {
+    $this->seed(RoleSeeder::class);
+
+    $producto = Product::factory()->create();
+    $color = Color::factory()->create();
+
+    variantPanel($producto)
+        ->call('startCreating')
+        ->set('sizeId', sizeOfProduct($producto, 'M')->getKey())
+        ->set('colorId', $color->getKey())
+        ->set('initialStock', '5')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $variante = $producto->variants()->sole();
+    $movimiento = $variante->inventoryMovements()->sole();
+
+    expect($variante->stock)->toBe(5)
+        ->and($movimiento->type)->toBe(CreateProductVariant::INITIAL_STOCK_TYPE)
+        ->and($movimiento->quantity)->toBe(5)
+        ->and($movimiento->note)->toBe(CreateProductVariant::INITIAL_STOCK_REASON);
+});
+
+test('refuses a stock that is negative or not a whole number and keeps the form open', function (string $stock) {
+    $this->seed(RoleSeeder::class);
+
+    $producto = Product::factory()->create();
+    $color = Color::factory()->create();
+
+    variantPanel($producto)
+        ->call('startCreating')
+        ->set('sizeId', sizeOfProduct($producto, 'M')->getKey())
+        ->set('colorId', $color->getKey())
+        ->set('initialStock', $stock)
+        ->call('save')
+        ->assertHasErrors(['initialStock'])
+        ->assertSet('showForm', true);
+
+    expect($producto->variants()->count())->toBe(0);
+})->with(['-1', '2.5', 'abc']);
+
 test('adjusts the stock in both directions and writes the reason down', function () {
     $this->seed(RoleSeeder::class);
 

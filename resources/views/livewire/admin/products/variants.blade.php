@@ -98,6 +98,7 @@
                             wire:model="initialStock"
                             type="text"
                             inputmode="numeric"
+                            placeholder="0"
                             class="mt-1 block w-full"
                         />
                         <x-input-error :messages="$errors->get('initialStock')" class="mt-2" />

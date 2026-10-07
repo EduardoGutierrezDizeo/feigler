@@ -56,8 +56,11 @@ class Variants extends Component
     /**
      * The stock a variant is born with. Only the creation form writes it: the
      * stock of a variant that already exists only moves through adjustments.
+     *
+     * It is empty while the form is open so a stock nobody wrote is not read as
+     * if it were a real zero; the save turns the blank into a zero itself.
      */
-    public string $initialStock = '0';
+    public string $initialStock = '';
 
     /**
      * The SKU of the variant being edited, kept as text so the form can show it as
@@ -136,6 +139,13 @@ class Variants extends Component
     public function save(): void
     {
         $product = $this->product();
+
+        // Un stock sin escribir no es un stock inválido: la variante nueva nace
+        // sin existencias y el cero se entiende antes de preguntar por el campo,
+        // de modo que un formulario que simplemente quedó en blanco se guarda.
+        if ($this->editingId === null && $this->initialStock === '') {
+            $this->initialStock = '0';
+        }
 
         // The sizes belong to a category, so the only sizes this form can offer are
         // the ones of the category of this product. A size id of another category
@@ -473,7 +483,7 @@ class Variants extends Component
         $this->editingSku = null;
         $this->sizeId = null;
         $this->colorId = null;
-        $this->initialStock = '0';
+        $this->initialStock = '';
         $this->resetValidation(['sizeId', 'colorId', 'initialStock']);
     }
 }
