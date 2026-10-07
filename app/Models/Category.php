@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\HomeImageSource;
 use App\Enums\StoreSection;
 use Database\Factories\CategoryFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -28,6 +29,10 @@ class Category extends Model
         'sku_prefix',
         'order',
         'is_active',
+        'home_image_source',
+        'home_image_path',
+        'home_image_thumbnail_path',
+        'home_image_product_image_id',
     ];
 
     /**
@@ -41,6 +46,7 @@ class Category extends Model
             'section' => StoreSection::class,
             'order' => 'integer',
             'is_active' => 'boolean',
+            'home_image_source' => HomeImageSource::class,
         ];
     }
 

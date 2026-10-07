@@ -403,9 +403,12 @@ test('guardia de consultas: la raíz usa un número fijo con 4 novedades y 3 sec
 
     expect(array_column($payload['sections'], 'key'))->toBe(['hombre', 'mujer', 'ninos'])
         ->and(preg_match_all('/<article\b/', $response->getContent()))->toBe(4)
-        // Eran 24 cuando cada tarjeta consultaba su stock y sus colores; ahora
-        // se arman con las relaciones ya cargadas y el recuento baja a 17.
-        ->and($consultas)->toBe(17);
+        // Eran 24 cuando cada tarjeta consultaba su stock y sus colores; el conteo
+        // de productos de todas las categorías pasó a una sola consulta agrupada y
+        // la lectura de la lista de novedades manuales añadió una, así que ahora
+        // son 16: 9 de secciones, 1 del conteo agrupado, 1 de las filas manuales
+        // (vacías aquí) y 5 de las novedades automáticas.
+        ->and($consultas)->toBe(16);
 });
 
 test('fuera de local la raíz sigue sirviendo welcome y el panel sigue protegido', function () {
