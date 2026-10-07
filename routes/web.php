@@ -4,6 +4,12 @@ use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
+    if (app()->environment('local')) {
+        // En local, si hay datos reales, mostrar storefront.home; si no hay, mantener vista previa disponible via /_vista
+        // pero queremos raíz con datos reales cuando existan. Por ahora, usar servicio HomePage.
+        return view('storefront.home', (new \App\Services\Storefront\HomePage())->home());
+    }
+
     return view('welcome');
 });
 

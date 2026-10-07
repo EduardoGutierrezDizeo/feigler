@@ -1,0 +1,25 @@
+﻿
+   FAIL  Tests\Feature\HomePageTest
+  Ô¿» ruta / responde 200 y renderiza con base vac├¡a                                                               1.18s  
+  ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ  
+   FAILED  Tests\Feature\HomePageTest > ruta / responde 200 y renderiza con base vac├¡a                 QueryException   
+  SQLSTATE[HY000]: General error: 1 no such table: categories (Connection: sqlite, Database: :memory:, SQL: select * from "categories" where "section" = hombre and exists (select * from "products" where "categories"."id" = "products"."category_id" and "status" != inactive and exists (select * from "product_variants" where "products"."id" = "product_variants"."product_id" and "is_active" = 1)) order by "order" asc, "id" asc)
+
+  at vendor\laravel\framework\src\Illuminate\Database\Connection.php:420
+    416Ôûò             // For select statements, we'll simply execute the query and return an array
+    417Ôûò             // of the database result set. Each element in the array will be a single
+    418Ôûò             // row from the database table, and will either be an array or objects.
+    419Ôûò             $statement = $this->prepared(
+  Ô×£ 420Ôûò                 $this->getPdoForSelect($useReadPdo)->prepare($query)
+    421Ôûò             );
+    422Ôûò 
+    423Ôûò             $this->bindValues($statement, $this->prepareBindings($bindings));
+    424Ôûò
+
+  1   vendor\laravel\framework\src\Illuminate\Database\Connection.php:420
+  2   vendor\laravel\framework\src\Illuminate\Database\Connection.php:827
+
+
+  Tests:    1 failed (0 assertions)
+  Duration: 1.58s
+

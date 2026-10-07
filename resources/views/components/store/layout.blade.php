@@ -84,9 +84,9 @@
     <footer class="mt-20 border-t border-arena/70 bg-linear-to-br from-crema/40 to-arena/30">
         <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-x-8 gap-y-3 px-4 py-8 text-sm text-gris-calido sm:px-8">
             <span class="font-display text-base tracking-[0.45em] text-verde">FEIGLER</span>
-            <span>Calle 2 · Santander</span>
-            <a href="#" class="transition hover:text-verde">Instagram</a>
-            <a href="#" class="transition hover:text-verde">WhatsApp</a>
+            <span>{{ config('tienda.direccion') }}</span>
+            <a href="{{ config('tienda.instagram') }}" class="transition hover:text-verde">Instagram</a>
+            <a href="{{ config('tienda.whatsapp') }}" class="transition hover:text-verde">WhatsApp</a>
         </div>
     </footer>
 
