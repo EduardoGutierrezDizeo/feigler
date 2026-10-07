@@ -69,7 +69,7 @@
                             :aria-disabled="(option.disabled).toString()"
                             :disabled="option.disabled"
                             @click="selectOption(option)"
-                            @mouseenter="$el.focus()"
+                            @mouseenter="$el.focus({ preventScroll: true })"
                             :class="{
                                 'px-3 py-2 text-sm text-left w-full flex items-center justify-between': true,
                                 'opacity-40 cursor-not-allowed': option.disabled,

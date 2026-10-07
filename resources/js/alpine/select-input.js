@@ -54,14 +54,32 @@ document.addEventListener('alpine:init', () => {
                 this.$dispatch('select-changed', { value: select.value });
             });
 
-            // Cierra al hacer scroll/resize (como pide el requisito)
-            const closeOnScrollResize = () => {
+            // Cierra al hacer scroll fuera del panel (ventana u otro contenedor,
+            // p. ej. un modal) o con resize. El scroll interno del propio panel
+            // —el que produce la rueda y la barra del ratón— no debe cerrarlo.
+            const isPanelScroll = (event) => {
+                const panel = this.$refs.panel;
+
+                if (! panel || ! (event.target instanceof Node)) {
+                    return false;
+                }
+
+                return event.target === panel || panel.contains(event.target);
+            };
+            const closeOnScroll = (event) => {
+                if (this.open && ! isPanelScroll(event)) {
+                    this.close();
+                }
+            };
+            // El resize va dirigido a window, que no es un Node: este listener
+            // no mira event.target, solo cierra.
+            const closeOnResize = () => {
                 if (this.open) {
                     this.close();
                 }
             };
-            window.addEventListener('scroll', closeOnScrollResize, true);
-            window.addEventListener('resize', closeOnScrollResize);
+            window.addEventListener('scroll', closeOnScroll, true);
+            window.addEventListener('resize', closeOnResize);
 
             // Cierra con Escape global cuando abierto
             this.$watch('open', (value) => {
@@ -108,7 +126,8 @@ document.addEventListener('alpine:init', () => {
             this.focusedIndex = this.findSelectedIndex();
             this.$nextTick(() => {
                 this.positionPanel();
-                this.$refs.panel?.focus();
+                this.scrollToFocused();
+                this.$refs.panel?.focus({ preventScroll: true });
             });
         },
 
@@ -117,7 +136,7 @@ document.addEventListener('alpine:init', () => {
                 return;
             }
             this.open = false;
-            this.$refs.button?.focus();
+            this.$refs.button?.focus({ preventScroll: true });
         },
 
         buildOptions() {
@@ -325,7 +344,7 @@ document.addEventListener('alpine:init', () => {
                 next = 0;
             }
             this.focusedIndex = enabled[next].i;
-            this.$refs.panel?.children[this.focusedIndex]?.focus();
+            this.focusFocusedOption();
         },
 
         currentOptionIndex() {
@@ -333,11 +352,29 @@ document.addEventListener('alpine:init', () => {
             return enabled[this.focusedIndex]?.i ?? -1;
         },
 
+        /**
+         * Enfoca la opción marcada y la deja visible moviendo SOLO el scrollTop
+         * del panel. preventScroll evita que el navegador desplace el elemento
+         * a la vista —y con él a los ancestros, lo que dispararía el scroll
+         * global que cierra el panel—, y el ajuste manual sobre offsetTop y
+         * offsetHeight evita llamar al desplazamiento del navegador, que
+         * también mueve contenedores externos.
+         * Lo usan solo los atajos de teclado, nunca el ratón.
+         */
+        focusFocusedOption() {
+            const panel = this.$refs.panel;
+            const target = panel?.querySelector(`[data-option-index="${this.focusedIndex}"]`);
+            if (target) {
+                target.focus({ preventScroll: true });
+            }
+            this.scrollToFocused();
+        },
+
         focusFirst() {
             const enabled = this.options.map((o, i) => ({ o, i })).filter(x => x.o.type === 'option' && ! x.o.disabled);
             if (enabled.length > 0) {
                 this.focusedIndex = enabled[0].i;
-                this.scrollToFocused();
+                this.focusFocusedOption();
             }
         },
 
@@ -345,13 +382,28 @@ document.addEventListener('alpine:init', () => {
             const enabled = this.options.map((o, i) => ({ o, i })).filter(x => x.o.type === 'option' && ! x.o.disabled);
             if (enabled.length > 0) {
                 this.focusedIndex = enabled[enabled.length - 1].i;
-                this.scrollToFocused();
+                this.focusFocusedOption();
             }
         },
 
         scrollToFocused() {
-            const el = this.$refs.panel?.querySelector(`[data-option-index="${this.focusedIndex}"]`);
-            el?.scrollIntoView({ block: 'nearest' });
+            const panel = this.$refs.panel;
+            if (! panel) {
+                return;
+            }
+            const el = panel.querySelector(`[data-option-index="${this.focusedIndex}"]`);
+            if (! el) {
+                return;
+            }
+            const top = el.offsetTop;
+            const bottom = top + el.offsetHeight;
+            const visibleTop = panel.scrollTop;
+            const visibleBottom = visibleTop + panel.clientHeight;
+            if (top < visibleTop) {
+                panel.scrollTop = top;
+            } else if (bottom > visibleBottom) {
+                panel.scrollTop = bottom - panel.clientHeight;
+            }
         },
 
         typeahead(key) {
@@ -364,7 +416,7 @@ document.addEventListener('alpine:init', () => {
             const found = candidates.find(x => x.o.text.toLowerCase().startsWith(lower));
             if (found) {
                 this.focusedIndex = found.i;
-                this.scrollToFocused();
+                this.focusFocusedOption();
             }
         },
 
