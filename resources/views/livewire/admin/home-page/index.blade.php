@@ -1,12 +1,12 @@
 <div>
-    {{-- Página contenedora. Solo es dueña del título y de cuál de las pestañas está
-         montada; el trabajo lo hace el hijo de la pestaña activa.
+{{-- Página contenedora. Solo es dueña del título y de cuál de las pestañas está
+     montada; el trabajo lo hace el hijo de la pestaña activa.
 
-         El tab está a la espera de las piezas que completarán la portada (el bloque
-         «Lo más nuevo»), así que la barra de pestañas solo se dibuja cuando el enum
-         declaró más de una: con una sola el selector sobraría. Cada hijo se monta con
-         una `wire:key` propia, lo que hace que Livewire entre de lleno con un
-         componente nuevo y limpio al cambiar de tab. --}}
+     La barra de pestañas se dibuja cuando el enum declaró más de una: con una
+     sola el selector sobraría. Cada hijo se monta con una `wire:key` propia, lo
+     que hace que Livewire entre de lleno con un componente nuevo y limpio al
+     cambiar de tab: un formulario abierto en otra pestaña no sigue esperando
+     cuando se vuelve. --}}
     <h1 class="font-display text-4xl font-medium text-tinta sm:text-5xl">
         Vista principal
     </h1>
@@ -47,6 +47,14 @@
         role="tabpanel"
         @if (count(\App\Enums\HomePageTab::cases()) > 1) aria-labelledby="home-tab-{{ $activeTab->value }}" @endif
     >
-        <livewire:admin.home-page.categories wire:key="home-panel-categorias" />
+        @switch($activeTab)
+            @case(\App\Enums\HomePageTab::Categorias)
+                <livewire:admin.home-page.categories wire:key="home-panel-categorias" />
+                @break
+
+            @case(\App\Enums\HomePageTab::MasNuevo)
+                <livewire:admin.home-page.featured wire:key="home-panel-mas-nuevo" />
+                @break
+        @endswitch
     </div>
 </div>

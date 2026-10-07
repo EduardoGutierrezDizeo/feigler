@@ -4,15 +4,12 @@ namespace App\Services\Storefront;
 
 use App\Enums\StoreSection;
 use App\Models\Category;
-use App\Models\HomeFeaturedProduct;
 use App\Models\Product;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
 class HomePage
 {
-    private const NOVIDADES_LIMIT = 4;
-
     public function home(): array
     {
         $sections = $this->buildSections();
@@ -103,13 +100,10 @@ class HomePage
     /**
      * Las prendas destacadas de la portada, ya convertidas en tarjetas.
      *
-     * Las variantes se traen con su color para que ProductCards arme cada
-     * tarjeta sin volver a consultar: una tarjeta armada a mano costaría dos
-     * consultas más por cada novedad.
-     *
-     * Una lista manual de novedades gana sobre la regla automática; solo cuando
-     * no hay elección, o ninguna de las elegidas se muestra ya, se recurre a lo
-     * de siempre.
+     * La decisión de cuáles son — y por qué — la toma HomeNewProducts, la misma
+     * clase a la que el panel pregunta en «Lo más nuevo» para enseñar el día de
+     * hoy. Aquí solo se traducen los productos en tarjetas, que es el único
+     * trabajo de esta página.
      *
      * @return list<array{
      *     id: int,
@@ -123,20 +117,9 @@ class HomePage
      */
     private function buildNewProducts(): array
     {
-        $featured = $this->getManualFeaturedProducts();
+        $novelties = app(HomeNewProducts::class)->effective();
 
-        $products = $featured ?? Product::query()
-            ->with(['category', 'images'])
-            ->withWhereHas('variants', function ($q) {
-                $q->where('is_active', true)->with('color');
-            })
-            ->visible()
-            ->orderBy('created_at', 'desc')
-            ->orderBy('id', 'desc')
-            ->limit(self::NOVIDADES_LIMIT)
-            ->get();
-
-        return ProductCards::makeAll($products);
+        return ProductCards::makeAll($novelties['products']);
     }
 
     private function getVisibleCategoriesForSection(StoreSection $section): Collection
@@ -177,48 +160,5 @@ class HomePage
             ->groupBy('category_id')
             ->selectRaw('category_id, count(*) as total')
             ->pluck('total', 'category_id');
-    }
-
-    /**
-     * The hand-picked highlights, when there is a decision; null when there is
-     * none or when none of the chosen products is shown, which is when the
-     * automatic rule of always keeps running.
-     *
-     * The rows are read first and the products in a second query keyed by id, so
-     * a list of any length costs the same. Only the chosen products are shown,
-     * in their chosen order and with the visible ones keeping their slot: a list
-     * of three is not filled with automatic picks.
-     *
-     * @return Collection<int, Product>|null
-     */
-    private function getManualFeaturedProducts(): ?Collection
-    {
-        $rows = HomeFeaturedProduct::query()
-            ->orderBy('order')
-            ->orderBy('id')
-            ->get();
-
-        if ($rows->isEmpty()) {
-            return null;
-        }
-
-        $products = Product::query()
-            ->with(['category', 'images'])
-            ->withWhereHas('variants', function ($q) {
-                $q->where('is_active', true)->with('color');
-            })
-            ->visible()
-            ->whereIn('id', $rows->pluck('product_id'))
-            ->get()
-            ->keyBy('id');
-
-        $featured = collect($rows)
-            ->pluck('product_id')
-            ->map(fn (int $productId) => $products[$productId] ?? null)
-            ->filter()
-            ->take(self::NOVIDADES_LIMIT)
-            ->values();
-
-        return $featured->isEmpty() ? null : $featured;
     }
 }
