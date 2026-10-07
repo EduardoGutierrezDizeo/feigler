@@ -408,80 +408,98 @@
                     @else
                         <ul class="mt-3 space-y-3">
                             @foreach ($composition as $indice => $fila)
-                                @php
-                                    // Un material no puede ocupar dos filas, y el pivote no
-                                    // tiene ninguna clave que lo impida: lo rechaza la acción.
-                                    // El selector lo adelanta quitando de esta fila los
-                                    // materiales que ya están en las otras.
-                                    $enOtrasFilas = [];
-                                    foreach ($composition as $otroIndice => $otraFila) {
-                                        if ($otroIndice !== $indice && ($otraFila['material_id'] ?? '') !== '') {
-                                            $enOtrasFilas[] = (int) $otraFila['material_id'];
+                                    @php
+                                        // Un material no puede ocupar dos filas, y el pivote no
+                                        // tiene ninguna clave que lo impida: lo rechaza la acción.
+                                        // El selector lo adelanta quitando de esta fila los
+                                        // materiales que ya están en las otras.
+                                        $enOtrasFilas = [];
+                                        foreach ($composition as $otroIndice => $otraFila) {
+                                            if ($otroIndice !== $indice && ($otraFila['material_id'] ?? '') !== '') {
+                                                $enOtrasFilas[] = (int) $otraFila['material_id'];
+                                            }
                                         }
-                                    }
-                                @endphp
 
-                                <li
-                                    wire:key="composition-{{ $indice }}"
-                                    class="grid items-end gap-3 sm:grid-cols-[minmax(0,1fr)_7rem_auto]"
-                                >
-                                    <div>
-                                        <x-input-label for="composition-{{ $indice }}-material" value="Material" />
-                                        <x-select-input
-                                            id="composition-{{ $indice }}-material"
-                                            wire:model="composition.{{ $indice }}.material_id"
-                                            class="mt-1 block w-full"
-                                            required
-                                        >
-                                            <option value="">— Selecciona un material —</option>
-                                            @foreach ($materials as $material)
-                                                @continue(in_array((int) $material->id, $enOtrasFilas, true))
-                                                {{-- El material que el producto ya tiene se ofrece aunque
-                                                     esté desactivado: quitarlo del selector obligaría a
-                                                     cambiar la composición para poder guardar el producto. --}}
-                                                <option
-                                                    value="{{ $material->id }}"
-                                                    @selected((string) $material->id === (string) ($fila['material_id'] ?? ''))
-                                                >
-                                                    {{ $material->name }}{{ $material->is_active ? '' : ' (inactivo)' }}
-                                                </option>
-                                            @endforeach
-                                        </x-select-input>
-                                        <x-input-error
-                                            :messages="$errors->get('composition.'.$indice.'.material_id')"
-                                            class="mt-2"
-                                        />
-                                    </div>
+                                        // Los errores de la fila viven bajo ella, en una línea que
+                                        // ocupa todo el ancho, y no dentro de sus columnas: si
+                                        // el mensaje del porcentaje quepiera en la columna de
+                                        // 7rem la fila crecería de arriba y empujaría la suma,
+                                        // y con un tamaño fijo el mensaje se desbordaría.
+                                        $erroresDeLaFila = array_merge(
+                                            $errors->get('composition.'.$indice.'.material_id'),
+                                            $errors->get('composition.'.$indice.'.percentage'),
+                                        );
+                                    @endphp
 
-                                    <div>
-                                        <x-input-label for="composition-{{ $indice }}-percentage" value="Porcentaje" />
-                                        <x-text-input
-                                            id="composition-{{ $indice }}-percentage"
-                                            wire:model.live="composition.{{ $indice }}.percentage"
-                                            type="number"
-                                            inputmode="numeric"
-                                            min="1"
-                                            max="100"
-                                            step="1"
-                                            class="mt-1 block w-full"
-                                            required
-                                        />
-                                        <x-input-error
-                                            :messages="$errors->get('composition.'.$indice.'.percentage')"
-                                            class="mt-2"
-                                        />
-                                    </div>
-
-                                    <x-secondary-button
-                                        type="button"
-                                        wire:click="removeMaterialRow({{ $indice }})"
-                                        wire:loading.attr="disabled"
-                                        title="Quitar este material"
-                                        class="mb-0.5"
+                                    <li
+                                        wire:key="composition-{{ $indice }}"
+                                        class="grid items-start gap-3 sm:grid-cols-[minmax(0,1fr)_7rem_auto]"
                                     >
-                                        Quitar
-                                    </x-secondary-button>
-                                </li>
+                                        <div>
+                                            <x-input-label for="composition-{{ $indice }}-material" value="Material" />
+                                            <x-select-input
+                                                id="composition-{{ $indice }}-material"
+                                                wire:model="composition.{{ $indice }}.material_id"
+                                                class="mt-1 block w-full"
+                                                required
+                                            >
+                                                <option value="">— Selecciona un material —</option>
+                                                @foreach ($materials as $material)
+                                                    @continue(in_array((int) $material->id, $enOtrasFilas, true))
+                                                    {{-- El material que el producto ya tiene se ofrece aunque
+                                                         esté desactivado: quitarlo del selector obligaría a
+                                                         cambiar la composición para poder guardar el producto. --}}
+                                                    <option
+                                                        value="{{ $material->id }}"
+                                                        @selected((string) $material->id === (string) ($fila['material_id'] ?? ''))
+                                                    >
+                                                        {{ $material->name }}{{ $material->is_active ? '' : ' (inactivo)' }}
+                                                    </option>
+                                                @endforeach
+                                            </x-select-input>
+                                        </div>
+
+                                        <div>
+                                            <x-input-label for="composition-{{ $indice }}-percentage" value="Porcentaje" />
+                                            <x-text-input
+                                                id="composition-{{ $indice }}-percentage"
+                                                wire:model.live="composition.{{ $indice }}.percentage"
+                                                type="number"
+                                                inputmode="numeric"
+                                                min="1"
+                                                max="100"
+                                                step="1"
+                                                class="mt-1 block w-full"
+                                                required
+                                            />
+                                        </div>
+
+                                        {{-- El Quitar se empuja hasta quedar junto a los campos y
+                                             no junto a sus mensajes: la fila no se desacomoda
+                                             cuando llega un error. --}}
+                                        <x-secondary-button
+                                            type="button"
+                                            wire:click="removeMaterialRow({{ $indice }})"
+                                            wire:loading.attr="disabled"
+                                            title="Quitar este material"
+                                            class="mt-6"
+                                        >
+                                            Quitar
+                                        </x-secondary-button>
+
+                                        @if ($erroresDeLaFila !== [])
+                                            <div data-composition-row-error class="col-span-full">
+                                                <x-input-error
+                                                    :messages="$errors->get('composition.'.$indice.'.material_id')"
+                                                    class="mt-2"
+                                                />
+                                                <x-input-error
+                                                    :messages="$errors->get('composition.'.$indice.'.percentage')"
+                                                    class="mt-2"
+                                                />
+                                            </div>
+                                        @endif
+                                    </li>
                             @endforeach
                         </ul>
                     @endif

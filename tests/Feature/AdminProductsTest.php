@@ -1251,8 +1251,73 @@ describe('la composición de materiales', function () {
     })->with([
         ['0', 'El porcentaje no puede ser menor que 1.'],
         ['101', 'El porcentaje no puede superar 100.'],
+        ['50,5', 'El porcentaje debe ser un número entero.'],
         ['diez', 'El porcentaje debe ser un número entero.'],
     ]);
+
+    /**
+     * La línea del aviso es de la fila y no de la columna: si el mensaje del
+     * porcentaje cupiera (o se desbordara) dentro de su columna de 7rem, la fila
+     * crecería y empujaría la suma de abajo; bajo la fila, en todo su ancho, la
+     * fila se queda igual sea que venga un error o no.
+     */
+    test('el error de porcentaje vive bajo la fila, en toda su línea, y no dentro de la columna', function (string $porcentaje, string $mensaje) {
+        $polos = numberedCategory('PL', 'Polos');
+        $algodon = Material::factory()->create(['name' => 'Algodón']);
+
+        $panel = Livewire::actingAs(adminForPanel())
+            ->test(Index::class)
+            ->call('create')
+            ->set('name', 'Polo clásico')
+            ->set('categoryId', $polos->id)
+            ->set('basePrice', '89900')
+            ->call('addMaterialRow')
+            ->set('composition', [['material_id' => (string) $algodon->getKey(), 'percentage' => $porcentaje]])
+            ->call('save')
+            ->assertHasErrors(['composition.0.percentage' => $mensaje]);
+
+        // El aviso está en el contenedor de errores de la fila y puede leerse.
+        $panel
+            ->assertSeeHtml('data-composition-row-error')
+            ->assertSee($mensaje, false);
+
+        // Y la columna del porcentaje — del propio campo hasta el botón que lo
+        // quita — no lo lleva: de ahí venía la fila que se desacomodaba.
+        $html = $panel->html();
+
+        $inicio = strpos($html, 'wire:model.live="composition.0.percentage"');
+        $fin = strpos($html, 'wire:click="removeMaterialRow(0)"');
+
+        expect($inicio)->not->toBeFalse()
+            ->and($fin)->not->toBeFalse();
+
+        $columna = substr($html, $inicio, $fin - $inicio);
+
+        expect($columna)->not->toContain($mensaje);
+    })->with([
+        ['0', 'El porcentaje no puede ser menor que 1.'],
+        ['101', 'El porcentaje no puede superar 100.'],
+        ['50,5', 'El porcentaje debe ser un número entero.'],
+        ['diez', 'El porcentaje debe ser un número entero.'],
+    ]);
+
+    test('sin errores la fila no lleva contenedor y sus campos siguen en pie', function () {
+        $polos = numberedCategory('PL', 'Polos');
+        $algodon = Material::factory()->create(['name' => 'Algodón']);
+
+        Livewire::actingAs(adminForPanel())
+            ->test(Index::class)
+            ->call('create')
+            ->set('name', 'Polo clásico')
+            ->set('categoryId', $polos->id)
+            ->set('basePrice', '89900')
+            ->call('addMaterialRow')
+            ->set('composition', [['material_id' => (string) $algodon->getKey(), 'percentage' => '100']])
+            ->assertDontSeeHtml('data-composition-row-error')
+            ->assertSeeHtml('wire:model="composition.0.material_id"')
+            ->assertSeeHtml('wire:model.live="composition.0.percentage"')
+            ->assertSeeHtml('wire:click="removeMaterialRow(0)"');
+    });
 
     test('un material repetido se rechaza en la fila que lo repite', function () {
         $polos = numberedCategory('PL', 'Polos');
