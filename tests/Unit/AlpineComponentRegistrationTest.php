@@ -184,16 +184,17 @@ function registeredAlpineComponents(string $projectPath): array
 }
 
 /**
- * Modulos de resources/js que usan el magic `$el` como identificador suelto.
+ * Modulos de resources/js que usan magics de Alpine como identificadores sueltos
+ * dentro de métodos de componentes registrados con `Alpine.data()`.
  *
- * Los magics de Alpine (`$el`, `$refs`, `$store`, `$data`) solo existen como
- * propiedades del componente dentro de una expresion evaluada por Alpine. En un
- * metodo de `Alpine.data()` un `$el` a secas es un `ReferenceError`, porque el
- * identificador no esta en el ambito del metodo.
+ * Los magics de Alpine (`$el`, `$refs`, `$store`, `$data`, `$root`, `$dispatch`,
+ * `$nextTick`, `$watch`) solo existen como propiedades del componente dentro de
+ * una expresión evaluada por Alpine. En un método de `Alpine.data()` un magic
+ * a secas (sin `this.`) es un `ReferenceError`.
  *
  * @return list<string>
  */
-function modulesUsingBareElMagic(string $projectPath): array
+function modulesUsingBareAlpineMagics(string $projectPath): array
 {
     $files = new RecursiveIteratorIterator(
         new RecursiveDirectoryIterator($projectPath.'/resources/js', RecursiveDirectoryIterator::SKIP_DOTS)
@@ -206,10 +207,18 @@ function modulesUsingBareElMagic(string $projectPath): array
             continue;
         }
 
-        // Se lee sin comentarios para que un `$el` mencionado en un JSDoc no se
-        // cuente como uso real.
-        if (preg_match('/(?<![\w.$])\$el\b/', javascriptSource($file->getPathname()))) {
-            $offenders[] = str_replace('\\', '/', substr($file->getPathname(), strlen($projectPath) + 1));
+        $path = $file->getPathname();
+        $source = javascriptSource($path);
+
+        // Ignorar archivos que no registran Alpine.data() (plugins, barrel, etc.)
+        if (! preg_match('/Alpine\.data\s*\(/', $source)) {
+            continue;
+        }
+
+        // Buscar magics sueltos: $el, $refs, $dispatch, $nextTick, $watch, $store, $root
+        // Deben ir sin this. delante
+        if (preg_match('/(?<![\w.$])\$(?:el|refs|dispatch|nextTick|watch|store|root)\b/', $source)) {
+            $offenders[] = str_replace('\\', '/', substr($path, strlen($projectPath) + 1));
         }
     }
 
@@ -284,17 +293,17 @@ test('the admin form modal entangles showForm in the x-data object so it can ope
     expect($view)->toContain('x-data="adminModal($wire)"');
 });
 
-test('Alpine component methods reach the root element through this.$el', function () {
+test('Alpine component methods must use this.$el, this.$refs, this.$dispatch, this.$nextTick, this.$watch, this.$store, this.$root', function () {
     $projectPath = dirname(__DIR__, 2);
 
-    expect(modulesUsingBareElMagic($projectPath))->toBeEmpty();
+    expect(modulesUsingBareAlpineMagics($projectPath))->toBeEmpty();
 
-    // El dialogo de confirmacion es el que suffer el fallo: `focusables()` se llama
-    // desde un `$nextTick`, y un `ReferenceError` ahi no se queda en su componente.
-    // Aborta el bucle `releaseNextTicks()` de Alpine y, con el, la transicion que
-    // estaba invoking: el toast recien insertado se queda en su estado
-    // `enter-start` (`opacity-0`) y el panel no muestra ningun aviso aunque el
-    // servidor si lo haya despachado.
+    // El dialogo de confirmacion es el que sufrió el fallo: `focusables()` se llama
+    // desde un `$nextTick`, y un `ReferenceError` ahí no se queda en su componente.
+    // Aborta el bucle `releaseNextTicks()` de Alpine y, con ello, la transición
+    // que lo estaba invocando.
     expect(javascriptSource($projectPath.'/resources/js/alpine/confirm-dialog.js'))
         ->toMatch('/this\.\$el\.querySelectorAll\(selector\)/');
+
+    // El componente selectInput también debe respetar estas reglas (sin magics sueltos).
 });

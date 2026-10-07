@@ -29,3 +29,4 @@ import './color-hex-input.js';
 import './confirm-dialog.js';
 import './page-enter.js';
 import './price-input.js';
+import './select-input.js';
