@@ -67,3 +67,20 @@ test('the admin page renders the toaster inside the wrapper with the sidebar sta
 
     expect($dentroDelWrapper)->toBeTrue();
 });
+
+test('the toaster picks the icon with x-show, without any nested template', function () {
+    $view = Blade::render('<x-toaster />');
+
+    // Dentro de un <svg> el parser no crea un HTMLTemplateElement: todo lo que
+    // vive en *foreign content* se queda como elemento del namespace SVG aun
+    // con tagName "template", así que `el.content` es `undefined` y la
+    // directiva `if` de Alpine tira en `show()` (livewire.js, «cloneNode»).
+    // Por eso el icono se decide con `x-show` sobre los dos <path> que ya
+    // están en el DOM. Además, los dos <svg> (el del icono y el del botón de
+    // cerrar) son decorativos: tienen `aria-hidden="true"`.
+    expect($view)
+        ->not->toContain('x-if')
+        ->toContain("x-show=\"toast.tone === 'success'\"")
+        ->toContain("x-show=\"toast.tone !== 'success'\"")
+        ->toMatch('/<svg[^>]*aria-hidden="true"/');
+});
