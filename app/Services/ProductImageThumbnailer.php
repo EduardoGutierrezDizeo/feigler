@@ -14,8 +14,9 @@ use Throwable;
  *
  * The original is never replaced: it is the file an admin downloads and the one
  * a future crop would be made from, so what is written next to it is a WebP of
- * at most 480 px on its longest side and quality 80, which is what makes a
- * listing of dozens of pictures weigh tens of kilobytes instead of megabytes. A
+ * at most 960 px on its longest side and quality 85, which is what makes a
+ * listing of dozens of pictures weigh tens of kilobytes instead of megabytes
+ * while staying sharp on the biggest card of the home page and on 2x screens. A
  * picture smaller than that is copied at its own size and never enlarged,
  * because a blown-up 200 px picture is heavier without being sharper.
  *
@@ -34,13 +35,21 @@ class ProductImageThumbnailer
 {
     /**
      * The longest side a thumbnail may have, in pixels.
+     *
+     * The home page paints the category arches up to 435 css px wide on a
+     * phone (a 68% peek carousel) and 302 px on a desktop, and the product
+     * cards up to 296 px wide: at a 2x screen the widest of those layouts
+     * needs between 530 and 604 source pixels, so a portrait picture of a
+     * 2:3 source fits at 640 px wide here. 960 px on the longest side covers
+     * that whole range; a larger edge would only feed tablet breakpoints
+     * (md and sm, up to 743 css px at 2x) at a much heavier per-file cost.
      */
-    public const MAX_EDGE_PX = 480;
+    public const MAX_EDGE_PX = 960;
 
     /**
      * The WebP quality a thumbnail is encoded with.
      */
-    public const QUALITY = 80;
+    public const QUALITY = 85;
 
     /**
      * How many pixels a picture may have before it is left without a thumbnail.

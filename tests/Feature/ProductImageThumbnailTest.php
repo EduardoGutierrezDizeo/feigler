@@ -109,7 +109,7 @@ function jpegConOrientacion(int $orientacion, int $ancho = 200, int $alto = 100)
     return "\xFF\xD8".("\xFF\xE1".pack('n', strlen($exif) + 2).$exif).substr($jpeg, 2);
 }
 
-test('an uploaded picture is thumbnailed next to it, in webp and at most 480 px on its longest side', function () {
+test('an uploaded picture is thumbnailed next to it, in webp and at most 960 px on its longest side', function () {
     Storage::fake('public');
 
     $producto = productoConMiniaturas(colorDeMiniaturas());
@@ -123,10 +123,26 @@ test('an uploaded picture is thumbnailed next to it, in webp and at most 480 px 
 
     Storage::disk('public')->assertExists($imagen->thumbnail_path);
 
-    // 1000x600 se reduce a la mitad de lado largo y conserva la proporción.
+    // 1000x600 se escala a los 960 de lado largo y conserva la proporción.
     expect(tamanoDe($imagen->thumbnail_path))->toBe([
-        'width' => 480,
-        'height' => 288,
+        'width' => 960,
+        'height' => 576,
+        'mime' => 'image/webp',
+    ]);
+});
+
+test('a big picture is thumbnailed to the 960 px edge, so the widest home card stays sharp at 2x', function () {
+    Storage::fake('public');
+
+    $producto = productoConMiniaturas(colorDeMiniaturas());
+    $azul = $producto->colors()->first();
+
+    $imagen = (new UploadProductImages)($producto, $azul, [fotoGrande('enorme.jpg', 2400, 1600)])->first();
+
+    // 2400x1600 se escala a 960x640 sin deformar.
+    expect(tamanoDe($imagen->thumbnail_path))->toBe([
+        'width' => 960,
+        'height' => 640,
         'mime' => 'image/webp',
     ]);
 });
@@ -463,7 +479,7 @@ test('a picture taken with the phone in vertical is turned the right way up in t
     $imagen = (new UploadProductImages)($producto, $azul, [$vertical])->first();
 
     // Orientación 6 es «girar 90° en sentido horario»: una foto de 1000x600 se
-    // guarda girada, como 600x1000, y de ahí sale la miniatura de 288x480. Sin
-    // leer la orientación saldría 480x288, que es la foto tumbada.
-    expect(tamanoDe($imagen->thumbnail_path))->toMatchArray(['width' => 288, 'height' => 480]);
+    // guarda girada, como 600x1000, y de ahí sale la miniatura de 576x960. Sin
+    // leer la orientación saldría 960x576, que es la foto tumbada.
+    expect(tamanoDe($imagen->thumbnail_path))->toMatchArray(['width' => 576, 'height' => 960]);
 });
