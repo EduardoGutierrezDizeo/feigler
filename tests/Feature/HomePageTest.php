@@ -38,11 +38,44 @@ function createTestData()
     return compact('color', 'size', 'categoryHombre', 'categoryMujer', 'categoryNinos');
 }
 
+/**
+ * Deja visible una categoría en hombre y otra en mujer para que el carrusel de la
+ * raíz tenga dos secciones: la pestaña activa y una inactiva.
+ */
+function createTwoSectionsData()
+{
+    $data = createTestData();
+    $color = $data['color'];
+    $size = $data['size'];
+
+    foreach ([
+        'camisa' => $data['categoryHombre'],
+        'vestido' => $data['categoryMujer'],
+    ] as $slug => $categoria) {
+        $producto = Product::factory()->create([
+            'category_id' => $categoria->getKey(),
+            'name' => 'Prenda '.$categoria->name,
+            'slug' => $slug,
+            'status' => 'active',
+            'base_price' => 10000,
+        ]);
+        ProductVariant::factory()->create([
+            'product_id' => $producto->getKey(),
+            'color_id' => $color->getKey(),
+            'size_id' => $size->getKey(),
+            'is_active' => true,
+            'stock' => 5,
+        ]);
+    }
+
+    return $data;
+}
+
 /*
  * Lee el objeto con el que Alpine recibe las secciones del carrusel de la raíz,
- * igual que storefrontAlpinePayload() hace con la vista previa. El contador y la
- * imagen de cada categoría solo existen dentro de ese JSON: la pestaña y la
- * tarjeta los pintan con x-text y :src, nunca en el HTML que manda el servidor.
+ * igual que storefrontAlpinePayload() hace con la vista previa. Las pestañas y el
+ * enlace de "Ver todo" los pintan con x-text y :href desde ese JSON; el contador y
+ * la imagen de cada categoría viven en los paneles que renderiza Blade.
  */
 function homeAlpinePayload(string $html, string $component): array
 {
@@ -355,6 +388,75 @@ test('una sección sin categorías visibles no entra en las pestañas', function
         ->and(array_column($payload['sections'][0]['categories'], 'name'))->toBe(['Camisas'])
         ->and($payload['sections'][0]['categories'][0]['url'])->toContain($data['categoryHombre']->getKey())
         ->and($payload['initial'])->toBe('hombre');
+});
+
+test('cada panel de sección renderiza siempre su fila de puntos y sus flechas', function () {
+    createTwoSectionsData();
+
+    $html = get('/')->assertOk()->getContent();
+    $payload = homeAlpinePayload($html, 'categoryCarousel');
+
+    get('/')->assertOk()
+        ->assertSeeHtml('data-carousel-dots')
+        ->assertSeeHtml('data-carousel-arrows');
+
+    expect(substr_count($html, 'data-carousel-dots'))->toBe(count($payload['sections']))
+        ->and(substr_count($html, 'data-carousel-arrows'))->toBe(count($payload['sections']) * 2);
+});
+
+test('los paneles inactivos son inertes y ocultos del narrador, y el activo no', function () {
+    createTwoSectionsData();
+
+    $html = get('/')->assertOk()->getContent();
+    $payload = homeAlpinePayload($html, 'categoryCarousel');
+
+    $document = new DOMDocument;
+    libxml_use_internal_errors(true);
+    $document->loadHTML($html);
+    libxml_clear_errors();
+
+    $panels = (new DOMXPath($document))->query('//div[@data-category-panel]');
+
+    expect($panels)->toHaveCount(2);
+
+    foreach ($panels as $panel) {
+        $key = $panel->getAttribute('data-category-panel');
+
+        if ($key === $payload['initial']) {
+            expect($panel->hasAttribute('inert'))->toBeFalse()
+                ->and($panel->hasAttribute('aria-hidden'))->toBeFalse();
+        } else {
+            expect($panel->hasAttribute('inert'))->toBeTrue()
+                ->and($panel->getAttribute('aria-hidden'))->toBe('true');
+        }
+    }
+});
+
+test('el inicio no usa x-if', function () {
+    $source = file_get_contents(resource_path('views/storefront/home.blade.php'));
+
+    expect($source)->not->toContain('x-if');
+});
+
+test('ningún panel se oculta con la clase hidden ni con display:none', function () {
+    createTwoSectionsData();
+
+    $html = get('/')->assertOk()->getContent();
+
+    $document = new DOMDocument;
+    libxml_use_internal_errors(true);
+    $document->loadHTML($html);
+    libxml_clear_errors();
+
+    $panels = (new DOMXPath($document))->query('//div[@data-category-panel]');
+
+    foreach ($panels as $panel) {
+        foreach (array_merge([$panel], iterator_to_array($panel->getElementsByTagName('*'))) as $nodo) {
+            expect(preg_split('/\s+/', trim($nodo->getAttribute('class'))))->not->toContain('hidden')
+                ->and($nodo->hasAttribute('hidden'))->toBeFalse()
+                ->and($nodo->getAttribute('style'))->not->toContain('display');
+        }
+    }
 });
 
 test('guardia de consultas: la raíz usa un número fijo con 4 novedades y 3 secciones', function () {
