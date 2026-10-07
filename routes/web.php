@@ -32,3 +32,7 @@ Route::middleware('auth')->group(function () {
 require __DIR__.'/admin.php';
 
 require __DIR__.'/auth.php';
+
+if (app()->environment('local')) {
+    require __DIR__.'/storefront-preview.php';
+}

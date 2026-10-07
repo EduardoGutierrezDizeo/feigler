@@ -25,8 +25,20 @@ import './plugins.js';
 
 // Componentes Alpine.data.
 import './admin-modal.js';
+import categoryCarousel from './category-carousel.js';
 import './color-hex-input.js';
 import './confirm-dialog.js';
 import './page-enter.js';
 import './price-input.js';
+import priceRange from './price-range.js';
+import productPurchase from './product-purchase.js';
 import './select-input.js';
+
+// La tienda pública: los tres módulos solo exportan la fábrica
+// (`export default function categoryCarousel(config)`), así que aquí es donde
+// se registran, con el mismo patrón que el resto y dentro de `alpine:init`.
+document.addEventListener('alpine:init', () => {
+    Alpine.data('categoryCarousel', categoryCarousel);
+    Alpine.data('priceRange', priceRange);
+    Alpine.data('productPurchase', productPurchase);
+});

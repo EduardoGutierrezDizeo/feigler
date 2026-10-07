@@ -16,8 +16,20 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>{{ $title }}</title>
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+
+    {{-- `admin.js` es la entrada que registra los componentes Alpine sin importar
+         Alpine: en esta página lo arranca Livewire (`@livewireScripts`), igual
+         que en el panel. `app.js` arrancaría una segunda instancia. --}}
+    @vite(['resources/css/app.css', 'resources/js/admin.js'])
     @livewireStyles
+
+    {{-- Oculta los elementos de Alpine hasta que arranque. --}}
+    <style>[x-cloak] { display: none !important; }</style>
 </head>
 <body class="flex min-h-screen flex-col bg-linear-to-br from-crema to-[#F3ECDD] font-sans text-tinta antialiased">
     <header x-data="{ open: false }" @keydown.escape.window="open = false"
