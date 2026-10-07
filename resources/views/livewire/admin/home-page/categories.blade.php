@@ -70,6 +70,9 @@
 
                                 @if ($category->products->isEmpty())
                                     <span class="font-medium text-ladrillo">Aún no aparece en el inicio</span>
+                                    <span class="text-gris-calido">
+                                        La categoría no tiene productos visibles (un producto activo con al menos una variante activa).
+                                    </span>
                                 @else
                                     <span class="text-gris-calido">
                                         {{ $category->products->count() }} {{ $category->products->count() === 1 ? 'producto visible' : 'productos visibles' }}
@@ -147,24 +150,34 @@
             @endif
 
             @if ($photoOption === \App\Enums\HomeImageSource::Upload->value)
-                <div class="rounded-xl border border-dashed border-arena px-4 py-4">
+                <div
+                    x-data="homeImageUploadPreview($wire, 'imageUpload', @js($editingPhoto['url'] ?? null))"
+                    class="rounded-xl border border-dashed border-arena px-4 py-4"
+                >
                     <input
                         type="file"
                         accept=".jpg,.jpeg,.png,.webp"
                         wire:model="imageUpload"
-                        x-data="homeImageUploadPreview($wire, 'imageUpload')"
                         x-on:change="preview($el)"
                         class="block w-full text-sm text-gris-calido file:me-3 file:rounded-lg file:border-0 file:bg-hueso file:px-3 file:py-2 file:text-sm file:font-medium file:text-verde hover:file:bg-arena/60"
                         aria-label="Elegir una imagen para subir"
                     >
 
-                    <template x-if="previewUrl">
-                        <img :src="previewUrl" alt="Vista previa de la foto elegida" class="mt-4 h-40 w-full rounded-lg object-cover">
-                    </template>
+                    <img
+                        x-show="previewUrl"
+                        x-cloak
+                        :src="previewUrl"
+                        alt="Vista previa de la foto elegida"
+                        class="mt-4 h-40 w-full rounded-lg object-cover"
+                    >
 
-                    <template x-if="! previewUrl && @js($editingPhoto !== null ? $editingPhoto['url'] : null)">
-                        <img src="{{ $editingPhoto !== null ? $editingPhoto['url'] : '' }}" alt="Foto que la categoría muestra hoy" class="mt-4 h-40 w-full rounded-lg object-cover">
-                    </template>
+                    <img
+                        x-show="! previewUrl && currentUrl"
+                        x-cloak
+                        src="{{ $editingPhoto !== null ? $editingPhoto['url'] : '' }}"
+                        alt="Foto que la categoría muestra hoy"
+                        class="mt-4 h-40 w-full rounded-lg object-cover"
+                    >
 
                     <x-input-error :messages="$errors->get('imageUpload')" class="mt-2" />
 

@@ -3,9 +3,9 @@
  *
  * Se registra vía `Alpine.data('homeImageUploadPreview', ...)` desde el barrel
  * `resources/js/alpine/index.js` y se usa en Blade como
- * `x-data="homeImageUploadPreview($wire, 'imageUpload')"`, así que el proveedor
- * recibe el proxy `$wire` y el nombre de la propiedad que guarda el archivo en
- * el componente Livewire.
+ * `x-data="homeImageUploadPreview($wire, 'imageUpload', @js(...))"`, así que el
+ * proveedor recibe el proxy `$wire`, el nombre de la propiedad que guarda el
+ * archivo en el componente Livewire y la URL que la categoría muestra hoy.
  *
  * La vista previa es un `URL.createObjectURL` del archivo elegido que se destruye
  * cuando la foto deja de estar pendiente: cuando el administrador elige otro
@@ -14,11 +14,14 @@
  * copia del archivo en la memoria del navegador.
  */
 document.addEventListener('alpine:init', () => {
-    Alpine.data('homeImageUploadPreview', (wire, property) => ({
+    Alpine.data('homeImageUploadPreview', (wire, property, currentUrl) => ({
         previewUrl: null,
         objectUrl: null,
+        currentUrl: null,
 
         init() {
+            this.currentUrl = currentUrl ?? null
+
             this.$watch('previewUrl', (value) => {
                 if (value === null && this.objectUrl) {
                     URL.revokeObjectURL(this.objectUrl)

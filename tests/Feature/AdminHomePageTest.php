@@ -15,6 +15,7 @@ use Database\Seeders\RoleSeeder;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Js;
 use Livewire\Livewire;
 use Spatie\Permission\PermissionRegistrar;
 
@@ -454,4 +455,111 @@ test('el número de consultas del selector no cambia entre 4 y 49 fotos', functi
     $segundas = $medicion();
 
     expect($segundas)->toBe($primeras);
+});
+
+test('todo elemento x-show con previewUrl o currentUrl queda bajo el x-data de la previa', function () {
+    $this->seed(RoleSeeder::class);
+
+    $escena = escenaInicioPanel('PP1', 'Camisas', StoreSection::Hombre, 'NEG');
+
+    $html = panelDeInicio()
+        ->call('changePhoto', $escena['categoria']->getKey())
+        ->set('photoOption', 'upload')
+        ->assertSee('Guardar imagen')
+        ->html();
+
+    $dom = new DOMDocument;
+
+    libxml_use_internal_errors(true);
+    $dom->loadHTML('<?xml encoding="UTF-8">'.$html);
+    libxml_clear_errors();
+
+    $xpath = new DOMXPath($dom);
+
+    expect($xpath->query('//*[@x-show]')->length)->toBeGreaterThan(0);
+
+    foreach ($xpath->query('//*[@x-show]') as $elemento) {
+        $expresion = $elemento->getAttribute('x-show');
+
+        if ($expresion === '' || preg_match('/previewUrl|currentUrl/', $expresion) !== 1) {
+            continue;
+        }
+
+        $bajoElXData = false;
+
+        for ($nodo = $elemento->parentNode; $nodo !== null; $nodo = $nodo->parentNode) {
+            if ($nodo instanceof DOMElement && str_starts_with($nodo->getAttribute('x-data'), 'homeImageUploadPreview(')) {
+                $bajoElXData = true;
+
+                break;
+            }
+        }
+
+        expect($bajoElXData)->toBeTrue('El elemento x-show="'.$expresion.'" quedó fuera del x-data de la previa.');
+    }
+});
+
+test('ninguna vista del módulo «Vista principal» usa x-if', function () {
+    foreach (glob(resource_path('views/livewire/admin/home-page/*.blade.php')) as $vista) {
+        expect(file_get_contents($vista))->not->toContain('x-if');
+    }
+});
+
+test('las expresiones de las directivas x del bloque de subida no incrustan literales de Blade', function () {
+    $vista = (string) file_get_contents(resource_path('views/livewire/admin/home-page/categories.blade.php'));
+
+    preg_match_all('/\s((?:x-[a-z0-9_.:-]+|:[a-z0-9_-]+|@[a-z0-9_.:-]+(?:\.[a-z0-9_-]+)*))="([^"]*)"/i', $vista, $coincidencias, PREG_SET_ORDER);
+
+    expect($coincidencias)->not->toBeEmpty();
+
+    foreach ($coincidencias as [$atributo, $expresion]) {
+        if ($atributo === 'x-data') {
+            continue;
+        }
+
+        expect($expresion)->not->toMatch('/\{\{|\}\}|@js|<\?php/');
+    }
+});
+
+test('el x-data de la previa recibe la URL actual como tercer argumento', function () {
+    $this->seed(RoleSeeder::class);
+
+    $conFoto = escenaInicioPanel('JD1', 'Camisas', StoreSection::Hombre, 'NEG');
+
+    (new UploadCategoryHomeImage)($conFoto['categoria'], UploadedFile::fake()->image('propia.jpg'));
+
+    $url = Storage::disk(ProductImage::DISK)->url($conFoto['categoria']->fresh()->home_image_thumbnail_path);
+
+    panelDeInicio()
+        ->call('changePhoto', $conFoto['categoria']->getKey())
+        ->set('photoOption', 'upload')
+        ->assertSeeHtml('x-data="homeImageUploadPreview($wire, \'imageUpload\', '.Js::from($url).')"');
+});
+
+test('el x-data de la previa recibe null cuando la categoría no tiene foto', function () {
+    $this->seed(RoleSeeder::class);
+
+    $categoria = Category::factory()->section(StoreSection::Hombre)->create(['name' => 'Básicos', 'sku_prefix' => 'JD2']);
+
+    panelDeInicio()
+        ->call('changePhoto', $categoria->getKey())
+        ->set('photoOption', 'upload')
+        ->assertSeeHtml('x-data="homeImageUploadPreview($wire, \'imageUpload\', null)"');
+});
+
+test('el aviso de apoyo solo aparece para categorías sin productos visibles', function () {
+    $this->seed(RoleSeeder::class);
+
+    escenaInicioPanel('AV1', 'Camisas', StoreSection::Hombre, 'NEG');
+    $vacia = Category::factory()->section(StoreSection::Mujer)->create(['name' => 'Básicos', 'sku_prefix' => 'AV2']);
+
+    panelDeInicio()
+        ->assertSee('1 producto visible')
+        ->assertDontSee('Aún no aparece en el inicio')
+        ->assertDontSee('La categoría no tiene productos visibles (un producto activo con al menos una variante activa).');
+
+    panelDeInicio()
+        ->call('setSection', 'mujer')
+        ->assertSee('Aún no aparece en el inicio')
+        ->assertSee('La categoría no tiene productos visibles (un producto activo con al menos una variante activa).');
 });
