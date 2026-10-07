@@ -6,8 +6,12 @@
     el trait App\Livewire\Concerns\Notifies). Para mostrar un aviso desde
     Alpine se usa `$store.toast.success('…')` o `$store.toast.error('…')`.
 --}}
+{{-- Por encima de los modales (admin-modal z-50 y confirm-dialog z-[70]): un aviso
+     debe verse aunque haya un modal abierto. Fuera solo queda el panel del select
+     (z-[9999]), que es un volante efímero y sí debe tapar a todo. --}}
 <div
-    class="pointer-events-none fixed inset-x-0 bottom-0 z-[60] flex flex-col items-center gap-2 p-4 sm:inset-x-auto sm:end-0 sm:top-0 sm:bottom-auto sm:items-end sm:pe-6 sm:ps-0 sm:pt-6"
+    x-data="{}"
+    class="pointer-events-none fixed inset-x-0 bottom-0 z-[80] flex flex-col items-center gap-2 p-4 sm:inset-x-auto sm:end-0 sm:top-0 sm:bottom-auto sm:items-end sm:pe-6 sm:ps-0 sm:pt-6"
     aria-live="polite"
     aria-atomic="false"
 >

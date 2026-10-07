@@ -95,9 +95,11 @@
                     {{ $slot }}
                 </main>
             </div>
+
+            <x-toaster />
+
         </div>
 
-        <x-toaster />
         <x-confirm-dialog />
 
         @livewireScripts
