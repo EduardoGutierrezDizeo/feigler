@@ -23,4 +23,10 @@ return [
     'instagram' => '#',
     // TODO: confirmar con el dueño el número de WhatsApp.
     'whatsapp' => '#',
+    // CONFIRMAR CON EL DUEÑO: resumen de envíos junto al botón de compra.
+    'envio_resumen' => 'Envío nacional',
+    // CONFIRMAR CON EL DUEÑO: resumen de cambios junto al botón de compra.
+    'cambios_resumen' => 'Cambios fáciles · 30 días',
+    // CONFIRMAR CON EL DUEÑO: texto del acordeón «Envíos y cambios» de la ficha.
+    'envios_cambios_texto' => 'Enviamos a todo el país. Si no te queda bien, tienes 30 días para cambiarla.',
 ];

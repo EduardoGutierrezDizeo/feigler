@@ -5,6 +5,7 @@
                   summary (string|null), description (string|null),
                   materials: [{ name, percentage }],
                   colors:   [{ id, name, hex, images: [{ url, thumb|null }] }],
+                  initialColor (int, índice del color de portada; opcional, 0 por defecto),
                   sizes:    [string]                      (talla de la categoría, en orden)
                   variants: [{ id, color (id del color), size (string), stock (int) }],
                   breadcrumb: [{ label, url }] }
@@ -17,6 +18,7 @@
         'colors' => $product['colors'],
         'sizes' => $product['sizes'],
         'variants' => $product['variants'],
+        'initialColor' => $product['initialColor'] ?? 0,
         'lowStock' => 3,
     ];
     $sections = [
@@ -136,7 +138,7 @@
                     </button>
                 </div>
 
-                <p class="mt-6 flex flex-wrap gap-x-6 gap-y-1 text-sm text-gris-calido"><span>Envío nacional</span><span>Cambios fáciles · 30 días</span></p>
+                <p class="mt-6 flex flex-wrap gap-x-6 gap-y-1 text-sm text-gris-calido"><span>{{ config('tienda.envio_resumen') }}</span><span>{{ config('tienda.cambios_resumen') }}</span></p>
 
                 {{-- Acordeones --}}
                 <div class="mt-8 divide-y divide-arena border-y border-arena">
@@ -162,7 +164,7 @@
                                                 <p>Composición no indicada.</p>
                                             @endforelse
                                         @else
-                                            <p>Enviamos a todo el país. Si no te queda bien, tienes 30 días para cambiarla.</p>
+                                            <p>{{ config('tienda.envios_cambios_texto') }}</p>
                                         @endif
                                     </div>
                                 </div>

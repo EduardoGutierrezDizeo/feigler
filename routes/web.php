@@ -1,17 +1,24 @@
 <?php
 
 use App\Http\Controllers\ProfileController;
+use App\Services\Storefront\HomePage;
+use App\Services\Storefront\ProductPage;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     if (app()->environment('local')) {
         // En local, si hay datos reales, mostrar storefront.home; si no hay, mantener vista previa disponible via /_vista
         // pero queremos raíz con datos reales cuando existan. Por ahora, usar servicio HomePage.
-        return view('storefront.home', (new \App\Services\Storefront\HomePage())->home());
+        return view('storefront.home', (new HomePage)->home());
     }
 
     return view('welcome');
 });
+
+// La ficha pública vive en el slug del producto: es la dirección inmutable.
+Route::get('/producto/{slug}', function (string $slug) {
+    return view('storefront.product', (new ProductPage)->forSlug($slug));
+})->name('storefront.product');
 
 Route::get('/dashboard', function () {
     return view('dashboard');

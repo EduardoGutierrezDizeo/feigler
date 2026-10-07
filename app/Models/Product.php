@@ -313,6 +313,22 @@ class Product extends Model
     }
 
     /**
+     * The garments the storefront may show: never turned off, and still sold in
+     * at least one variant that is on.
+     *
+     * This is the same rule the home page and the product page both need, so it
+     * lives here rather than once per caller. Stock is deliberately not part of
+     * it: a garment that sold out is still sold, it has just run out.
+     *
+     * @param  Builder<Product>  $query
+     */
+    public function scopeVisible(Builder $query): void
+    {
+        $query->where('status', '!=', 'inactive')
+            ->whereHas('variants', fn (Builder $variants): Builder => $variants->where('is_active', true));
+    }
+
+    /**
      * The SQL that reads a text column as its folded, lowercase form.
      *
      * The letters are the ones Spanish product names actually carry, plus the
