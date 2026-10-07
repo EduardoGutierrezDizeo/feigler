@@ -2,15 +2,12 @@
 
 namespace App\Services\Storefront;
 
-use App\Enums\HomeImageSource;
 use App\Enums\StoreSection;
 use App\Models\Category;
 use App\Models\HomeFeaturedProduct;
 use App\Models\Product;
-use App\Models\ProductImage;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Storage;
 
 class HomePage
 {
@@ -69,24 +66,25 @@ class HomePage
      */
     private function renderSections(array $gathered): array
     {
-        // The counts of all categories share one grouped query and the chosen
-        // pictures share one more, instead of each category asking for its own
-        // count and for the picture it chose. That is what keeps the home page at
-        // a fixed number of queries no matter how many categories the store has.
+        // The counts of all categories share one grouped query and the home
+        // pictures share one service call, instead of each category asking for
+        // its own count and for the picture it chose. That is what keeps the
+        // home page at a fixed number of queries no matter how many categories
+        // the store has.
         $allCategories = collect($gathered)
             ->flatMap(fn (array $entry): Collection => $entry['visibleCategories']);
 
         $counts = $this->countVisibleProductsInCategories($allCategories->pluck('id')->all());
-        $chosenImages = $this->chosenHomeImages($allCategories);
+        $homeImages = app(HomeCategoryImages::class)->forCategories($allCategories);
 
         $result = [];
 
         foreach ($gathered as ['section' => $section, 'visibleCategories' => $visibleCategories]) {
-            $categories = $visibleCategories->map(function (Category $category) use ($section, $counts, $chosenImages) {
+            $categories = $visibleCategories->map(function (Category $category) use ($section, $counts, $homeImages) {
                 return [
                     'name' => $category->name,
                     'count' => $counts[$category->getKey()] ?? 0,
-                    'image' => $this->getHomeImageFor($category, $chosenImages),
+                    'image' => $homeImages[$category->getKey()]['url'] ?? null,
                     'url' => '/'.$section->value.'?categoria[]='.$category->id, // Provisional; rutas se definirán después
                 ];
             })->values()->all();
@@ -156,16 +154,6 @@ class HomePage
             ->get();
     }
 
-    private function getRecentVisibleProductImageForCategory(Category $category): ?string
-    {
-        $product = $category->products
-            ->sortByDesc('created_at')
-            ->sortByDesc('id')
-            ->first();
-
-        return $product?->coverImage?->thumbnailUrl();
-    }
-
     /**
      * The visible product count of every category, in one grouped query.
      *
@@ -189,107 +177,6 @@ class HomePage
             ->groupBy('category_id')
             ->selectRaw('category_id, count(*) as total')
             ->pluck('total', 'category_id');
-    }
-
-    /**
-     * The picked product pictures of every category whose decision asks for one.
-     *
-     * The products are loaded with the visibility rule, so a picture whose
-     * product stopped being visible comes back without its product and the
-     * resolution of the picture falls back to the automatic rule; a picture that
-     * was deleted is simply not among the ids any more.
-     *
-     * The query is only asked when some category picked a picture: a home page
-     * where nobody did keeps its count of queries untouched.
-     *
-     * @param  Collection<int, Category>  $categories
-     * @return Collection<int, ProductImage>
-     */
-    private function chosenHomeImages(Collection $categories): Collection
-    {
-        $ids = $categories
-            ->filter(fn (Category $category): bool => $this->sourceOf($category) === HomeImageSource::Product)
-            ->pluck('home_image_product_image_id')
-            ->filter()
-            ->all();
-
-        if ($ids === []) {
-            return new Collection;
-        }
-
-        return ProductImage::query()
-            ->whereIn('id', $ids)
-            ->with(['product' => function ($query) {
-                $query->visible();
-            }])
-            ->get()
-            ->keyBy('id');
-    }
-
-    /**
-     * The home picture a category chose, or the automatic one when the choice is
-     * broken.
-     *
-     * Every failure falls back to the automatic rule on purpose: the page must
-     * always render, and a category is never left without a picture because a
-     * choice it made stopped being available.
-     */
-    private function getHomeImageFor(Category $category, Collection $chosenImages): ?string
-    {
-        $image = match ($this->sourceOf($category)) {
-            HomeImageSource::Upload => $this->ownUploadedUrl($category),
-            HomeImageSource::Product => $this->chosenProductImageUrl($category, $chosenImages),
-            default => null,
-        };
-
-        return $image ?? $this->getRecentVisibleProductImageForCategory($category);
-    }
-
-    /**
-     * Which decision a category made, read as it is stored.
-     *
-     * It reads the raw value and never asks the enum to throw, so a value that is
-     * not one of the three (a column default that changed, a handwritten row)
-     * behaves like the automatic rule instead of breaking the page.
-     */
-    private function sourceOf(Category $category): ?HomeImageSource
-    {
-        return HomeImageSource::tryFrom((string) $category->getRawOriginal('home_image_source'));
-    }
-
-    /**
-     * The address of the photo the category uploaded, or the automatic rule when
-     * there is none to show.
-     */
-    private function ownUploadedUrl(Category $category): ?string
-    {
-        $path = $category->home_image_thumbnail_path ?? $category->home_image_path;
-
-        if ($path === null) {
-            return null;
-        }
-
-        return Storage::disk(ProductImage::DISK)->url($path);
-    }
-
-    /**
-     * The address of the product picture a category chose, or null when the
-     * choice no longer holds: the picture was deleted, belongs to a product that
-     * is not shown, or belongs to a product that moved to another category.
-     */
-    private function chosenProductImageUrl(Category $category, Collection $chosenImages): ?string
-    {
-        $image = $chosenImages->get($category->home_image_product_image_id);
-
-        if ($image === null || $image->product === null) {
-            return null;
-        }
-
-        if ((int) $image->product->category_id !== (int) $category->getKey()) {
-            return null;
-        }
-
-        return $image->thumbnailUrl();
     }
 
     /**

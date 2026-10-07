@@ -28,6 +28,7 @@ import './admin-modal.js';
 import categoryCarousel from './category-carousel.js';
 import './color-hex-input.js';
 import './confirm-dialog.js';
+import './home-image-upload-preview.js';
 import './page-enter.js';
 import './price-input.js';
 import priceRange from './price-range.js';
