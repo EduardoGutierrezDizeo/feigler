@@ -132,6 +132,87 @@ test('se llega a la vista principal desde /admin/home-page', function () {
         ->assertSee('Categorías');
 });
 
+test('el sidebar muestra el enlace «Vista principal» con la ruta del panel y lo marca activo en la pestaña mas-nuevo', function () {
+    $this->seed(RoleSeeder::class);
+
+    $admin = adminForPanel();
+    $href = route('admin.home-page.index');
+
+    $leerEnlaces = function (string $html) use ($href): array {
+        $dom = new DOMDocument;
+        libxml_use_internal_errors(true);
+        $dom->loadHTML($html);
+        libxml_clear_errors();
+
+        $enlaces = [];
+
+        foreach ((new DOMXPath($dom))->query('//a[@href="'.$href.'"]') as $enlace) {
+            $enlaces[] = [
+                'aria-current' => $enlace->getAttribute('aria-current'),
+                'texto' => trim($enlace->textContent),
+            ];
+        }
+
+        return $enlaces;
+    };
+
+    // El fragmento del sidebar se incluye dos veces (escritorio y móvil), y en las
+    // dos versiones el enlace lleva el mismo href y se marca activo en esa ruta.
+    foreach (['/admin/home-page', '/admin/home-page?tab=mas-nuevo'] as $ruta) {
+        $enlaces = $leerEnlaces($this->actingAs($admin)->get($ruta)->assertOk()->getContent());
+
+        expect($enlaces)->toHaveCount(2);
+
+        foreach ($enlaces as $enlace) {
+            expect($enlace['texto'])->toBe('Vista principal')
+                ->and($enlace['aria-current'])->toBe('page');
+        }
+    }
+
+    $enlacesDashboard = $leerEnlaces($this->actingAs($admin)->get('/admin/dashboard')->assertOk()->getContent());
+
+    expect($enlacesDashboard)->toHaveCount(2)
+        ->and($enlacesDashboard[0]['aria-current'])->toBe('')
+        ->and($enlacesDashboard[1]['aria-current'])->toBe('');
+});
+
+test('la barra de pestañas muestra las dos partes y marca la activa con aria-selected y tabindex', function () {
+    $this->seed(RoleSeeder::class);
+
+    $admin = adminForPanel();
+
+    $leerTabs = function (string $html): array {
+        $dom = new DOMDocument;
+        libxml_use_internal_errors(true);
+        $dom->loadHTML($html);
+        libxml_clear_errors();
+
+        $tabs = [];
+
+        foreach ((new DOMXPath($dom))->query('//button[@role="tab"]') as $tab) {
+            $tabs[$tab->getAttribute('id')] = [
+                'aria-selected' => $tab->getAttribute('aria-selected'),
+                'tabindex' => $tab->getAttribute('tabindex'),
+            ];
+        }
+
+        return $tabs;
+    };
+
+    $tabsMasNuevo = $leerTabs($this->actingAs($admin)->get('/admin/home-page?tab=mas-nuevo')->assertOk()->getContent());
+
+    expect($tabsMasNuevo)->toHaveKeys(['home-tab-categorias', 'home-tab-mas-nuevo'])
+        ->and($tabsMasNuevo['home-tab-mas-nuevo']['aria-selected'])->toBe('true')
+        ->and($tabsMasNuevo['home-tab-mas-nuevo']['tabindex'])->toBe('0')
+        ->and($tabsMasNuevo['home-tab-categorias']['aria-selected'])->toBe('false')
+        ->and($tabsMasNuevo['home-tab-categorias']['tabindex'])->toBe('-1');
+
+    $tabsCategorias = $leerTabs($this->actingAs($admin)->get('/admin/home-page')->assertOk()->getContent());
+
+    expect($tabsCategorias['home-tab-categorias']['aria-selected'])->toBe('true')
+        ->and($tabsCategorias['home-tab-mas-nuevo']['aria-selected'])->toBe('false');
+});
+
 test('el contenedor monta la pestaña de categorías y corrige un tab desconocido', function () {
     $this->seed(RoleSeeder::class);
 

@@ -8,6 +8,7 @@ use App\Models\HomeFeaturedProduct;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\User;
+use App\Services\Storefront\HomeNewProducts;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -72,6 +73,27 @@ function panelNovedades(?User $admin = null): mixed
 beforeEach(function () {
     $this->app->instance('env', 'local');
 });
+
+/**
+ * Los ids de los productos de «Así se ve hoy en el inicio», en el orden en que
+ * la pestaña los pinta, para poder compararlos con lo que entrega HomeNewProducts.
+ */
+function idsQueMuestraEnInicio(string $html): array
+{
+    preg_match_all('/wire:key="hoy-(\d+)"/', $html, $coincidencias);
+
+    return array_map('intval', $coincidencias[1] ?? []);
+}
+
+/**
+ * Los ids de los productos de «Tus elegidos», en el orden renderizado.
+ */
+function idsDeElegidos(string $html): array
+{
+    preg_match_all('/wire:key="featured-(\d+)"/', $html, $coincidencias);
+
+    return array_map('intval', $coincidencias[1] ?? []);
+}
 
 test('la pestaña «Lo más nuevo» solo es de un administrador, también después de montarse', function () {
     $this->seed(RoleSeeder::class);
@@ -380,4 +402,139 @@ test('la búsqueda de ocho resultados añade dos consultas: el LIKE y las portad
     DB::disableQueryLog();
 
     expect($conBuscador - $soloPantalla)->toBe(2);
+});
+
+test('«Así se ve hoy en el inicio» enseña lo mismo que HomeNewProducts en los tres estados', function () {
+    $this->seed(RoleSeeder::class);
+
+    $escena = baseNovedadesEscena('CO1', 'Camisas');
+    $a = productoNovedad($escena, 'Camisa A', 'CO1-001');
+    $b = productoNovedad($escena, 'Camisa B', 'CO1-002');
+    $c = productoNovedad($escena, 'Camisa C', 'CO1-003');
+
+    $idsDelInicio = fn (): array => app(HomeNewProducts::class)->effective()['products']->pluck('id')->all();
+
+    // Manual: la lista dice exactamente los elegidos visibles, en el orden de las filas.
+    $panel = panelNovedades();
+
+    foreach ([$a, $b, $c] as $producto) {
+        $panel->call('add', $producto->getKey());
+    }
+
+    expect(idsQueMuestraEnInicio($panel->html()))->toBe([$a->getKey(), $b->getKey(), $c->getKey()])
+        ->and(idsQueMuestraEnInicio($panel->html()))->toBe($idsDelInicio());
+
+    // Sin elegidos: la portada vuelve a la regla automática (las más recientes visibles).
+    HomeFeaturedProduct::query()->delete();
+
+    expect(idsQueMuestraEnInicio(panelNovedades()->html()))->toBe($idsDelInicio());
+
+    // Elegidos ocultos: ninguno se ve, el inicio vuelve a las más recientes visibles.
+    $ocultos = panelNovedades();
+    $ocultos->call('add', $a->getKey());
+    $ocultos->call('add', $b->getKey());
+
+    $a->update(['status' => 'inactive']);
+    $b->update(['status' => 'inactive']);
+
+    // El cambio se hizo fuera del componente: una interacción fuerza la relectura.
+    $ocultos->set('search', 'zzz');
+
+    expect(idsQueMuestraEnInicio($ocultos->html()))->toBe([$c->getKey()])
+        ->and(idsQueMuestraEnInicio($ocultos->html()))->toBe($idsDelInicio());
+});
+
+test('la cabecera de estado dice por qué se muestra cada lista', function () {
+    $this->seed(RoleSeeder::class);
+
+    $escena = baseNovedadesEscena('ES1', 'Camisas');
+    $elegido = productoNovedad($escena, 'Camisa Estado', 'ES1-001');
+
+    expect(panelNovedades()->html())->toContain('Automática: los 4 productos más recientes');
+
+    $panel = panelNovedades();
+    $panel->call('add', $elegido->getKey());
+
+    expect($panel->html())->toContain('Selección manual (1 producto)');
+
+    $elegido->update(['status' => 'inactive']);
+
+    // El cambio se hizo fuera del componente: una interacción fuerza la relectura.
+    $panel->set('search', 'zzz');
+
+    expect($panel->html())->toContain('Automática: ninguno de los elegidos está visible');
+});
+
+test('mover arriba y abajo reordena los elegidos y el inicio lo refleja', function () {
+    $this->seed(RoleSeeder::class);
+
+    $escena = baseNovedadesEscena('OR1', 'Camisas');
+    $a = productoNovedad($escena, 'Camisa Orden A', 'OR1-001');
+    $b = productoNovedad($escena, 'Camisa Orden B', 'OR1-002');
+    $c = productoNovedad($escena, 'Camisa Orden C', 'OR1-003');
+
+    $panel = panelNovedades();
+
+    foreach ([$a, $b, $c] as $producto) {
+        $panel->call('add', $producto->getKey());
+    }
+
+    $filas = fn (): array => HomeFeaturedProduct::query()->orderBy('order')->orderBy('id')->pluck('product_id')->all();
+
+    expect($filas())->toBe([$a->getKey(), $b->getKey(), $c->getKey()])
+        ->and(idsDeElegidos($panel->html()))->toBe([$a->getKey(), $b->getKey(), $c->getKey()])
+        ->and(idsQueMuestraEnInicio($panel->html()))->toBe([$a->getKey(), $b->getKey(), $c->getKey()]);
+
+    $filaDe = fn (Product $producto) => HomeFeaturedProduct::query()->where('product_id', $producto->getKey())->sole();
+
+    // Bajar el primero: el orden pasa a B, A, C.
+    $panel->call('moveDown', $filaDe($a)->getKey());
+
+    expect($filas())->toBe([$b->getKey(), $a->getKey(), $c->getKey()])
+        ->and(idsDeElegidos($panel->html()))->toBe([$b->getKey(), $a->getKey(), $c->getKey()])
+        ->and(idsQueMuestraEnInicio($panel->html()))->toBe([$b->getKey(), $a->getKey(), $c->getKey()]);
+
+    // Subir el último: el orden pasa a B, C, A.
+    $panel->call('moveUp', $filaDe($c)->getKey());
+
+    expect($filas())->toBe([$b->getKey(), $c->getKey(), $a->getKey()]);
+
+    // Forzar mover el primero hacia arriba y el último hacia abajo: es un no-op.
+    $panel->call('moveUp', $filaDe($b)->getKey());
+    $panel->call('moveDown', $filaDe($a)->getKey());
+
+    expect($filas())->toBe([$b->getKey(), $c->getKey(), $a->getKey()])
+        ->and(HomeFeaturedProduct::query()->count())->toBe(3);
+});
+
+test('el primer elegido no puede subir y el último no puede bajar: sus botones llegan deshabilitados', function () {
+    $this->seed(RoleSeeder::class);
+
+    $escena = baseNovedadesEscena('DB1', 'Camisas');
+    $a = productoNovedad($escena, 'Camisa Deshabilitada A', 'DB1-001');
+    $b = productoNovedad($escena, 'Camisa Deshabilitada B', 'DB1-002');
+
+    $panel = panelNovedades();
+    $panel->call('add', $a->getKey());
+    $panel->call('add', $b->getKey());
+
+    $filaDe = fn (Product $producto) => HomeFeaturedProduct::query()->where('product_id', $producto->getKey())->sole();
+    $idA = $filaDe($a)->getKey();
+    $idB = $filaDe($b)->getKey();
+
+    $dom = new DOMDocument;
+    libxml_use_internal_errors(true);
+    $dom->loadHTML($panel->html());
+    libxml_clear_errors();
+
+    $wireClicks = [];
+
+    foreach ((new DOMXPath($dom))->query('//button') as $boton) {
+        $wireClicks[$boton->getAttribute('wire:click')] = $boton->hasAttribute('disabled');
+    }
+
+    expect($wireClicks['moveUp('.$idA.')'])->toBeTrue()
+        ->and($wireClicks['moveDown('.$idA.')'])->toBeFalse()
+        ->and($wireClicks['moveUp('.$idB.')'])->toBeFalse()
+        ->and($wireClicks['moveDown('.$idB.')'])->toBeTrue();
 });
