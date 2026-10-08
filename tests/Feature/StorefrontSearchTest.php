@@ -258,6 +258,23 @@ test('el texto sobrevive en el «Mostrar más» y en el enlace de la sección', 
         ->and($payload['nextUrl'])->toBe(url('/buscar').'?q=camisa&mostrar=24');
 });
 
+test('con dieciséis coincidencias «Mostrar más» acumula y no ofrece siguiente', function () {
+    $escena = searchScene();
+    $size = $escena['camisas']->sizes()->first();
+
+    foreach (range(1, 13) as $n) {
+        searchProduct($escena['camisas'], 'SCT-1'.str_pad((string) $n, 2, '0', STR_PAD_LEFT), 'Camisa Extra '.$n, 'camisa-extra-'.$n, 50000 + $n, now()->subDays($n), [
+            [$size, $escena['negro'], 3],
+        ]);
+    }
+
+    $payload = searchPayload('q=camisa&mostrar=24');
+
+    expect($payload['total'])->toBe(16)
+        ->and($payload['shown'])->toBe(16)
+        ->and($payload['nextUrl'])->toBeNull();
+});
+
 test('el texto buscado sale escapado en el título, el chip y el encabezado', function () {
     searchScene();
 

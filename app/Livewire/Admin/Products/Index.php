@@ -16,6 +16,7 @@ use App\Livewire\Concerns\Notifies;
 use App\Models\Category;
 use App\Models\Material;
 use App\Models\Product;
+use App\Support\LikePattern;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -377,9 +378,12 @@ class Index extends Component
             // listado entero sale de una consulta y leer más filas no cuesta más.
             ->whereHas('category', fn (Builder $query): Builder => $query->where('section', $section->value))
             ->when($search !== '', function (Builder $query) use ($search): void {
+                $pattern = LikePattern::contains($search);
+                $escape = LikePattern::escapeCharacter();
+
                 $query->where(fn (Builder $query) => $query
-                    ->whereRaw('LOWER(name) LIKE ?', ["%{$search}%"])
-                    ->orWhereRaw('LOWER(reference) LIKE ?', ["%{$search}%"]));
+                    ->whereRaw('LOWER(name) LIKE ? ESCAPE ?', [$pattern, $escape])
+                    ->orWhereRaw('LOWER(reference) LIKE ? ESCAPE ?', [$pattern, $escape]));
             })
             ->when($this->categoryFilter !== '', fn (Builder $query) => $this->applyCategoryFilter($query))
             ->when($this->statusFilter !== '', fn (Builder $query) => $this->applyStatusFilter($query));

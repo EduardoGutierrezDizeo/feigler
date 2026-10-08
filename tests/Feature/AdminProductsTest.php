@@ -147,6 +147,29 @@ test('searches products by name or reference regardless of case', function () {
         ->assertDontSee('Pantalón sastre');
 });
 
+test('los comodines de LIKE se buscan como texto, no como comodines', function () {
+    $this->seed(RoleSeeder::class);
+
+    $polos = numberedCategory('PL', 'Polos');
+    Product::factory()->for($polos)->create(['name' => 'Camisa 100% algodón', 'reference' => 'PL-001']);
+    Product::factory()->for($polos)->create(['name' => 'Pantalón sastre', 'reference' => 'PA-014']);
+    Product::factory()->for($polos)->create(['name' => 'Camisa Doble__Azul', 'reference' => 'PL-002']);
+
+    Livewire::actingAs(adminForPanel())
+        ->test(Index::class)
+        ->set('search', '%')
+        ->assertSee('Camisa 100% algodón')
+        ->assertDontSee('Pantalón sastre')
+        ->assertDontSee('Camisa Doble__Azul');
+
+    Livewire::actingAs(adminForPanel())
+        ->test(Index::class)
+        ->set('search', '_')
+        ->assertSee('Camisa Doble__Azul')
+        ->assertDontSee('Camisa 100% algodón')
+        ->assertDontSee('Pantalón sastre');
+});
+
 test('filters products by category', function () {
     $this->seed(RoleSeeder::class);
 
