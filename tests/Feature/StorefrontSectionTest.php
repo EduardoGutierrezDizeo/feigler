@@ -6,6 +6,7 @@ use App\Models\Color;
 use App\Models\Material;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Services\Storefront\HomePage;
 use App\Services\Storefront\SectionFilters;
 use App\Services\Storefront\SectionPage;
 use Illuminate\Http\Request;
@@ -262,6 +263,74 @@ test('talla y color se exigen sobre la misma variante activa', function () {
     expect($lNegroStock['total'])->toBe(0);
 });
 
+test('una variante M-Azul inactiva no cuela su producto en talla y color ni en stock', function () {
+    $escena = escenaSeccion();
+    $azul = $escena['azul']->getKey();
+
+    $fantasma = crearPrenda($escena['camisas'], 'Camisa Fantasma', 'camisa-fantasma', 1000, now()->subDays(9), [
+        [$escena['lCamisas'], $escena['negro'], 1],
+    ]);
+    ProductVariant::factory()->for($fantasma)->inactive()->inSize($escena['mCamisas'])->create([
+        'color_id' => $azul,
+        'stock' => 20,
+    ]);
+
+    crearPrenda($escena['camisas'], 'Camisa Espejo', 'camisa-espejo', 65000, now()->subDays(8), [
+        [$escena['lCamisas'], $escena['negro'], 1],
+        [$escena['mCamisas'], $escena['azul'], 25],
+    ]);
+
+    $mAzul = sectionPayload('/hombre?talla[]=M&color[]='.$azul, StoreSection::Hombre);
+    expect($mAzul['total'])->toBe(2)
+        ->and(array_column($mAzul['products'], 'name'))->toBe(['Camisa Nube', 'Camisa Espejo']);
+
+    $mAzulStock = sectionPayload('/hombre?talla[]=M&color[]='.$azul.'&stock=1', StoreSection::Hombre);
+    expect($mAzulStock['total'])->toBe(2)
+        ->and(array_column($mAzulStock['products'], 'name'))->toBe(['Camisa Nube', 'Camisa Espejo']);
+});
+
+test('la variante inactiva más barata no altera los resultados de talla y color', function () {
+    $escena = escenaSeccion();
+    $azul = $escena['azul']->getKey();
+
+    $fantasma = crearPrenda($escena['camisas'], 'Camisa Fantasma', 'camisa-fantasma', 1000, now()->subDays(9), [
+        [$escena['lCamisas'], $escena['negro'], 1],
+    ]);
+    ProductVariant::factory()->for($fantasma)->inactive()->inSize($escena['mCamisas'])->create([
+        'color_id' => $azul,
+        'stock' => 20,
+    ]);
+
+    $porPrecio = sectionPayload('/hombre?orden=precio-asc&talla[]=M&color[]='.$azul, StoreSection::Hombre);
+
+    expect($porPrecio['total'])->toBe(1)
+        ->and(array_column($porPrecio['products'], 'name'))->toBe(['Camisa Nube']);
+});
+
+test('los conteos de talla y de color ignoran la variante inactiva', function () {
+    $escena = escenaSeccion();
+    $azul = $escena['azul']->getKey();
+
+    $fantasma = crearPrenda($escena['camisas'], 'Camisa Fantasma', 'camisa-fantasma', 1000, now()->subDays(9), [
+        [$escena['lCamisas'], $escena['negro'], 1],
+    ]);
+    $mAzulFantasma = ProductVariant::factory()->for($fantasma)->inactive()->inSize($escena['mCamisas'])->create([
+        'color_id' => $azul,
+        'stock' => 20,
+    ]);
+
+    $tallaM = fn (): int => sectionPayload('/hombre?talla[]=M', StoreSection::Hombre)['total'];
+    $colorAzul = fn (): int => sectionPayload('/hombre?color[]='.$azul, StoreSection::Hombre)['total'];
+
+    expect($tallaM())->toBe(3)
+        ->and($colorAzul())->toBe(2);
+
+    $mAzulFantasma->update(['is_active' => true]);
+
+    expect($tallaM())->toBe(4)
+        ->and($colorAzul())->toBe(3);
+});
+
 test('los conteos de una familia ignoran el filtro de su propia familia', function () {
     $escena = escenaSeccion();
 
@@ -311,7 +380,7 @@ test('la lista crece de doce en doce hasta un tope', function () {
     expect($primera['shown'])->toBe(12)
         ->and($primera['total'])->toBe(22)
         ->and($primera['nextUrl'])->toContain('mostrar=24')
-        ->and($primera['nextUrl'])->toContain('categoria%5B%5D%5B0%5D='.$camisas);
+        ->and($primera['nextUrl'])->toContain('categoria%5B%5D='.$camisas);
 
     $segunda = sectionPayload('/hombre?categoria[]='.$camisas.'&mostrar=24', StoreSection::Hombre);
     expect($segunda['shown'])->toBe(22)
@@ -342,8 +411,8 @@ test('el enlace de siguiente paso conserva los filtros', function () {
 
     $nextUrl = sectionPayload('/hombre?categoria[]='.$camisas.'&material[]='.$lino.'&stock=1&orden=precio-asc', StoreSection::Hombre)['nextUrl'];
 
-    expect($nextUrl)->toContain('categoria%5B%5D%5B0%5D='.$camisas)
-        ->and($nextUrl)->toContain('material%5B%5D%5B0%5D='.$lino)
+    expect($nextUrl)->toContain('categoria%5B%5D='.$camisas)
+        ->and($nextUrl)->toContain('material%5B%5D='.$lino)
         ->and($nextUrl)->toContain('stock=1')
         ->and($nextUrl)->toContain('orden=precio-asc')
         ->and($nextUrl)->toContain('mostrar=24');
@@ -363,8 +432,61 @@ test('los chips de los filtros activos quitan un valor y no llevan mostrar', fun
 
     expect($chip['removeUrl'])->not->toContain('material')
         ->and($chip['removeUrl'])->not->toContain('mostrar')
-        ->and($chip['removeUrl'])->toContain('categoria%5B%5D%5B0%5D='.$camisas)
+        ->and($chip['removeUrl'])->toContain('categoria%5B%5D='.$camisas)
         ->and($chip['removeUrl'])->toContain('stock=1');
+});
+
+test('las URLs llevan arreglos planos sin índices y la acción del formulario es la sección', function () {
+    $escena = escenaSeccion();
+    $camisas = (string) $escena['camisas']->getKey();
+    $negro = (string) $escena['negro']->getKey();
+    $lino = (string) $escena['lino']->getKey();
+
+    foreach (range(1, 20) as $n) {
+        $extra = crearPrenda($escena['camisas'], 'Camisa Extra '.$n, 'camisa-extra-'.$n, 50000 + $n, now()->subDays(30 + $n), [
+            [$escena['mCamisas'], $escena['negro'], 3],
+        ]);
+        $extra->materials()->attach($escena['lino'], ['percentage' => 100]);
+    }
+
+    $base = url('/hombre').'?'.implode('&', [
+        'categoria%5B%5D='.$camisas,
+        'talla%5B%5D=M',
+        'color%5B%5D='.$negro,
+        'material%5B%5D='.$lino,
+        'stock=1',
+        'orden=precio-asc',
+    ]);
+
+    $payload = sectionPayload('/hombre?categoria[]='.$camisas.'&talla[]=M&color[]='.$negro.'&material[]='.$lino.'&stock=1&orden=precio-asc', StoreSection::Hombre);
+
+    expect($payload['nextUrl'])->toBe($base.'&mostrar=24')
+        ->and($payload['section']['url'])->toBe(url('/hombre'))
+        ->and($payload['clearUrl'])->toBe(url('/hombre'))
+        ->and(array_column($payload['active'], 'label'))
+        ->toBe(['Camisas', 'Talla M', 'Negro', 'Lino', 'Solo en stock']);
+
+    expect($payload['active'][0]['removeUrl'])->toBe(url('/hombre').'?'.implode('&', [
+        'talla%5B%5D=M',
+        'color%5B%5D='.$negro,
+        'material%5B%5D='.$lino,
+        'stock=1',
+        'orden=precio-asc',
+    ]))
+        ->and($payload['active'][1]['removeUrl'])->toBe(url('/hombre').'?'.implode('&', [
+            'categoria%5B%5D='.$camisas,
+            'color%5B%5D='.$negro,
+            'material%5B%5D='.$lino,
+            'stock=1',
+            'orden=precio-asc',
+        ]));
+
+    get('/hombre')->assertSeeHtml('<form method="GET" action="'.url('/hombre').'"');
+
+    $home = app(HomePage::class)->home();
+    $camisasHome = collect($home['sections'][0]['categories'])->firstWhere('name', 'Camisas');
+
+    expect($camisasHome['url'])->toBe(url('/hombre').'?categoria[]='.$camisas);
 });
 
 test('un valor que no pertenece a la sección se ignora', function () {
@@ -412,8 +534,63 @@ test('un rango de precio invertido se intercambia y se acota al rango de la secc
         ->and($payload['filters']['price']['from'])->toBeNull()
         ->and($payload['filters']['price']['to'])->toBe(90000)
         ->and($payload['filters']['price']['min'])->toBe(60000)
-        ->and($payload['filters']['price']['max'])->toBe(151000)
+        ->and($payload['filters']['price']['max'])->toBe(150000)
         ->and($payload['filters']['price']['step'])->toBe(1000);
+});
+
+test('una prenda justo en el límite se alcanza con el límite como filtro', function () {
+    escenaSeccion();
+
+    $hastaElMax = sectionPayload('/hombre?precio_max=150000', StoreSection::Hombre);
+    expect($hastaElMax['total'])->toBe(4)
+        ->and(array_column($hastaElMax['products'], 'name'))->toContain('Abrigo Toro');
+
+    $desdeElMin = sectionPayload('/hombre?precio_min=60000', StoreSection::Hombre);
+    expect($desdeElMin['total'])->toBe(4)
+        ->and(array_column($desdeElMin['products'], 'name'))->toContain('Camisa Cebra');
+
+    $todo = sectionPayload('/hombre?precio_min=60000&precio_max=150000', StoreSection::Hombre);
+    expect($todo['total'])->toBe(4);
+});
+
+test('una prenda un peso por encima del precio máximo no aparece', function () {
+    $escena = escenaSeccion();
+
+    crearPrenda($escena['camisas'], 'Camisa Cara', 'camisa-cara', 150001, now()->subDays(7), [
+        [$escena['mCamisas'], $escena['negro'], 1],
+    ]);
+
+    $payload = sectionPayload('/hombre?precio_max=150000', StoreSection::Hombre);
+
+    expect($payload['filters']['price']['max'])->toBe(151000)
+        ->and(array_column($payload['products'], 'name'))
+        ->toBe(['Camisa Nube', 'Abrigo Toro', 'Camisa Cebra', 'Pantalón Delta'])
+        ->and(array_column($payload['products'], 'name'))->not->toContain('Camisa Cara');
+});
+
+test('con precios ya múltiplos del paso los límites coinciden con ellos', function () {
+    escenaSeccion();
+
+    $payload = sectionPayload('/hombre', StoreSection::Hombre);
+
+    expect($payload['filters']['price']['min'])->toBe(60000)
+        ->and($payload['filters']['price']['max'])->toBe(150000);
+});
+
+test('con precios no múltiplos del paso el límite se redondea hacia afuera', function () {
+    $escena = escenaSeccion();
+
+    crearPrenda($escena['camisas'], 'Camisa Rara', 'camisa-rara', 60500, now()->subDays(10), [
+        [$escena['mCamisas'], $escena['negro'], 1],
+    ]);
+    crearPrenda($escena['abrigos'], 'Abrigo Caro', 'abrigo-caro', 150400, now()->subDays(11), [
+        [$escena['mAbrigos'], $escena['negro'], 1],
+    ]);
+
+    $payload = sectionPayload('/hombre', StoreSection::Hombre);
+
+    expect($payload['filters']['price']['min'])->toBe(60000)
+        ->and($payload['filters']['price']['max'])->toBe(151000);
 });
 
 test('un límite de precio que queda fuera del rango no se cuenta como movido', function () {

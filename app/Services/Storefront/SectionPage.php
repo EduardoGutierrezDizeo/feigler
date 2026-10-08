@@ -277,7 +277,9 @@ class SectionPage
 
     /**
      * Los límites del deslizador de precio: el precio mínimo y máximo de las
-     * prendas visibles de la sección, redondeados hacia fuera al paso.
+     * prendas visibles de la sección, redondeados hacia fuera al paso solo si no
+     * son ya múltiplos del paso. Un máximo de 150000 con paso 1000 da 150000,
+     * y 150400 da 151000.
      *
      * Es de toda la sección a propósito: el rango no cambia según qué filtros
      * estén puestos, o mover la talla reencuadraría el rango bajo los dedos.
@@ -298,8 +300,8 @@ class SectionPage
         $max = (int) ($row?->hi ?? 0);
 
         return [
-            intdiv($min, self::PRICE_STEP) * self::PRICE_STEP,
-            (intdiv($max, self::PRICE_STEP) + 1) * self::PRICE_STEP,
+            (int) floor($min / self::PRICE_STEP) * self::PRICE_STEP,
+            (int) ceil($max / self::PRICE_STEP) * self::PRICE_STEP,
         ];
     }
 
@@ -395,11 +397,13 @@ class SectionPage
     }
 
     /**
-     * Los parámetros canónicos de la página, listos para http_build_query.
+     * Los parámetros canónicos de la página, tal y como los serializa la URL.
      *
-     * Los pasos de precio solo entran cuando se movieron del borde; el orden solo
-     * entra cuando no es el que ya trae una página sin él. «mostrar» no entra:
-     * los enlaces se construyen aparte con el paso que corresponda.
+     * Los arreglos se serializan planos y sin índices (categoria[]=5, no
+     * categoria[0]=5 ni categoria[][0]=5). Los pasos de precio solo entran
+     * cuando se movieron del borde; el orden solo entra cuando no es el que ya
+     * trae una página sin él. «mostrar» no entra: los enlaces se construyen
+     * aparte con el paso que corresponda.
      *
      * @param  list<int>  $categories
      * @param  list<string>  $sizes
@@ -671,7 +675,28 @@ class SectionPage
     {
         $url = $section->route();
 
-        return $params === [] ? $url : $url.'?'.http_build_query($params);
+        return $params === [] ? $url : $url.'?'.static::queryString($params);
+    }
+
+    /**
+     * Los parámetros de una sección como cadena de consulta, con los arreglos
+     * planos y sin índices: una categoría se escribe `categoria[]=5` y dos,
+     * `categoria[]=5&categoria[]=3`, que es el formato que el propio formulario
+     * emite con sus casillas repetidas.
+     *
+     * @param  array<string, mixed>  $params
+     */
+    private static function queryString(array $params): string
+    {
+        $pairs = [];
+
+        foreach ($params as $key => $value) {
+            foreach (is_array($value) ? $value : [$value] as $item) {
+                $pairs[] = rawurlencode($key).'='.rawurlencode((string) $item);
+            }
+        }
+
+        return implode('&', $pairs);
     }
 
     private function sortLabel(string $value): string
