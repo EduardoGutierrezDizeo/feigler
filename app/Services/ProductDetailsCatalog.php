@@ -13,6 +13,7 @@ use App\Models\Category;
 use App\Models\Color;
 use App\Models\Material;
 use App\Models\Size;
+use App\Services\Storefront\ListingScope;
 use App\Support\Concerns\NormalizesNames;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
@@ -223,11 +224,13 @@ class ProductDetailsCatalog
      * first in catalog order.
      *
      * The section narrows the list to one part of the store and is not required, because
-     * a catalog that shows every size is a legitimate thing to want.
+     * a catalog that shows every size is a legitimate thing to want. A scope narrows it
+     * to the sections it covers, which is how a listing of several sections asks.
      *
+     * @param  StoreSection|ListingScope|null  $section  One section, the sections of a scope, or the whole store.
      * @return Collection<int, array{name: string, ids: list<int>}>
      */
-    public function sizeNamesForFilter(?StoreSection $section = null): Collection
+    public function sizeNamesForFilter(StoreSection|ListingScope|null $section = null): Collection
     {
         $sizes = Size::query()
             ->active()
@@ -243,11 +246,12 @@ class ProductDetailsCatalog
      *
      * The section narrows the list to the garments a catalog of that section would
      * show, and is not required because a catalog that offers every color is a
-     * legitimate thing to want.
+     * legitimate thing to want. A scope narrows it to the sections it covers.
      *
+     * @param  StoreSection|ListingScope|null  $section  One section, the sections of a scope, or the whole store.
      * @return Collection<int, Color>
      */
-    public function colorsForFilter(?StoreSection $section = null): Collection
+    public function colorsForFilter(StoreSection|ListingScope|null $section = null): Collection
     {
         return Color::query()
             ->active()
@@ -264,31 +268,17 @@ class ProductDetailsCatalog
      * garment that is in the catalog with its composition says the material is used.
      *
      * A material of a section is one that a visible garment of an active category of
-     * that section is made of, which is the same definition the section listing uses.
+     * that section is made of, which is the same definition the section listing uses;
+     * a scope asks the same for the sections it covers.
      *
+     * @param  StoreSection|ListingScope|null  $section  One section, the sections of a scope, or the whole store.
      * @return Collection<int, Material>
      */
-    public function materialsForFilter(?StoreSection $section = null): Collection
+    public function materialsForFilter(StoreSection|ListingScope|null $section = null): Collection
     {
         return Material::query()
             ->active()
-            ->whereHas('products', function (Builder $products) use ($section): void {
-                $products->where('status', '!=', 'inactive');
-
-                if ($section === null) {
-                    return;
-                }
-
-                $products
-                    ->whereHas(
-                        'variants',
-                        fn (Builder $variants): Builder => $variants->where('is_active', true),
-                    )
-                    ->whereHas(
-                        'category',
-                        fn (Builder $categories): Builder => $categories->inSection($section)->where('is_active', true),
-                    );
-            })
+            ->whereHas('products', fn (Builder $products): Builder => $this->visibleGarment($section, $products))
             ->ordered()
             ->get();
     }
@@ -303,34 +293,45 @@ class ProductDetailsCatalog
      * product is in the catalog, and deciding that a size has to be hidden because its
      * units ran out is a question about the shop rather than about the catalog.
      *
-     * The section narrows the garment to the catalog of that section, and a section
-     * garment has to sit in a category that is on: turning a category off hides its
-     * garments from the section listing, so an option they alone carry is not offered.
+     * The section — or the sections a scope covers — narrows the garment to the catalog
+     * it lists, and such a garment has to sit in a category that is on: turning a
+     * category off hides its garments from the listing, so an option they alone carry
+     * is not offered.
      *
      * It is written once and passed to the three queries that need it, so the definition
      * of a visible product cannot drift apart between the sizes and the colors.
      *
      * @return Closure(Builder<\App\Models\ProductVariant>): Builder<\App\Models\ProductVariant>>
      */
-    private function variantsOfAVisibleProduct(?StoreSection $section = null): Closure
+    private function variantsOfAVisibleProduct(StoreSection|ListingScope|null $section = null): Closure
     {
         return function (Builder $variants) use ($section): Builder {
             $variants
                 ->where('is_active', true)
-                ->whereHas('product', function (Builder $products) use ($section): void {
-                    $products->where('status', '!=', 'inactive');
-
-                    if ($section === null) {
-                        return;
-                    }
-
-                    $products->whereHas('category', function (Builder $categories) use ($section): void {
-                        $categories->inSection($section)->where('is_active', true);
-                    });
-                });
+                ->whereHas('product', fn (Builder $products): Builder => $this->visibleGarment($section, $products));
 
             return $variants;
         };
+    }
+
+    /**
+     * One garment a filter list may count: turned on, and — when a section or a scope
+     * narrows the store — inside an active category of it.
+     *
+     * A section is read as the scope that covers it alone, so `ListingScope::applyTo()`
+     * is the one place that says what a garment of a section (or of several sections)
+     * is, and these lists cannot drift apart from the listing itself.
+     *
+     * @param  Builder<Product>  $products
+     * @return Builder<Product>
+     */
+    private function visibleGarment(StoreSection|ListingScope|null $section, Builder $products): Builder
+    {
+        if ($section === null) {
+            return $products->where('status', '!=', 'inactive');
+        }
+
+        return ($section instanceof ListingScope ? $section : ListingScope::section($section))->applyTo($products);
     }
 
     /**

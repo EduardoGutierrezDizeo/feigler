@@ -12,7 +12,7 @@ use Illuminate\Http\Request;
  * sintáctico — solo números para los ids, valores conocidos para el orden, un
  * rango 12..120 para «mostrar» — y el chequeo de que un valor pertenezca a la
  * sección (un id de otra sección se ignora, una talla que no existe se ignora)
- * lo hace SectionPage al cruzar estos valores con las opciones que la sección
+ * lo hace ListingPage al cruzar estos valores con las opciones que la sección
  * ofrece, porque ese cruce tiene a mano la base de datos.
  *
  * Un filtro que llega mal escrito no es un error: la página se sirve igual sin
@@ -120,7 +120,7 @@ class SectionFilters
 
     /**
      * El nombre de una talla tal y como se escribió, recortado. Una talla que no
-     * existe en la sección la descarta SectionPage al cruzarla con las que la
+     * existe en la sección la descarta ListingPage al cruzarla con las que la
      * sección ofrece.
      *
      * @return list<string>
