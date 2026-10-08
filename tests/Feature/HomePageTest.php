@@ -525,3 +525,72 @@ test('fuera de local la raíz sigue sirviendo welcome y el panel sigue protegido
 
     $this->get('/dashboard')->assertRedirect(route('login'));
 });
+
+test('cada panel de categorías muestra las de su propia sección y no las de otra', function () {
+    createTwoSectionsData();
+
+    $html = get('/')->assertOk()->getContent();
+
+    $document = new DOMDocument;
+    libxml_use_internal_errors(true);
+    $document->loadHTML($html);
+    libxml_clear_errors();
+
+    $panels = (new DOMXPath($document))->query('//div[@data-category-panel]');
+    $textos = [];
+
+    foreach ($panels as $panel) {
+        $textos[$panel->getAttribute('data-category-panel')] = $panel->textContent;
+    }
+
+    expect($textos)->toHaveKeys(['hombre', 'mujer'])
+        ->and($textos['hombre'])->toContain('Camisas')->not->toContain('Vestidos')
+        ->and($textos['mujer'])->toContain('Vestidos')->not->toContain('Camisas');
+});
+
+test('las claves de los paneles son exactamente las secciones del payload del carrusel', function () {
+    createTwoSectionsData();
+
+    $html = get('/')->assertOk()->getContent();
+    $payload = homeAlpinePayload($html, 'categoryCarousel');
+
+    $document = new DOMDocument;
+    libxml_use_internal_errors(true);
+    $document->loadHTML($html);
+    libxml_clear_errors();
+
+    $panelKeys = [];
+
+    foreach ((new DOMXPath($document))->query('//div[@data-category-panel]') as $panel) {
+        $panelKeys[] = $panel->getAttribute('data-category-panel');
+    }
+
+    $payloadKeys = array_column($payload['sections'], 'key');
+    sort($panelKeys);
+    sort($payloadKeys);
+
+    expect($panelKeys)->toBe($payloadKeys);
+});
+
+test('exactamente un panel está sin inert y es el de la sección inicial', function () {
+    createTwoSectionsData();
+
+    $html = get('/')->assertOk()->getContent();
+    $payload = homeAlpinePayload($html, 'categoryCarousel');
+
+    $document = new DOMDocument;
+    libxml_use_internal_errors(true);
+    $document->loadHTML($html);
+    libxml_clear_errors();
+
+    $activos = [];
+
+    foreach ((new DOMXPath($document))->query('//div[@data-category-panel]') as $panel) {
+        if ($panel->hasAttribute('inert')) {
+            continue;
+        }
+        $activos[] = $panel->getAttribute('data-category-panel');
+    }
+
+    expect($activos)->toBe([$payload['initial']]);
+});

@@ -6,17 +6,19 @@ export default function categoryCarousel(config) {
         pages: 1,
         atStart: true,
         atEnd: false,
+        root: null,
 
         get current() {
             return this.sections.find((s) => s.key === this.section) ?? this.sections[0] ?? { categories: [], label: '', url: '#' };
         },
 
         init() {
+            this.root = this.$el;
             this.$nextTick(() => this.measure());
         },
 
         panel(key = this.section) {
-            return this.$el.querySelector(`[data-category-panel="${key}"]`);
+            return this.root?.querySelector(`[data-category-panel="${key}"]`) ?? null;
         },
 
         track() {
