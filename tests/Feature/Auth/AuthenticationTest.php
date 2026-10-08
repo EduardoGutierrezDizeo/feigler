@@ -9,6 +9,12 @@ test('login screen can be rendered', function () {
     $response->assertStatus(200);
 });
 
+test('the login screen links to the registration page', function () {
+    $this->get('/login')
+        ->assertOk()
+        ->assertSeeHtml('href="'.route('register').'"');
+});
+
 test('the primary button component submits forms by default', function () {
     $html = Blade::render('<x-primary-button>Save</x-primary-button>');
 

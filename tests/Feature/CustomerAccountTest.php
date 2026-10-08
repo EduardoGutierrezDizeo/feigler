@@ -248,6 +248,28 @@ test('el personal no entra a Mi cuenta', function () {
     $this->actingAs($vendedor)->get(route('account.index'))->assertForbidden();
 });
 
+test('el cliente cierra sesión desde el desplegable de su cuenta', function () {
+    $this->seed(RoleSeeder::class);
+
+    $user = User::factory()->create();
+    $user->assignRole('cliente');
+
+    $this->actingAs($user)->get(route('account.index'))
+        ->assertOk()
+        ->assertSee('Cerrar sesión')
+        ->assertSeeHtml('action="'.route('logout').'"');
+
+    $this->post(route('logout'))->assertRedirect('/');
+
+    $this->assertGuest();
+});
+
+test('un invitado no ve el control de cerrar sesión', function () {
+    $this->get(route('storefront.tienda'))
+        ->assertOk()
+        ->assertDontSee('Cerrar sesión');
+});
+
 test('el enlace firmado de verificación lleva al cliente a Mi cuenta', function () {
     $this->seed(RoleSeeder::class);
     Event::fake();

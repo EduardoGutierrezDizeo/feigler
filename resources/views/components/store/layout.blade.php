@@ -48,8 +48,26 @@
 
             <nav aria-label="Principal" class="ml-auto hidden items-center gap-6 text-sm lg:flex">
                 @foreach ($nav as $key => [$label, $href])
-                    <a href="{{ url($href) }}" @if ($active === $key) aria-current="page" @endif
-                       class="border-b pb-0.5 transition {{ $active === $key ? 'border-laton text-verde' : 'border-transparent text-gris-calido hover:text-verde' }}">{{ $label }}</a>
+                    @if ($key === 'cuenta' && auth()->user()?->hasRole('cliente'))
+                        <div class="relative" x-data="{ open: false }" @keydown.escape.window="open = false" @click.outside="open = false">
+                            <button type="button" @click="open = !open" :aria-expanded="open"
+                                    class="flex items-center gap-1 border-b pb-0.5 transition {{ $active === $key ? 'border-laton text-verde' : 'border-transparent text-gris-calido hover:text-verde' }}">
+                                {{ $label }}
+                                <svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            </button>
+                            <div x-show="open" x-transition.opacity style="display: none"
+                                 class="absolute right-0 z-50 mt-2 w-44 rounded-xl border border-arena bg-crema py-1 shadow-lg">
+                                <a href="{{ url($href) }}" class="block px-4 py-2 text-gris-calido transition hover:bg-hueso/50 hover:text-verde">Mi cuenta</a>
+                                <form method="POST" action="{{ route('logout') }}">
+                                    @csrf
+                                    <button type="submit" class="block w-full px-4 py-2 text-left text-gris-calido transition hover:bg-hueso/50 hover:text-verde">Cerrar sesión</button>
+                                </form>
+                            </div>
+                        </div>
+                    @else
+                        <a href="{{ url($href) }}" @if ($active === $key) aria-current="page" @endif
+                           class="border-b pb-0.5 transition {{ $active === $key ? 'border-laton text-verde' : 'border-transparent text-gris-calido hover:text-verde' }}">{{ $label }}</a>
+                    @endif
                 @endforeach
             </nav>
 
@@ -76,6 +94,13 @@
                     <a href="{{ url($href) }}" class="rounded-xl px-3 py-2.5 {{ $active === $key ? 'bg-hueso/60 text-verde' : 'text-tinta hover:bg-hueso/40' }}">{{ $label }}</a>
                 @endforeach
             </nav>
+
+            @if (auth()->user()?->hasRole('cliente'))
+                <form method="POST" action="{{ route('logout') }}" class="mt-1">
+                    @csrf
+                    <button type="submit" class="block w-full rounded-xl px-3 py-2.5 text-left text-tinta hover:bg-hueso/40">Cerrar sesión</button>
+                </form>
+            @endif
         </div>
     </header>
 

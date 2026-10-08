@@ -52,4 +52,11 @@
             </x-primary-button>
         </div>
     </form>
+
+    <p class="mt-6 text-center text-sm text-gris-calido">
+        ¿No tienes cuenta?
+        <a href="{{ route('register') }}" class="text-verde underline underline-offset-4 transition-colors duration-150 ease-in-out hover:text-tinta">
+            Crea tu cuenta
+        </a>
+    </p>
 </x-guest-layout>
