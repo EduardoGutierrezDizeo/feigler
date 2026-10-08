@@ -29,17 +29,22 @@ import categoryCarousel from './category-carousel.js';
 import './color-hex-input.js';
 import './confirm-dialog.js';
 import './home-image-upload-preview.js';
+import loadMore from './load-more.js';
 import './page-enter.js';
 import './price-input.js';
 import priceRange from './price-range.js';
 import productPurchase from './product-purchase.js';
 import './select-input.js';
 
-// La tienda pública: los tres módulos solo exportan la fábrica
+// La tienda pública: los módulos solo exportan la fábrica
 // (`export default function categoryCarousel(config)`), así que aquí es donde
-// se registran, con el mismo patrón que el resto y dentro de `alpine:init`.
+// se registran, con el mismo patrón que el resto y dentro de `alpine:init`. Los
+// que NO exportan la fábrica (admin-modal, confirm-dialog...) se registran ellos
+// mismos con un listener propio, por eso se importan sin nombre para que sus
+// efectos ocurran.
 document.addEventListener('alpine:init', () => {
     Alpine.data('categoryCarousel', categoryCarousel);
+    Alpine.data('loadMore', loadMore);
     Alpine.data('priceRange', priceRange);
     Alpine.data('productPurchase', productPurchase);
 });

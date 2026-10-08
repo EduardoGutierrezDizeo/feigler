@@ -185,7 +185,7 @@
             </aside>
 
             {{-- Resultados --}}
-            <div class="min-w-0">
+            <div class="min-w-0" x-data="loadMore({ url: @js($nextUrl), shown: @js($shown), total: @js($total) })">
                 @if (count($active))
                     <div class="mb-6 flex flex-wrap items-center gap-2">
                         <span class="text-xs text-gris-calido">Filtros activos</span>
@@ -197,16 +197,19 @@
                 @endif
 
                 @if (count($products))
-                    <div class="grid grid-cols-2 gap-4 sm:gap-6 xl:grid-cols-3">
+                    <div x-ref="grid" class="grid grid-cols-2 gap-4 sm:gap-6 xl:grid-cols-3">
                         @foreach ($products as $product)
-                            <x-store.product-card :product="$product" />
+                            <x-store.product-card :product="$product" data-product-id="{{ $product['id'] }}" />
                         @endforeach
                     </div>
 
                     <div class="mt-12 text-center">
-                        <p class="text-sm text-gris-calido">Mostrando {{ $shown }} de {{ $total }} {{ $total === 1 ? 'prenda' : 'prendas' }}</p>
+                        <p class="text-sm text-gris-calido">Mostrando <span x-text="shown">{{ $shown }}</span> de <span x-text="total">{{ $total }}</span> <span x-text="total === 1 ? 'prenda' : 'prendas'">{{ $total === 1 ? 'prenda' : 'prendas' }}</span></p>
                         @if ($nextUrl)
-                            <a href="{{ $nextUrl }}" class="mt-4 inline-block rounded-full border border-laton px-8 py-2.5 text-sm text-verde transition hover:bg-verde hover:text-crema">Mostrar más</a>
+                            <a href="{{ $nextUrl }}" :href="url" data-load-more="{{ $nextUrl }}"
+                               @click.prevent="load()" x-show="url"
+                               x-text="loading ? 'Cargando…' : 'Mostrar más'"
+                               class="mt-4 inline-block rounded-full border border-laton px-8 py-2.5 text-sm text-verde transition hover:bg-verde hover:text-crema">Mostrar más</a>
                         @endif
                     </div>
                 @else

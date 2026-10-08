@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>soy un producto · Feigler</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+
+    
+    <script type="module" src="http://[::1]:5173/@vite/client" data-navigate-track="reload"></script><link rel="stylesheet" href="http://[::1]:5173/resources/css/app.css" data-navigate-track="reload" /><script type="module" src="http://[::1]:5173/resources/js/admin.js" data-navigate-track="reload"></script>    <!-- Livewire Styles --><style >[wire\:loading][wire\:loading], [wire\:loading\.delay][wire\:loading\.delay], [wire\:loading\.list-item][wire\:loading\.list-item], [wire\:loading\.inline-block][wire\:loading\.inline-block], [wire\:loading\.inline][wire\:loading\.inline], [wire\:loading\.block][wire\:loading\.block], [wire\:loading\.flex][wire\:loading\.flex], [wire\:loading\.table][wire\:loading\.table], [wire\:loading\.grid][wire\:loading\.grid], [wire\:loading\.inline-flex][wire\:loading\.inline-flex] {display: none;}[wire\:loading\.delay\.none][wire\:loading\.delay\.none], [wire\:loading\.delay\.shortest][wire\:loading\.delay\.shortest], [wire\:loading\.delay\.shorter][wire\:loading\.delay\.shorter], [wire\:loading\.delay\.short][wire\:loading\.delay\.short], [wire\:loading\.delay\.default][wire\:loading\.delay\.default], [wire\:loading\.delay\.long][wire\:loading\.delay\.long], [wire\:loading\.delay\.longer][wire\:loading\.delay\.longer], [wire\:loading\.delay\.longest][wire\:loading\.delay\.longest] {display: none;}[wire\:offline][wire\:offline] {display: none;}[wire\:dirty]:not(textarea):not(input):not(select) {display: none;}:root {--livewire-progress-bar-color: #2299dd;}[x-cloak="x-cloak"],[x-cloak=""] {display: none !important;}[wire\:cloak="wire:cloak"],[wire\:cloak=""] {display: none !important;}dialog#livewire-error::backdrop {background-color: rgba(0, 0, 0, .6);}</style>
+
+    
+    <style>[x-cloak] { display: none !important; }</style>
+<script id="browser-logger-active">
+(function() {
+    const ENDPOINT = 'http://127.0.0.1:8000/_boost/browser-logs';
+    const logQueue = [];
+    let flushTimeout = null;
+    const captureTypes = ["error","warning","info","log","debug","table"];
+
+    console.log('🔍 Browser logger active (MCP server detected). Posting to: ' + ENDPOINT);
+
+    // Store original console methods
+    const originalConsole = {
+        log: console.log,
+        debug: console.debug,
+        info: console.info,
+        error: console.error,
+        warn: console.warn,
+        table: console.table
+    };
+
+    // Walk own enumerable keys so JSON.stringify cannot auto-invoke a proxy fake toJSON (e.g. Livewire's `$wire`) and fire a real request.
+    function toSafeValue(value, seen) {
+        if (value === null || typeof value !== 'object') {
+            return value;
+        }
+        if (value instanceof Error) {
+            return { name: value.name, message: value.message, stack: value.stack };
+        }
+        // Date has no own enumerable keys, so the walk below would collapse it to {}.
+        if (value instanceof Date) {
+            return value.toISOString();
+        }
+        if (seen.has(value)) {
+            return '[Circular]';
+        }
+        seen.add(value);
+        if (Array.isArray(value)) {
+            return value.map((item) => toSafeValue(item, seen));
+        }
+        const plain = {};
+        for (const key of Object.keys(value)) {
+            if (key === 'toJSON') continue;
+            try {
+                plain[key] = toSafeValue(value[key], seen);
+            } catch (e) {
+                plain[key] = '[Unreadable]';
+            }
+        }
+        return plain;
+    }
+
+    // Helper to safely stringify values
+    function safeStringify(obj) {
+        return JSON.stringify(toSafeValue(obj, new WeakSet()));
+    }
+
+    // Normalize log type for consistency (e.g., 'warn' to 'warning')
+    function normalizeType(type) {
+        return type === 'warn' ? 'warning' : type;
+    }
+
+    // Determine if a log type should be captured based on configured levels
+    function shouldCapture(type) {
+        return captureTypes.includes(normalizeType(type));
+    }
+
+    // Batch and send logs
+    function flushLogs() {
+        if (logQueue.length === 0) return;
+
+        const batch = logQueue.splice(0, logQueue.length);
+
+        fetch(ENDPOINT, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({ logs: batch })
+        }).catch(err => {
+            // Silently fail to avoid infinite loops
+            originalConsole.error('Failed to send logs:', err);
+        });
+    }
+
+    // Debounced flush (100ms)
+    function scheduleFlush() {
+        if (flushTimeout) clearTimeout(flushTimeout);
+        flushTimeout = setTimeout(flushLogs, 100);
+    }
+
+    // Intercept console methods
+    ['log', 'debug', 'info', 'error', 'warn', 'table'].forEach(method => {
+        console[method] = function(...args) {
+            // Call original method
+            originalConsole[method].apply(console, args);
+
+            // Capture log data
+            try {
+                if (!shouldCapture(method)) {
+                    return;
+                }
+
+                logQueue.push({
+                    type: method,
+                    timestamp: new Date().toISOString(),
+                    data: args.map(arg => {
+                        try {
+                            return typeof arg === 'object' ? JSON.parse(safeStringify(arg)) : arg;
+                        } catch (e) {
+                            return String(arg);
+                        }
+                    }),
+                    url: window.location.href,
+                    userAgent: navigator.userAgent
+                });
+
+                scheduleFlush();
+            } catch (e) {
+                // Fail silently
+            }
+        };
+    });
+
+    // Global error handlers for uncaught errors
+    const originalOnError = window.onerror;
+    window.onerror = function boostErrorHandler(errorMsg, url, lineNumber, colNumber, error) {
+        try {
+            if (shouldCapture('error')) {
+                logQueue.push({
+                    type: 'uncaught_error',
+                    timestamp: new Date().toISOString(),
+                    data: [{
+                        message: errorMsg,
+                        filename: url,
+                        lineno: lineNumber,
+                        colno: colNumber,
+                        error: error ? {
+                            name: error.name,
+                            message: error.message,
+                            stack: error.stack
+                        } : null
+                    }],
+                    url: window.location.href,
+                    userAgent: navigator.userAgent
+                });
+
+                scheduleFlush();
+            }
+
+        } catch (e) {
+            // Fail silently
+        }
+
+        // Call original handler if it exists
+        if (originalOnError && typeof originalOnError === 'function') {
+            return originalOnError(errorMsg, url, lineNumber, colNumber, error);
+        }
+
+        // Let the error continue to propagate
+        return false;
+    }
+    window.addEventListener('error', (event) => {
+        try {
+            if (!shouldCapture('error')) {
+                return false;
+            }
+
+            logQueue.push({
+                type: 'window_error',
+                timestamp: new Date().toISOString(),
+                data: [{
+                    message: event.message,
+                    filename: event.filename,
+                    lineno: event.lineno,
+                    colno: event.colno,
+                    error: event.error ? {
+                        name: event.error.name,
+                        message: event.error.message,
+                        stack: event.error.stack
+                    } : null
+                }],
+                url: window.location.href,
+                userAgent: navigator.userAgent
+            });
+
+            scheduleFlush();
+        } catch (e) {
+            // Fail silently
+        }
+
+        // Let the error continue to propagate
+        return false;
+    });
+    window.addEventListener('unhandledrejection', (event) => {
+        try {
+            if (!shouldCapture('error')) {
+                return false;
+            }
+
+            logQueue.push({
+                type: 'error',
+                timestamp: new Date().toISOString(),
+                data: [{
+                    message: 'Unhandled Promise Rejection',
+                    reason: toSafeValue(event.reason, new WeakSet())
+                }],
+                url: window.location.href,
+                userAgent: navigator.userAgent
+            });
+
+            scheduleFlush();
+        } catch (e) {
+            // Fail silently
+        }
+
+        // Let the rejection continue to propagate
+        return false;
+    });
+
+    // Flush on page unload
+    window.addEventListener('beforeunload', () => {
+        if (logQueue.length > 0) {
+            navigator.sendBeacon(ENDPOINT, JSON.stringify({ logs: logQueue }));
+        }
+    });
+})();
+</script>
+</head>
+<body class="flex min-h-screen flex-col bg-linear-to-br from-crema to-[#F3ECDD] font-sans text-tinta antialiased">
+    <header x-data="{ open: false }" @keydown.escape.window="open = false"
+            class="sticky top-0 z-40 border-b border-arena/70 bg-crema/90 backdrop-blur">
+        <div class="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4 sm:px-8">
+            <a href="http://127.0.0.1:8000" class="font-display text-xl tracking-[0.45em] text-verde">FEIGLER</a>
+
+            <form action="http://127.0.0.1:8000/buscar" method="get" role="search" class="mx-auto hidden w-full max-w-xs md:block">
+                <label class="relative block">
+                    <span class="sr-only">Buscar productos</span>
+                    <svg class="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-gris-calido" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4" stroke-linecap="round"/></svg>
+                    <input type="search" name="q" placeholder="Buscar productos"
+                           class="w-full rounded-full border border-arena bg-crema/70 py-2 pl-10 pr-4 text-sm placeholder:text-gris-calido focus:border-verde focus:ring-verde/20">
+                </label>
+            </form>
+
+            <nav aria-label="Principal" class="ml-auto hidden items-center gap-6 text-sm lg:flex">
+                                    <a href="http://127.0.0.1:8000/hombre"                        class="border-b pb-0.5 transition border-transparent text-gris-calido hover:text-verde">Hombre</a>
+                                    <a href="http://127.0.0.1:8000/mujer"                        class="border-b pb-0.5 transition border-transparent text-gris-calido hover:text-verde">Mujer</a>
+                                    <a href="http://127.0.0.1:8000/ninos"                        class="border-b pb-0.5 transition border-transparent text-gris-calido hover:text-verde">Niños</a>
+                                    <a href="http://127.0.0.1:8000/novedades"                        class="border-b pb-0.5 transition border-transparent text-gris-calido hover:text-verde">Novedades</a>
+                                    <a href="http://127.0.0.1:8000/tienda"                        class="border-b pb-0.5 transition border-transparent text-gris-calido hover:text-verde">Tienda</a>
+                                    <a href="http://127.0.0.1:8000/cuenta"                        class="border-b pb-0.5 transition border-transparent text-gris-calido hover:text-verde">Cuenta</a>
+                            </nav>
+
+            <a href="http://127.0.0.1:8000/carrito"
+               class="ml-auto whitespace-nowrap rounded-full border border-laton px-4 py-1.5 text-sm text-verde transition hover:bg-verde hover:text-crema lg:ml-0">
+                Carrito · 0
+            </a>
+
+            <button type="button" class="grid size-10 place-items-center rounded-full border border-arena text-verde lg:hidden"
+                    @click="open = !open" :aria-expanded="open" aria-controls="menu-movil" aria-label="Abrir menú">
+                <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+            </button>
+        </div>
+
+        <div id="menu-movil" x-show="open" x-transition.opacity style="display: none"
+             class="border-t border-arena/70 bg-crema px-4 pb-5 pt-4 lg:hidden">
+            <form action="http://127.0.0.1:8000/buscar" method="get" role="search" class="mb-4">
+                <label class="sr-only" for="buscar-movil">Buscar productos</label>
+                <input id="buscar-movil" type="search" name="q" placeholder="Buscar productos"
+                       class="w-full rounded-full border border-arena bg-crema py-2 px-4 text-sm focus:border-verde focus:ring-verde/20">
+            </form>
+            <nav aria-label="Principal móvil" class="grid grid-cols-2 gap-1 text-base">
+                                    <a href="http://127.0.0.1:8000/hombre" class="rounded-xl px-3 py-2.5 text-tinta hover:bg-hueso/40">Hombre</a>
+                                    <a href="http://127.0.0.1:8000/mujer" class="rounded-xl px-3 py-2.5 text-tinta hover:bg-hueso/40">Mujer</a>
+                                    <a href="http://127.0.0.1:8000/ninos" class="rounded-xl px-3 py-2.5 text-tinta hover:bg-hueso/40">Niños</a>
+                                    <a href="http://127.0.0.1:8000/novedades" class="rounded-xl px-3 py-2.5 text-tinta hover:bg-hueso/40">Novedades</a>
+                                    <a href="http://127.0.0.1:8000/tienda" class="rounded-xl px-3 py-2.5 text-tinta hover:bg-hueso/40">Tienda</a>
+                                    <a href="http://127.0.0.1:8000/cuenta" class="rounded-xl px-3 py-2.5 text-tinta hover:bg-hueso/40">Cuenta</a>
+                            </nav>
+        </div>
+    </header>
+
+    <main class="flex-1"><div class="mx-auto max-w-7xl px-4 pt-6 sm:px-8" x-data="productPurchase(JSON.parse('{\u0022name\u0022:\u0022soy un producto\u0022,\u0022colors\u0022:[{\u0022id\u0022:6,\u0022name\u0022:\u0022Amarillo\u0022,\u0022hex\u0022:\u0022#E8CC59\u0022,\u0022images\u0022:[]}],\u0022sizes\u0022:[\u0022XS\u0022],\u0022variants\u0022:[{\u0022id\u0022:41,\u0022color\u0022:6,\u0022size\u0022:\u0022XS\u0022,\u0022stock\u0022:1111}],\u0022initialColor\u0022:0,\u0022lowStock\u0022:3}'))">
+
+        <nav aria-label="Ruta" class="text-xs text-gris-calido">
+            <ol class="flex flex-wrap items-center gap-x-1.5">
+                                    <li class="flex items-center gap-1.5">
+                                                    <a href="/" class="hover:text-verde">Inicio</a><span aria-hidden="true">/</span>
+                                            </li>
+                                    <li class="flex items-center gap-1.5">
+                                                    <a href="http://127.0.0.1:8000/hombre" class="hover:text-verde">Hombre</a><span aria-hidden="true">/</span>
+                                            </li>
+                                    <li class="flex items-center gap-1.5">
+                                                    <span class="text-tinta" aria-current="page">soy un producto</span>
+                                            </li>
+                            </ol>
+        </nav>
+
+        <div class="mt-6 grid gap-10 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:gap-14">
+
+            
+            <div class="flex flex-col gap-3 sm:flex-row sm:gap-4">
+                <ul class="order-2 flex gap-3 overflow-x-auto sm:order-1 sm:w-20 sm:shrink-0 sm:flex-col sm:overflow-visible" aria-label="Miniaturas">
+                    <template x-for="(img, i) in images" :key="img.url">
+                        <li class="w-16 shrink-0 sm:w-full">
+                            <button type="button" @click="imageIndex = i" :aria-label="'Ver foto ' + (i + 1)" :aria-current="imageIndex === i"
+                                    class="block aspect-3/4 w-full overflow-hidden rounded-xl border bg-linear-to-b from-[#F3ECDD] to-arena transition"
+                                    :class="imageIndex === i ? 'border-laton ring-2 ring-laton/40' : 'border-arena hover:border-laton/60'">
+                                <img :src="img.thumb || img.url" alt="" loading="lazy" class="h-full w-full object-cover">
+                            </button>
+                        </li>
+                    </template>
+                </ul>
+
+                <div class="relative order-1 aspect-4/5 min-w-0 flex-1 overflow-hidden rounded-3xl border border-arena/80 bg-linear-to-b from-[#F3ECDD] to-arena sm:order-2">
+                    <img x-show="image" :src="image?.url" :alt="name + ' en ' + (color?.name ?? '')" class="h-full w-full object-cover" style="display: none">
+                    <p x-show="!image" class="grid h-full place-items-center px-6 text-center text-sm text-gris-calido">Este color todavía no tiene fotos.</p>
+
+                    <div x-show="images.length > 1" style="display: none">
+                            <button type="button" @click="prev()" aria-label="Foto anterior"
+                                    class="absolute left-3 top-1/2 grid size-10 -translate-y-1/2 place-items-center rounded-full bg-crema text-verde shadow-md transition hover:bg-white">
+                                <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg>
+                            </button>
+                            <button type="button" @click="next()" aria-label="Foto siguiente"
+                                    class="absolute right-3 top-1/2 grid size-10 -translate-y-1/2 place-items-center rounded-full bg-crema text-verde shadow-md transition hover:bg-white">
+                                <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+                            </button>
+                    </div>
+
+                    <p x-show="images.length" class="absolute inset-x-0 bottom-4 text-center text-xs text-gris-calido" style="display: none">
+                        <span x-text="imageIndex + 1"></span> / <span x-text="images.length"></span> · <span x-text="color?.name"></span>
+                    </p>
+                </div>
+            </div>
+
+            
+            <div class="min-w-0">
+                <p class="text-xs text-laton">CMTH-005 · Hombre · Camiseta</p>
+                <h1 class="mt-3 font-display text-5xl leading-none sm:text-6xl">soy un producto</h1>
+                <p class="mt-4 font-display text-3xl text-verde">$50.000</p>
+                
+                
+                <div class="mt-8">
+                    <p class="text-sm">Color · <span class="text-gris-calido" x-text="color?.name"></span></p>
+                    <div class="mt-3 flex flex-wrap gap-3" role="group" aria-label="Color">
+                        <template x-for="(c, i) in colors" :key="c.id">
+                            <button type="button" @click="selectColor(i)" :aria-pressed="colorIndex === i" :aria-label="c.name" :title="c.name"
+                                    class="size-9 rounded-full border border-black/10 transition"
+                                    :class="colorIndex === i ? 'ring-2 ring-verde ring-offset-2 ring-offset-crema' : 'hover:ring-2 hover:ring-laton/60 hover:ring-offset-2 hover:ring-offset-crema'"
+                                    :style="'background-color:' + c.hex"></button>
+                        </template>
+                    </div>
+                </div>
+
+                
+                <div class="mt-7">
+                    <div class="flex items-center justify-between">
+                        <p class="text-sm">Talla · <span class="text-gris-calido" x-text="size ?? 'elige una'"></span></p>
+                        <button type="button" data-size-guide class="text-sm text-verde underline decoration-laton underline-offset-4">Guía de tallas</button>
+                    </div>
+                    <div class="mt-3 flex flex-wrap gap-2.5" role="group" aria-label="Talla">
+                        <template x-for="s in sizes" :key="s">
+                            <button type="button" @click="selectSize(s)" :disabled="stockFor(s) <= 0" :aria-pressed="size === s" x-text="s"
+                                    class="min-w-12 rounded-xl border px-4 py-2.5 text-sm transition"
+                                    :class="size === s
+                                        ? 'border-verde-hondo bg-linear-to-b from-verde to-verde-hondo text-crema shadow-md'
+                                        : (stockFor(s) <= 0 ? 'cursor-not-allowed border-arena/60 text-gris-calido/50 line-through' : 'border-arena hover:border-verde')"></button>
+                        </template>
+                    </div>
+                    <p x-show="showLowStock" class="mt-3 text-sm text-ladrillo" style="display: none" role="status">Quedan pocas unidades en esta talla</p>
+                </div>
+
+                
+                <div class="mt-8 flex flex-wrap items-center gap-3">
+                    <div class="inline-flex items-center rounded-full border border-arena" role="group" aria-label="Cantidad">
+                        <button type="button" @click="step(-1)" aria-label="Menos" class="grid size-11 place-items-center text-lg text-gris-calido hover:text-verde">−</button>
+                        <span class="w-8 text-center text-sm" x-text="quantity" aria-live="polite"></span>
+                        <button type="button" @click="step(1)" aria-label="Más" class="grid size-11 place-items-center text-lg text-gris-calido hover:text-verde">+</button>
+                    </div>
+                    <button type="button" @click="addToCart()" :disabled="!canAdd"
+                            class="min-w-0 flex-1 rounded-full bg-linear-to-b from-verde to-verde-hondo px-6 py-3 text-sm text-crema shadow-[0_10px_20px_-10px_rgba(7,63,37,0.7)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+                            x-text="size === null ? 'Elige una talla' : (selectedStock <= 0 ? 'Agotado' : 'Agregar al carrito')"></button>
+                    <button type="button" data-wishlist aria-label="Agregar a favoritos"
+                            class="grid size-12 place-items-center rounded-full border border-laton text-verde transition hover:bg-verde hover:text-crema">
+                        <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z" stroke-linejoin="round"/></svg>
+                    </button>
+                </div>
+
+                <p class="mt-6 flex flex-wrap gap-x-6 gap-y-1 text-sm text-gris-calido"><span>Envío nacional</span><span>Cambios fáciles · 30 días</span></p>
+
+                
+                <div class="mt-8 divide-y divide-arena border-y border-arena">
+                                                                                            <div x-data="{ open: false }">
+                            <h2>
+                                <button type="button" @click="open = !open" :aria-expanded="open" aria-controls="acordeon-1"
+                                        class="flex w-full items-center justify-between py-4 text-left text-[0.95rem]">
+                                    Material y cuidado
+                                    <span class="text-laton transition-transform" :class="open && 'rotate-45'" aria-hidden="true">+</span>
+                                </button>
+                            </h2>
+                            <div id="acordeon-1" class="grid transition-[grid-template-rows] duration-300" :class="open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'">
+                                <div class="overflow-hidden">
+                                    <div class="pb-5 text-sm leading-relaxed text-gris-calido">
+                                                                                                                                    <p>Composición no indicada.</p>
+                                                                                                                        </div>
+                                </div>
+                            </div>
+                        </div>
+                                                                    <div x-data="{ open: false }">
+                            <h2>
+                                <button type="button" @click="open = !open" :aria-expanded="open" aria-controls="acordeon-2"
+                                        class="flex w-full items-center justify-between py-4 text-left text-[0.95rem]">
+                                    Envíos y cambios
+                                    <span class="text-laton transition-transform" :class="open && 'rotate-45'" aria-hidden="true">+</span>
+                                </button>
+                            </h2>
+                            <div id="acordeon-2" class="grid transition-[grid-template-rows] duration-300" :class="open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'">
+                                <div class="overflow-hidden">
+                                    <div class="pb-5 text-sm leading-relaxed text-gris-calido">
+                                                                                    <p>Enviamos a todo el país. Si no te queda bien, tienes 30 días para cambiarla.</p>
+                                                                            </div>
+                                </div>
+                            </div>
+                        </div>
+                                    </div>
+            </div>
+        </div>
+
+        
+                    <section class="pt-20" aria-labelledby="titulo-relacionados">
+                <p class="text-xs text-laton">También te puede gustar</p>
+                <h2 id="titulo-relacionados" class="mt-2 font-display text-4xl sm:text-5xl">Más de <em class="italic text-verde">Camiseta</em></h2>
+                <div class="mt-8 grid grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-4">
+                                            <article class="group relative">
+    <a href="http://127.0.0.1:8000/producto/camiseta-slim-2"
+       class="block overflow-hidden rounded-2xl border border-arena/80 bg-crema shadow-[0_10px_28px_-18px_rgba(30,27,24,0.35)] transition duration-300 hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-laton">
+        <div class="relative aspect-4/5 bg-linear-to-b from-[#F3ECDD] to-arena">
+                            <img src="http://localhost:8000/storage/products/30/6/thumbs/nXTiTpvFjHV31hti7Vz633awyQkPm8JJL03xj1RK.webp" alt="camiseta slim" loading="lazy"
+                     class="h-full w-full object-cover ">
+                                        <span class="absolute left-3 top-3 rounded-full bg-verde-hondo px-3 py-1 text-xs text-crema">Nuevo</span>
+                    </div>
+        <div class="space-y-1 p-4">
+            <h3 class="truncate text-[0.95rem]">camiseta slim</h3>
+            <p class="text-sm text-gris-calido">$80.000</p>
+                            <ul class="flex gap-1.5 pt-1" aria-label="Colores disponibles">
+                                            <li class="size-3.5 rounded-full border border-black/10" style="background-color: #E8CC59" title="Amarillo"></li>
+                                            <li class="size-3.5 rounded-full border border-black/10" style="background-color: #ABEF3D" title="Aut Odio"></li>
+                                    </ul>
+                    </div>
+    </a>
+
+    <button type="button" data-wishlist="30" aria-label="Agregar camiseta slim a favoritos"
+            class="absolute right-3 top-3 grid size-9 place-items-center rounded-full bg-crema/90 text-verde shadow-sm transition hover:bg-crema hover:text-verde-hondo">
+        <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z" stroke-linejoin="round"/></svg>
+    </button>
+</article>
+                                            <article class="group relative">
+    <a href="http://127.0.0.1:8000/producto/camiseta-prueba"
+       class="block overflow-hidden rounded-2xl border border-arena/80 bg-crema shadow-[0_10px_28px_-18px_rgba(30,27,24,0.35)] transition duration-300 hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-laton">
+        <div class="relative aspect-4/5 bg-linear-to-b from-[#F3ECDD] to-arena">
+                                        <span class="absolute left-3 top-3 rounded-full bg-verde-hondo px-3 py-1 text-xs text-crema">Nuevo</span>
+                    </div>
+        <div class="space-y-1 p-4">
+            <h3 class="truncate text-[0.95rem]">camiseta prueba</h3>
+            <p class="text-sm text-gris-calido">$50.000</p>
+                            <ul class="flex gap-1.5 pt-1" aria-label="Colores disponibles">
+                                            <li class="size-3.5 rounded-full border border-black/10" style="background-color: #E8CC59" title="Amarillo"></li>
+                                    </ul>
+                    </div>
+    </a>
+
+    <button type="button" data-wishlist="24" aria-label="Agregar camiseta prueba a favoritos"
+            class="absolute right-3 top-3 grid size-9 place-items-center rounded-full bg-crema/90 text-verde shadow-sm transition hover:bg-crema hover:text-verde-hondo">
+        <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z" stroke-linejoin="round"/></svg>
+    </button>
+</article>
+                                            <article class="group relative">
+    <a href="http://127.0.0.1:8000/producto/camiseta-slim"
+       class="block overflow-hidden rounded-2xl border border-arena/80 bg-crema shadow-[0_10px_28px_-18px_rgba(30,27,24,0.35)] transition duration-300 hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-laton">
+        <div class="relative aspect-4/5 bg-linear-to-b from-[#F3ECDD] to-arena">
+                                        <span class="absolute left-3 top-3 rounded-full bg-verde-hondo px-3 py-1 text-xs text-crema">Nuevo</span>
+                    </div>
+        <div class="space-y-1 p-4">
+            <h3 class="truncate text-[0.95rem]">camiseta slim</h3>
+            <p class="text-sm text-gris-calido">$50.000</p>
+                            <ul class="flex gap-1.5 pt-1" aria-label="Colores disponibles">
+                                            <li class="size-3.5 rounded-full border border-black/10" style="background-color: #E8CC59" title="Amarillo"></li>
+                                    </ul>
+                    </div>
+    </a>
+
+    <button type="button" data-wishlist="4" aria-label="Agregar camiseta slim a favoritos"
+            class="absolute right-3 top-3 grid size-9 place-items-center rounded-full bg-crema/90 text-verde shadow-sm transition hover:bg-crema hover:text-verde-hondo">
+        <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z" stroke-linejoin="round"/></svg>
+    </button>
+</article>
+                                            <article class="group relative">
+    <a href="http://127.0.0.1:8000/producto/camiseta-clasica"
+       class="block overflow-hidden rounded-2xl border border-arena/80 bg-crema shadow-[0_10px_28px_-18px_rgba(30,27,24,0.35)] transition duration-300 hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-laton">
+        <div class="relative aspect-4/5 bg-linear-to-b from-[#F3ECDD] to-arena">
+                            <img src="http://localhost:8000/storage/products/2/7/thumbs/mfvePdl0dLnewwf8A3GV1lkfKiyzZBPDO64IKCzK.webp" alt="camiseta clasica" loading="lazy"
+                     class="h-full w-full object-cover ">
+                                        <span class="absolute left-3 top-3 rounded-full bg-verde-hondo px-3 py-1 text-xs text-crema">Nuevo</span>
+                    </div>
+        <div class="space-y-1 p-4">
+            <h3 class="truncate text-[0.95rem]">camiseta clasica</h3>
+            <p class="text-sm text-gris-calido">$80.000</p>
+                            <ul class="flex gap-1.5 pt-1" aria-label="Colores disponibles">
+                                            <li class="size-3.5 rounded-full border border-black/10" style="background-color: #2350A8" title="Azul"></li>
+                                            <li class="size-3.5 rounded-full border border-black/10" style="background-color: #E8CC59" title="Amarillo"></li>
+                                            <li class="size-3.5 rounded-full border border-black/10" style="background-color: #A8202A" title="Rojo"></li>
+                                            <li class="size-3.5 rounded-full border border-black/10" style="background-color: #511792" title="Maiores Eum"></li>
+                                    </ul>
+                    </div>
+    </a>
+
+    <button type="button" data-wishlist="2" aria-label="Agregar camiseta clasica a favoritos"
+            class="absolute right-3 top-3 grid size-9 place-items-center rounded-full bg-crema/90 text-verde shadow-sm transition hover:bg-crema hover:text-verde-hondo">
+        <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z" stroke-linejoin="round"/></svg>
+    </button>
+</article>
+                                    </div>
+            </section>
+            </div></main>
+
+    <footer class="mt-20 border-t border-arena/70 bg-linear-to-br from-crema/40 to-arena/30">
+        <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-x-8 gap-y-3 px-4 py-8 text-sm text-gris-calido sm:px-8">
+            <span class="font-display text-base tracking-[0.45em] text-verde">FEIGLER</span>
+            <span>Calle 2 · Santander</span>
+            <a href="#" class="transition hover:text-verde">Instagram</a>
+            <a href="#" class="transition hover:text-verde">WhatsApp</a>
+        </div>
+    </footer>
+
+    <!-- Livewire Scripts -->
+<script src="http://127.0.0.1:8000/livewire-2abf6fdd/livewire.js?id=8ea5922c"   data-csrf="rHhqSpvPNNLQtHJj7gwZlpU844Ao1cBQQsNCoLro" data-module-url="http://127.0.0.1:8000/livewire-2abf6fdd" data-update-uri="http://127.0.0.1:8000/livewire-2abf6fdd/update" data-navigate-once="true"></script>
+</body>
+</html>

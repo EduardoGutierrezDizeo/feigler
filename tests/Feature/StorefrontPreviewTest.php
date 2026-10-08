@@ -108,7 +108,10 @@ test('la sección muestra los filtros, el orden y el botón de mostrar más', fu
         ->assertSeeHtml('name="orden"')
         ->assertSeeHtml('Quitar filtro')
         ->assertSeeHtml('Vestido Selva')
-        ->assertSeeHtml('Mostrar más');
+        ->assertSeeHtml('Mostrar más')
+        ->assertSeeHtml('x-ref="grid"')
+        ->assertSeeHtml('data-product-id=')
+        ->assertSeeHtml('x-data="loadMore(');
 });
 
 test('ninguna de las tres vistas de la tienda usa x-if', function (string $view) {

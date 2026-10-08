@@ -10,7 +10,7 @@
     $soldOut = $badge === 'agotado';
 @endphp
 
-<article class="group relative">
+<article {{ $attributes->merge(['class' => 'group relative']) }}>
     <a href="{{ $product['url'] }}"
        class="block overflow-hidden rounded-2xl border border-arena/80 bg-crema shadow-[0_10px_28px_-18px_rgba(30,27,24,0.35)] transition duration-300 hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-laton">
         <div class="relative aspect-4/5 bg-linear-to-b from-[#F3ECDD] to-arena">
