@@ -75,7 +75,13 @@ Route::get('/buscar', SearchController::class)->name('storefront.search');
 
 Route::get('/dashboard', function () {
     return view('dashboard');
-})->middleware(['auth', 'verified'])->name('dashboard');
+})->middleware(['auth', 'redirect.customer', 'verified'])->name('dashboard');
+
+// Mi cuenta: la página mínima del cliente. El dueño de la sesión entra aquí; el
+// personal y los invitados no. La verificación del correo todavía no bloquea nada.
+Route::get('/cuenta', function () {
+    return view('storefront.account', ['user' => auth()->user()]);
+})->middleware(['auth', 'role:cliente'])->name('account.index');
 
 Route::get('/staff', function () {
     $modules = [

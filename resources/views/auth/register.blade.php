@@ -1,11 +1,7 @@
 <x-guest-layout>
     <h1 class="font-display text-3xl font-semibold text-tinta">
-        {{ __('Register') }}
+        Crea tu cuenta de Feigler
     </h1>
-
-    <p class="mt-1 text-sm text-gris-calido">
-        Crea una cuenta para entrar al panel de Feigler
-    </p>
 
     <form method="POST" action="{{ route('register') }}" class="mt-8">
         @csrf
@@ -15,6 +11,13 @@
             <x-input-label for="name" :value="__('Name')" />
             <x-text-input id="name" class="block mt-1 w-full" type="text" name="name" :value="old('name')" required autofocus autocomplete="name" />
             <x-input-error :messages="$errors->get('name')" class="mt-2" />
+        </div>
+
+        <!-- Last name -->
+        <div class="mt-4">
+            <x-input-label for="last_name" value="Apellido" />
+            <x-text-input id="last_name" class="block mt-1 w-full" type="text" name="last_name" :value="old('last_name')" required autocomplete="family-name" />
+            <x-input-error :messages="$errors->get('last_name')" class="mt-2" />
         </div>
 
         <!-- Email Address -->
@@ -45,6 +48,22 @@
                             name="password_confirmation" required autocomplete="new-password" />
 
             <x-input-error :messages="$errors->get('password_confirmation')" class="mt-2" />
+        </div>
+
+        <!-- Phone -->
+        <div class="mt-4">
+            <x-input-label for="phone" value="Teléfono" />
+            <x-text-input id="phone" class="block mt-1 w-full" type="tel" name="phone" :value="old('phone')" required autocomplete="tel" />
+            <x-input-error :messages="$errors->get('phone')" class="mt-2" />
+        </div>
+
+        <!-- Personal data authorization -->
+        <div class="mt-4">
+            <label for="terms" class="flex items-start gap-3 text-sm text-gris-calido">
+                <input id="terms" type="checkbox" name="terms" value="1" @checked(old('terms')) class="mt-0.5 size-4 rounded border-arena text-verde focus:ring-verde/30" />
+                <span>{{ config('tienda.datos_personales_texto') }}</span>
+            </label>
+            <x-input-error :messages="$errors->get('terms')" class="mt-2" />
         </div>
 
         <div class="mt-6 flex flex-col-reverse items-center gap-3 sm:flex-row sm:items-center sm:justify-between">

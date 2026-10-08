@@ -19,6 +19,10 @@ class EmailVerificationNotificationController extends Controller
 
         $request->user()->sendEmailVerificationNotification();
 
+        if ($request->user()->hasRole('cliente')) {
+            return redirect()->route('account.index')->with('status', 'verification-link-sent');
+        }
+
         return back()->with('status', 'verification-link-sent');
     }
 }

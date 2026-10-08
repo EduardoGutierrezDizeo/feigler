@@ -38,6 +38,10 @@ class AuthenticatedSessionController extends Controller
             return redirect()->route('staff.placeholder');
         }
 
+        if ($user->hasRole('cliente')) {
+            return redirect()->intended(route('account.index', absolute: false));
+        }
+
         return redirect()->intended(route('dashboard', absolute: false));
     }
 

@@ -29,4 +29,6 @@ return [
     'cambios_resumen' => 'Cambios fáciles · 30 días',
     // CONFIRMAR CON EL DUEÑO: texto del acordeón «Envíos y cambios» de la ficha.
     'envios_cambios_texto' => 'Enviamos a todo el país. Si no te queda bien, tienes 30 días para cambiarla.',
+    // CONFIRMAR CON UN PROFESIONAL: texto de la autorización de tratamiento de datos del registro.
+    'datos_personales_texto' => 'Autorizo el tratamiento de mis datos personales de acuerdo con la política de tratamiento de datos de Feigler.',
 ];
