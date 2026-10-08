@@ -594,3 +594,115 @@ test('exactamente un panel está sin inert y es el de la sección inicial', func
 
     expect($activos)->toBe([$payload['initial']]);
 });
+
+test('las tarjetas del carrusel conservan el mismo tamaño en todas las secciones aunque el número de categorías cambie', function () {
+    $data = createTestData();
+    $color = $data['color'];
+    $size = $data['size'];
+
+    // Tres categorías visibles en hombre y una en mujer: los paneles no pueden
+    // cuadrar si el tamaño de la tarjeta dependiera del número de categorías.
+    $categorias = [
+        ['categoria' => $data['categoryHombre'], 'slug' => 'camisas'],
+        ['categoria' => Category::factory()->create(['section' => StoreSection::Hombre, 'name' => 'Polos', 'sku_prefix' => 'PO']), 'slug' => 'polos'],
+        ['categoria' => Category::factory()->create(['section' => StoreSection::Hombre, 'name' => 'Chaquetas', 'sku_prefix' => 'CHQ']), 'slug' => 'chaquetas'],
+        ['categoria' => $data['categoryMujer'], 'slug' => 'vestidos'],
+    ];
+
+    foreach ($categorias as ['categoria' => $categoria, 'slug' => $slug]) {
+        $producto = Product::factory()->create([
+            'category_id' => $categoria->getKey(),
+            'name' => 'Prenda '.$categoria->name,
+            'slug' => $slug,
+            'status' => 'active',
+            'base_price' => 10000,
+        ]);
+        ProductVariant::factory()->create([
+            'product_id' => $producto->getKey(),
+            'color_id' => $color->getKey(),
+            'size_id' => $size->getKey(),
+            'is_active' => true,
+            'stock' => 5,
+        ]);
+    }
+
+    $html = get('/')->assertOk()->getContent();
+
+    $document = new DOMDocument;
+    libxml_use_internal_errors(true);
+    $document->loadHTML($html);
+    libxml_clear_errors();
+
+    $xpath = new DOMXPath($document);
+    $primeraTarjeta = [];
+
+    foreach (['hombre', 'mujer'] as $key) {
+        $tarjetas = $xpath->query('//div[@data-category-panel="'.$key.'"]//div[@data-category-track]/a');
+        $primeraTarjeta[$key] = $tarjetas->item(0)->getAttribute('class');
+    }
+
+    expect($xpath->query('//div[@data-category-panel="hombre"]//div[@data-category-track]/a'))->toHaveCount(3)
+        ->and($xpath->query('//div[@data-category-panel="mujer"]//div[@data-category-track]/a'))->toHaveCount(1)
+        ->and($primeraTarjeta['hombre'])->toBe($primeraTarjeta['mujer'])
+        ->and($primeraTarjeta['hombre'])->toContain('w-[68%]')
+        ->and($primeraTarjeta['hombre'])->toContain('sm:w-[calc((100%-1.5rem)/2)]');
+});
+
+test('cada panel declara su estado con :class, :inert y :aria-hidden gobernados por isActive', function () {
+    createTwoSectionsData();
+
+    $html = get('/')->assertOk()->getContent();
+    $payload = homeAlpinePayload($html, 'categoryCarousel');
+
+    $nPaneles = count($payload['sections']);
+
+    expect(substr_count($html, 'data-category-panel="'))->toBe($nPaneles)
+        ->and(substr_count($html, ':inert="!isActive($el)"'))->toBe($nPaneles)
+        ->and(substr_count($html, ':aria-hidden="isActive($el) ? false : \'true\'"'))->toBe($nPaneles)
+        ->and(substr_count($html, ':class="{ \'visible opacity-100 translate-y-0\': isActive($el), \'invisible opacity-0 translate-y-1 pointer-events-none\': !isActive($el) }"'))->toBe($nPaneles);
+});
+
+test('en el HTML inicial solo el panel de la sección inicial está visible y el resto totalmente inactivo', function () {
+    createTwoSectionsData();
+
+    $html = get('/')->assertOk()->getContent();
+    $payload = homeAlpinePayload($html, 'categoryCarousel');
+
+    $document = new DOMDocument;
+    libxml_use_internal_errors(true);
+    $document->loadHTML($html);
+    libxml_clear_errors();
+
+    foreach ((new DOMXPath($document))->query('//div[@data-category-panel]') as $panel) {
+        $clases = preg_split('/\s+/', trim($panel->getAttribute('class')));
+        $esInicial = $panel->getAttribute('data-category-panel') === $payload['initial'];
+
+        expect(in_array('visible', $clases, true))->toBe($esInicial)
+            ->and(in_array('opacity-100', $clases, true))->toBe($esInicial)
+            ->and(in_array('translate-y-0', $clases, true))->toBe($esInicial)
+            ->and(in_array('invisible', $clases, true))->toBe(! $esInicial)
+            ->and(in_array('opacity-0', $clases, true))->toBe(! $esInicial)
+            ->and(in_array('translate-y-1', $clases, true))->toBe(! $esInicial)
+            ->and(in_array('pointer-events-none', $clases, true))->toBe(! $esInicial)
+            ->and($panel->hasAttribute('inert'))->toBe(! $esInicial);
+    }
+});
+
+test('ningún panel mezcla clases de estado contradictorias en el HTML inicial', function () {
+    createTwoSectionsData();
+
+    $html = get('/')->assertOk()->getContent();
+
+    $document = new DOMDocument;
+    libxml_use_internal_errors(true);
+    $document->loadHTML($html);
+    libxml_clear_errors();
+
+    foreach ((new DOMXPath($document))->query('//div[@data-category-panel]') as $panel) {
+        $clases = preg_split('/\s+/', trim($panel->getAttribute('class')));
+
+        expect(in_array('visible', $clases, true) && in_array('invisible', $clases, true))->toBeFalse()
+            ->and(in_array('opacity-0', $clases, true) && in_array('opacity-100', $clases, true))->toBeFalse()
+            ->and(in_array('translate-y-0', $clases, true) && in_array('translate-y-1', $clases, true))->toBeFalse();
+    }
+});

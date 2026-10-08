@@ -17,6 +17,10 @@ export default function categoryCarousel(config) {
             this.$nextTick(() => this.measure());
         },
 
+        isActive(el) {
+            return el?.dataset?.categoryPanel === this.section;
+        },
+
         panel(key = this.section) {
             return this.root?.querySelector(`[data-category-panel="${key}"]`) ?? null;
         },
@@ -50,28 +54,10 @@ export default function categoryCarousel(config) {
             track?.scrollTo({ left: index * track.clientWidth, behavior: 'smooth' });
         },
 
-        paintPanel(key, active) {
-            const panel = this.panel(key);
-            if (!panel) return;
-            panel.inert = !active;
-            panel.classList.toggle('invisible', !active);
-            panel.classList.toggle('opacity-0', !active);
-            panel.classList.toggle('translate-y-1', !active);
-            panel.classList.toggle('pointer-events-none', !active);
-            if (active) {
-                panel.removeAttribute('aria-hidden');
-            } else {
-                panel.setAttribute('aria-hidden', 'true');
-            }
-        },
-
         setSection(key) {
             if (key === this.section) return;
-            const previous = this.section;
             this.section = key;
             this.$nextTick(() => {
-                this.paintPanel(previous, false);
-                this.paintPanel(key, true);
                 this.panel(key)?.querySelector('[data-category-track]')?.scrollTo({ left: 0 });
                 this.measure();
             });

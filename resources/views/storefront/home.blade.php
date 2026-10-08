@@ -38,6 +38,9 @@
                     @endphp
                     <div data-category-panel="{{ $sectionSection['key'] }}"
                          @if (! $sectionActiva) inert aria-hidden="true" @endif
+                         :inert="!isActive($el)"
+                         :aria-hidden="isActive($el) ? false : 'true'"
+                         :class="{ 'visible opacity-100 translate-y-0': isActive($el), 'invisible opacity-0 translate-y-1 pointer-events-none': !isActive($el) }"
                          class="col-start-1 row-start-1 {{ $sectionActiva ? 'visible opacity-100 translate-y-0' : 'invisible opacity-0 translate-y-1 pointer-events-none' }} transition-[opacity,transform,visibility] duration-300 ease-out motion-reduce:transition-none motion-reduce:transform-none">
                         <div class="relative">
                             <div data-category-track @scroll.passive.throttle.80ms="update()"
