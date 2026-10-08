@@ -18,6 +18,15 @@ enum StoreSection: string
     }
 
     /**
+     * La URL de la sección, para que los enlaces la construyan desde la ruta
+     * nombrada y no a mano.
+     */
+    public function route(): string
+    {
+        return route('storefront.section.'.$this->value);
+    }
+
+    /**
      * Every value of the enum, in declaration order.
      *
      * It is what the gender selector is built from and what the form is validated

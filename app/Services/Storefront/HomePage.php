@@ -82,14 +82,14 @@ class HomePage
                     'name' => $category->name,
                     'count' => $counts[$category->getKey()] ?? 0,
                     'image' => $homeImages[$category->getKey()]['url'] ?? null,
-                    'url' => '/'.$section->value.'?categoria[]='.$category->id, // Provisional; rutas se definirán después
+                    'url' => $section->route().'?categoria[]='.$category->id,
                 ];
             })->values()->all();
 
             $result[] = [
                 'key' => $section->value,
                 'label' => $section->label(),
-                'url' => '/'.$section->value, // Provisional; rutas se definirán después
+                'url' => $section->route(),
                 'categories' => $categories,
             ];
         }

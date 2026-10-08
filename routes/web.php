@@ -1,8 +1,12 @@
 <?php
 
+use App\Enums\StoreSection;
 use App\Http\Controllers\ProfileController;
 use App\Services\Storefront\HomePage;
 use App\Services\Storefront\ProductPage;
+use App\Services\Storefront\SectionFilters;
+use App\Services\Storefront\SectionPage;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -19,6 +23,14 @@ Route::get('/', function () {
 Route::get('/producto/{slug}', function (string $slug) {
     return view('storefront.product', (new ProductPage)->forSlug($slug));
 })->name('storefront.product');
+
+// Una ruta por sección, con el nombre de su pestaña en la portada. Un valor que
+// no es una sección no tiene ruta, así que devuelve 404 él solo.
+foreach (StoreSection::cases() as $section) {
+    Route::get('/'.$section->value, function (Request $request) use ($section) {
+        return view('storefront.section', app(SectionPage::class)->for($section, SectionFilters::fromRequest($request, $section)));
+    })->name('storefront.section.'.$section->value);
+}
 
 Route::get('/dashboard', function () {
     return view('dashboard');

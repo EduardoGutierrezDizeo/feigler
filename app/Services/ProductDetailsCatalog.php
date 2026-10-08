@@ -231,9 +231,7 @@ class ProductDetailsCatalog
     {
         $sizes = Size::query()
             ->active()
-            ->whereHas('variants', $this->variantsOfAVisibleProduct())
-            ->when($section, fn (Builder $query): Builder => $query
-                ->whereHas('category', fn (Builder $categories): Builder => $categories->inSection($section)))
+            ->whereHas('variants', $this->variantsOfAVisibleProduct($section))
             ->ordered()
             ->get();
 
@@ -241,33 +239,56 @@ class ProductDetailsCatalog
     }
 
     /**
-     * The colors a shopper can be offered.
+     * The colors a shopper can be offered, whole store or one section.
+     *
+     * The section narrows the list to the garments a catalog of that section would
+     * show, and is not required because a catalog that offers every color is a
+     * legitimate thing to want.
      *
      * @return Collection<int, Color>
      */
-    public function colorsForFilter(): Collection
+    public function colorsForFilter(?StoreSection $section = null): Collection
     {
         return Color::query()
             ->active()
-            ->whereHas('variants', $this->variantsOfAVisibleProduct())
+            ->whereHas('variants', $this->variantsOfAVisibleProduct($section))
             ->ordered()
             ->get();
     }
 
     /**
-     * The materials a shopper can be offered.
+     * The materials a shopper can be offered, whole store or one section.
      *
      * A garment is made of a material whether or not it has been given a variant, so
      * unlike the sizes and the colors there is no variant in the middle of this one: a
      * garment that is in the catalog with its composition says the material is used.
      *
+     * A material of a section is one that a visible garment of an active category of
+     * that section is made of, which is the same definition the section listing uses.
+     *
      * @return Collection<int, Material>
      */
-    public function materialsForFilter(): Collection
+    public function materialsForFilter(?StoreSection $section = null): Collection
     {
         return Material::query()
             ->active()
-            ->whereHas('products', fn (Builder $products): Builder => $products->where('status', '!=', 'inactive'))
+            ->whereHas('products', function (Builder $products) use ($section): void {
+                $products->where('status', '!=', 'inactive');
+
+                if ($section === null) {
+                    return;
+                }
+
+                $products
+                    ->whereHas(
+                        'variants',
+                        fn (Builder $variants): Builder => $variants->where('is_active', true),
+                    )
+                    ->whereHas(
+                        'category',
+                        fn (Builder $categories): Builder => $categories->inSection($section)->where('is_active', true),
+                    );
+            })
             ->ordered()
             ->get();
     }
@@ -282,16 +303,34 @@ class ProductDetailsCatalog
      * product is in the catalog, and deciding that a size has to be hidden because its
      * units ran out is a question about the shop rather than about the catalog.
      *
+     * The section narrows the garment to the catalog of that section, and a section
+     * garment has to sit in a category that is on: turning a category off hides its
+     * garments from the section listing, so an option they alone carry is not offered.
+     *
      * It is written once and passed to the three queries that need it, so the definition
      * of a visible product cannot drift apart between the sizes and the colors.
      *
      * @return Closure(Builder<\App\Models\ProductVariant>): Builder<\App\Models\ProductVariant>>
      */
-    private function variantsOfAVisibleProduct(): Closure
+    private function variantsOfAVisibleProduct(?StoreSection $section = null): Closure
     {
-        return fn (Builder $variants): Builder => $variants
-            ->where('is_active', true)
-            ->whereHas('product', fn (Builder $products): Builder => $products->where('status', '!=', 'inactive'));
+        return function (Builder $variants) use ($section): Builder {
+            $variants
+                ->where('is_active', true)
+                ->whereHas('product', function (Builder $products) use ($section): void {
+                    $products->where('status', '!=', 'inactive');
+
+                    if ($section === null) {
+                        return;
+                    }
+
+                    $products->whereHas('category', function (Builder $categories) use ($section): void {
+                        $categories->inSection($section)->where('is_active', true);
+                    });
+                });
+
+            return $variants;
+        };
     }
 
     /**

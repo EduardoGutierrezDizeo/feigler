@@ -204,9 +204,7 @@ class ProductPage
 
         return [
             ['label' => 'Inicio', 'url' => '/'],
-            // Provisional: las rutas de sección (/hombre, /mujer, /ninos) las
-            // define el prompt de filtros, que es donde se crean.
-            ['label' => $section?->label() ?? '', 'url' => '/'.($section?->value ?? '')],
+            ['label' => $section?->label() ?? '', 'url' => $section !== null ? $section->route() : ''],
             ['label' => $product->name, 'url' => route('storefront.product', $product->slug)],
         ];
     }
