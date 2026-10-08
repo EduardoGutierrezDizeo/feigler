@@ -1,62 +1,43 @@
-<x-guest-layout>
-    <h1 class="font-display text-3xl font-semibold text-tinta">
-        {{ __('Log In') }}
-    </h1>
+<x-store.layout title="Iniciar sesión · Feigler">
+    <div class="mx-auto w-full max-w-md px-4 py-12 sm:px-8">
+        <div class="tarjeta p-6 sm:p-8">
+            <h1 class="font-display text-3xl font-semibold text-verde">
+                {{ __('Log In') }}
+            </h1>
 
-    <p class="mt-2 text-sm text-gris-calido">
-        Acceso al panel de Feigler
-    </p>
+            <p class="mt-2 text-sm text-gris-calido">
+                Acceso a tu cuenta de Feigler
+            </p>
 
-    <!-- Session Status -->
-    <x-auth-session-status class="mb-4" :status="session('status')" />
+            <x-store.status class="mt-6" :status="session('status')" />
 
-    <form method="POST" action="{{ route('login') }}" class="mt-8">
-        @csrf
+            <form method="POST" action="{{ route('login') }}" class="mt-6 space-y-5">
+                @csrf
 
-        <!-- Email Address -->
-        <div>
-            <x-input-label for="email" :value="__('Email')" />
-            <x-text-input id="email" class="block mt-1 w-full" type="email" name="email" :value="old('email')" required autofocus autocomplete="username" />
-            <x-input-error :messages="$errors->get('email')" class="mt-2" />
-        </div>
+                <x-store.field label="{{ __('Email') }}" name="email" type="email" :value="old('email')" :messages="$errors->get('email')" required autofocus autocomplete="email" />
 
-        <!-- Password -->
-        <div class="mt-4">
-            <x-input-label for="password" :value="__('Password')" />
+                <x-store.field label="{{ __('Password') }}" name="password" type="password" :messages="$errors->get('password')" required autocomplete="current-password" />
 
-            <x-text-input id="password" class="block mt-1 w-full"
-                            type="password"
-                            name="password"
-                            required autocomplete="current-password" />
+                <div>
+                    <label for="remember_me" class="inline-flex items-center gap-2 text-sm text-tinta">
+                        <input id="remember_me" type="checkbox" name="remember" class="size-4 rounded border-arena bg-crema text-verde transition-[border-color,box-shadow] duration-150 ease-in-out focus:ring-2 focus:ring-verde/25">
+                        <span>{{ __('Remember me') }}</span>
+                    </label>
+                </div>
 
-            <x-input-error :messages="$errors->get('password')" class="mt-2" />
-        </div>
+                <x-store.button>{{ __('Log in') }}</x-store.button>
+            </form>
 
-        <!-- Remember Me -->
-        <div class="block mt-4">
-            <label for="remember_me" class="inline-flex items-center">
-                <input id="remember_me" type="checkbox" class="rounded border-arena bg-crema text-verde transition-[border-color,box-shadow] duration-150 ease-in-out focus:ring-2 focus:ring-verde/25" name="remember">
-                <span class="ms-2 text-sm text-tinta">{{ __('Remember me') }}</span>
-            </label>
-        </div>
-
-        <div class="mt-6 flex flex-col-reverse items-center gap-3 sm:flex-row sm:items-center sm:justify-between">
             @if (Route::has('password.request'))
-                <a class="w-full rounded-md py-2 text-center text-sm text-gris-calido underline underline-offset-4 transition-colors duration-150 ease-in-out hover:text-brand-green focus:outline-2 focus:outline-offset-2 focus:outline-brand-green sm:w-auto sm:px-0 sm:py-0 sm:text-start" href="{{ route('password.request') }}">
-                    {{ __('Forgot your password?') }}
-                </a>
+                <p class="mt-6 text-center text-sm text-gris-calido">
+                    <x-store.link :href="route('password.request')">{{ __('Forgot your password?') }}</x-store.link>
+                </p>
             @endif
 
-            <x-primary-button class="w-full sm:ms-auto sm:w-auto">
-                {{ __('Log in') }}
-            </x-primary-button>
+            <p class="mt-3 text-center text-sm text-gris-calido">
+                ¿No tienes cuenta?
+                <x-store.link :href="route('register')">Crea tu cuenta</x-store.link>
+            </p>
         </div>
-    </form>
-
-    <p class="mt-6 text-center text-sm text-gris-calido">
-        ¿No tienes cuenta?
-        <a href="{{ route('register') }}" class="text-verde underline underline-offset-4 transition-colors duration-150 ease-in-out hover:text-tinta">
-            Crea tu cuenta
-        </a>
-    </p>
-</x-guest-layout>
+    </div>
+</x-store.layout>

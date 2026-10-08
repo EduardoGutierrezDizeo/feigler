@@ -1,29 +1,23 @@
-<x-guest-layout>
-    <h1 class="font-display text-3xl font-semibold text-tinta">
-        {{ __('Forgot your password?') }}
-    </h1>
+<x-store.layout title="Recuperar contraseña · Feigler">
+    <div class="mx-auto w-full max-w-md px-4 py-12 sm:px-8">
+        <div class="tarjeta p-6 sm:p-8">
+            <h1 class="font-display text-3xl font-semibold text-verde">
+                {{ __('Forgot your password?') }}
+            </h1>
 
-    <p class="mt-1 text-sm text-gris-calido">
-        {{ __('Forgot your password? No problem. Just let us know your email address and we will email you a password reset link that will allow you to choose a new one.') }}
-    </p>
+            <p class="mt-2 text-sm text-gris-calido">
+                {{ __('Forgot your password? No problem. Just let us know your email address and we will email you a password reset link that will allow you to choose a new one.') }}
+            </p>
 
-    <!-- Session Status -->
-    <x-auth-session-status class="mb-4" :status="session('status')" />
+            <x-store.status class="mt-6" :status="session('status')" />
 
-    <form method="POST" action="{{ route('password.email') }}" class="mt-8">
-        @csrf
+            <form method="POST" action="{{ route('password.email') }}" class="mt-6 space-y-5">
+                @csrf
 
-        <!-- Email Address -->
-        <div>
-            <x-input-label for="email" :value="__('Email')" />
-            <x-text-input id="email" class="block mt-1 w-full" type="email" name="email" :value="old('email')" required autofocus />
-            <x-input-error :messages="$errors->get('email')" class="mt-2" />
+                <x-store.field label="{{ __('Email') }}" name="email" type="email" :value="old('email')" :messages="$errors->get('email')" required autofocus autocomplete="email" />
+
+                <x-store.button>{{ __('Email Password Reset Link') }}</x-store.button>
+            </form>
         </div>
-
-        <div class="mt-8">
-            <x-primary-button class="w-full justify-center">
-                {{ __('Email Password Reset Link') }}
-            </x-primary-button>
-        </div>
-    </form>
-</x-guest-layout>
+    </div>
+</x-store.layout>

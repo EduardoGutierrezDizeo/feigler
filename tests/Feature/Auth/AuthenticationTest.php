@@ -29,14 +29,17 @@ test('the login form has a control that actually submits it', function () {
     $dom = new DOMDocument;
     $dom->loadHTML('<?xml encoding="utf-8" ?>'.$response->getContent(), LIBXML_NOERROR);
 
-    $forms = $dom->getElementsByTagName('form');
+    // El layout de la tienda añade sus propios formularios (el buscador), así que
+    // se localiza el formulario del login por su action en vez de asumir que es el único.
+    $loginForm = collect(iterator_to_array($dom->getElementsByTagName('form')))
+        ->first(fn (DOMElement $form) => $form->getAttribute('action') === route('login'));
 
-    expect($forms->length)->toBe(1);
+    expect($loginForm)->not->toBeNull();
 
     // A button without a type attribute submits the form, per HTML semantics.
     $types = array_map(
         fn (DOMElement $button) => $button->getAttribute('type') ?: 'submit',
-        iterator_to_array($forms->item(0)->getElementsByTagName('button')),
+        iterator_to_array($loginForm->getElementsByTagName('button')),
     );
 
     expect($types)->toContain('submit');
