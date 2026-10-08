@@ -1,4 +1,4 @@
-<x-store.layout title="Verifica tu correo · Feigler">
+<x-store.layout title="Verifica tu correo · Feigler" :access-modal="false">
     <div class="mx-auto w-full max-w-md px-4 py-12 sm:px-8">
         <div class="tarjeta p-6 sm:p-8">
             <h1 class="font-display text-3xl font-semibold text-verde">

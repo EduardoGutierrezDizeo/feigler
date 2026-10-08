@@ -41,6 +41,8 @@ class RegisterRequest extends FormRequest
      */
     protected function prepareForValidation(): void
     {
+        $this->errorBag = $this->accessErrorBag();
+
         $phone = $this->input('phone');
 
         if (is_string($phone)) {
@@ -102,6 +104,17 @@ class RegisterRequest extends FormRequest
         $value = $this->input($field);
 
         return is_string($value) ? trim($value) : $value;
+    }
+
+    /**
+     * La bolsa del modal cuando el registro viene del modal de acceso; si no, la
+     * bolsa por defecto, para no cambiar el comportamiento de la página /register.
+     */
+    private function accessErrorBag(): string
+    {
+        return in_array($this->input('access_modal'), ['login', 'register', 'forgot'], true)
+            ? $this->input('access_modal')
+            : 'default';
     }
 
     private function lowercasedEmail(): mixed

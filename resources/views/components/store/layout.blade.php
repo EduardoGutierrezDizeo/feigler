@@ -1,4 +1,4 @@
-@props(['title' => 'Feigler', 'active' => null, 'cartCount' => 0, 'searchQuery' => null])
+@props(['title' => 'Feigler', 'active' => null, 'cartCount' => 0, 'searchQuery' => null, 'accessModal' => true])
 
 @php
     $nav = [
@@ -9,6 +9,25 @@
         'tienda' => ['Tienda', '/tienda'],
         'cuenta' => ['Cuenta', '/cuenta'],
     ];
+
+    // El modal de acceso arranca abierto en la vista que dejó el último envío:
+    // la bolsa de errores con nombre (login/register/forgot) o la marca de una
+    // recuperación exitosa. Sin nada de eso, arranca cerrado en la vista de login.
+    // La vista previa se sirve sin sesión ni errores compartidos, así que ambas
+    // fuentes se consultan solo cuando existen.
+    $accessBags = ['login', 'register', 'forgot'];
+    $accessErrorBag = isset($errors) && $errors instanceof \Illuminate\Support\ViewErrorBag
+        ? collect($accessBags)->first(fn ($bag) => $errors->getBag($bag)->isNotEmpty())
+        : null;
+    $accessView = $accessErrorBag ?? 'login';
+    $accessOpen = $accessErrorBag !== null;
+
+    if (request()->hasSession()) {
+        $accessView = $accessErrorBag ?? request()->session()->get('access_modal', 'login');
+        $accessOpen = $accessOpen || request()->session()->has('access_modal');
+    }
+
+    $accessView = in_array($accessView, $accessBags, true) ? $accessView : 'login';
 @endphp
 <!DOCTYPE html>
 <html lang="es">
@@ -64,6 +83,10 @@
                                 </form>
                             </div>
                         </div>
+                    @elseif ($key === 'cuenta' && ! auth()->check())
+                        <a href="{{ route('login') }}" @click.prevent="$dispatch('open-access', { view: 'login' })"
+                           @if ($active === $key) aria-current="page" @endif
+                           class="border-b pb-0.5 transition {{ $active === $key ? 'border-laton text-verde' : 'border-transparent text-gris-calido hover:text-verde' }}">{{ $label }}</a>
                     @else
                         <a href="{{ url($href) }}" @if ($active === $key) aria-current="page" @endif
                            class="border-b pb-0.5 transition {{ $active === $key ? 'border-laton text-verde' : 'border-transparent text-gris-calido hover:text-verde' }}">{{ $label }}</a>
@@ -91,7 +114,12 @@
             </form>
             <nav aria-label="Principal móvil" class="grid grid-cols-2 gap-1 text-base">
                 @foreach ($nav as $key => [$label, $href])
-                    <a href="{{ url($href) }}" class="rounded-xl px-3 py-2.5 {{ $active === $key ? 'bg-hueso/60 text-verde' : 'text-tinta hover:bg-hueso/40' }}">{{ $label }}</a>
+                    @if ($key === 'cuenta' && ! auth()->check())
+                        <a href="{{ route('login') }}" @click.prevent="open = false; $dispatch('open-access', { view: 'login' })"
+                           class="rounded-xl px-3 py-2.5 {{ $active === $key ? 'bg-hueso/60 text-verde' : 'text-tinta hover:bg-hueso/40' }}">{{ $label }}</a>
+                    @else
+                        <a href="{{ url($href) }}" class="rounded-xl px-3 py-2.5 {{ $active === $key ? 'bg-hueso/60 text-verde' : 'text-tinta hover:bg-hueso/40' }}">{{ $label }}</a>
+                    @endif
                 @endforeach
             </nav>
 
@@ -114,6 +142,12 @@
             <a href="{{ config('tienda.whatsapp') }}" class="transition hover:text-verde">WhatsApp</a>
         </div>
     </footer>
+
+    @guest
+        @if ($accessModal)
+            <x-store.access-modal :view="$accessView" :open="$accessOpen" />
+        @endif
+    @endguest
 
     @livewireScripts
 </body>

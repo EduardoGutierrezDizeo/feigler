@@ -34,6 +34,17 @@ class LoginRequest extends FormRequest
     }
 
     /**
+     * Cuando el formulario viene del modal de acceso (campo oculto
+     * `access_modal`), los errores van a una bolsa con nombre para que el modal
+     * los muestre sin afectar a las páginas. Sin el campo, se usa la bolsa por
+     * defecto, igual que siempre.
+     */
+    protected function prepareForValidation(): void
+    {
+        $this->errorBag = $this->accessErrorBag();
+    }
+
+    /**
      * Attempt to authenticate the request's credentials.
      *
      * @throws ValidationException
@@ -47,7 +58,7 @@ class LoginRequest extends FormRequest
 
             throw ValidationException::withMessages([
                 'email' => trans('auth.failed'),
-            ]);
+            ])->errorBag($this->accessErrorBag());
         }
 
         if (! Auth::user()->is_active) {
@@ -55,7 +66,7 @@ class LoginRequest extends FormRequest
 
             throw ValidationException::withMessages([
                 'email' => 'Tu cuenta está desactivada, contacta al administrador.',
-            ]);
+            ])->errorBag($this->accessErrorBag());
         }
 
         RateLimiter::clear($this->throttleKey());
@@ -81,7 +92,17 @@ class LoginRequest extends FormRequest
                 'seconds' => $seconds,
                 'minutes' => ceil($seconds / 60),
             ]),
-        ]);
+        ])->errorBag($this->accessErrorBag());
+    }
+
+    /**
+     * La bolsa del modal cuando el envío trae `access_modal`; si no, la de siempre.
+     */
+    private function accessErrorBag(): string
+    {
+        return in_array($this->input('access_modal'), ['login', 'register', 'forgot'], true)
+            ? $this->input('access_modal')
+            : 'default';
     }
 
     /**

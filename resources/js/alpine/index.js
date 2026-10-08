@@ -24,6 +24,7 @@
 import './plugins.js';
 
 // Componentes Alpine.data.
+import accessModal from './access-modal.js';
 import './admin-modal.js';
 import categoryCarousel from './category-carousel.js';
 import './color-hex-input.js';
@@ -43,6 +44,7 @@ import './select-input.js';
 // mismos con un listener propio, por eso se importan sin nombre para que sus
 // efectos ocurran.
 document.addEventListener('alpine:init', () => {
+    Alpine.data('accessModal', accessModal);
     Alpine.data('categoryCarousel', categoryCarousel);
     Alpine.data('loadMore', loadMore);
     Alpine.data('priceRange', priceRange);

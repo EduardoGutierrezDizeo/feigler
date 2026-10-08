@@ -26,7 +26,9 @@ class PasswordResetLinkController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
-        $request->validate([
+        $bag = $this->accessErrorBag($request);
+
+        $request->validateWithBag($bag, [
             'email' => ['required', 'email'],
         ]);
 
@@ -37,9 +39,30 @@ class PasswordResetLinkController extends Controller
             $request->only('email')
         );
 
-        return $status == Password::RESET_LINK_SENT
-                    ? back()->with('status', __($status))
-                    : back()->withInput($request->only('email'))
-                        ->withErrors(['email' => __($status)]);
+        if ($status == Password::RESET_LINK_SENT) {
+            $response = back()->with('status', __($status));
+
+            // Solo cuando el envío viene del modal se marca la vista de
+            // recuperación: así un status por la página no reabre el modal más tarde.
+            if ($bag === 'forgot') {
+                $response->with('access_modal', 'forgot');
+            }
+
+            return $response;
+        }
+
+        return back()->withInput($request->only('email'))
+            ->withErrors(['email' => __($status)], $bag);
+    }
+
+    /**
+     * La bolsa del modal cuando la solicitud viene del modal de acceso; si no, la
+     * bolsa por defecto, para no cambiar el comportamiento de la página.
+     */
+    private function accessErrorBag(Request $request): string
+    {
+        return in_array($request->input('access_modal'), ['login', 'register', 'forgot'], true)
+            ? $request->input('access_modal')
+            : 'default';
     }
 }
