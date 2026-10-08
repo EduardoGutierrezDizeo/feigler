@@ -1,17 +1,26 @@
 {{--
-    Vista de sección (Hombre / Mujer / Niños) con filtros.
+    Vista de sección (Hombre / Mujer / Niños) y de las páginas de varias
+    secciones (Novedades / Tienda): la misma para todas.
     Los filtros son un formulario GET: funciona sin JavaScript y se envía solo al cambiar un campo.
-    Campos: categoria[], talla[], color[], material[], precio_min, precio_max, stock, orden.
+    Campos: seccion[], categoria[], talla[], color[], material[], precio_min, precio_max, stock, orden.
     Contrato de datos:
-      $section:  { key, label, url }
+      $section:  { key, label, url }   (siempre; las páginas de varias secciones
+                                        mandan aquí su identidad: clave de menú,
+                                        título y su propia URL)
+      $subtitle: string   (antetítulo sobre el título; por defecto «Sección»)
+      $crumbs:   [{ label, url|null }]  (migas de pan; por defecto Inicio / la página)
+      $emptyMessage: string|null  (título del estado vacío; por defecto el de siempre,
+                                   y entonces se ven también la pista y el botón de limpiar)
       $total:    int (prendas que cumplen los filtros)
       $shown:    int (prendas visibles en esta página)
       $products: lista de tarjetas
       $nextUrl:  string|null (enlace de «Mostrar más»)
-      $clearUrl: string (sección sin filtros)
+      $clearUrl: string (la página sin filtros)
       $sort:     { value, options: [{ value, label }] }
       $active:   [{ label, removeUrl }]
-      $filters:  { categories: [{ value, label, count, checked }],
+      $filters:  { sections: [{ value, label, count, checked }]|null  (null en una
+                                    sección: ahí la familia no se pinta ni se lee),
+                   categories: [{ value, label, count, checked }],
                    sizes:      [{ value, label, checked }],
                    colors:     [{ value, label, hex, checked }],
                    materials:  [{ value, label, count, checked }],
@@ -22,11 +31,18 @@
     $range = 'pointer-events-none absolute inset-0 h-5 w-full appearance-none bg-transparent '
         . '[&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:size-4 [&::-webkit-slider-thumb]:appearance-none '
         . '[&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-laton [&::-webkit-slider-thumb]:bg-crema '
-        . '[&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:size-4 [&::-moz-range-thumb]:rounded-full '
-        . '[&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-laton [&::-moz-range-thumb]:bg-crema [&::-moz-range-track]:bg-transparent';
+        . '[&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:size-4 [&::-moz-range-thumb]:appearance-none '
+        . '[&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-laton [&::-moz-range-thumb]:bg-crema [&::-moz-range-track]:bg-transparent';
     $check = 'size-4 rounded border-arena text-verde focus:ring-verde/30';
     $selectedColors = collect($filters['colors'])->where('checked', true)->pluck('label')->implode(', ');
     $price = $filters['price'];
+    $subtitle = $subtitle ?? 'Sección';
+    $crumbs = $crumbs ?? [
+        ['label' => 'Inicio', 'url' => url('/')],
+        ['label' => $section['label'], 'url' => null],
+    ];
+    $sectionsFamily = $filters['sections'] ?? null;
+    $emptyMessage = $emptyMessage ?? null;
 @endphp
 
 <x-store.layout :title="$section['label'] . ' · Feigler'" :active="$section['key']" :cart-count="$cartCount ?? 0">
@@ -36,12 +52,19 @@
           class="mx-auto max-w-7xl px-4 pt-6 sm:px-8">
 
         <nav aria-label="Ruta" class="text-xs text-gris-calido">
-            <a href="{{ url('/') }}" class="hover:text-verde">Inicio</a> / <span class="text-tinta" aria-current="page">{{ $section['label'] }}</span>
+            @foreach ($crumbs as $crumb)
+                @unless ($loop->first) / @endunless
+                @if ($crumb['url'] !== null)
+                    <a href="{{ $crumb['url'] }}" class="hover:text-verde">{{ $crumb['label'] }}</a>
+                @else
+                    <span class="text-tinta" aria-current="page">{{ $crumb['label'] }}</span>
+                @endif
+            @endforeach
         </nav>
 
         <div class="mt-4 flex flex-wrap items-end justify-between gap-4">
             <div>
-                <p class="text-xs text-laton">Sección</p>
+                <p class="text-xs text-laton">{{ $subtitle }}</p>
                 <h1 class="mt-1 font-display text-5xl leading-none sm:text-7xl">{{ $section['label'] }}</h1>
                 <p class="mt-2 text-sm text-gris-calido">{{ $total }} {{ $total === 1 ? 'prenda' : 'prendas' }}</p>
             </div>
@@ -72,6 +95,23 @@
                         <button type="button" @click="filtersOpen = false" class="text-sm text-gris-calido lg:hidden">Cerrar</button>
                     </div>
                 </div>
+
+                {{-- Sección (solo en páginas de varias secciones) --}}
+                @if ($sectionsFamily !== null)
+                    <div x-data="{ open: true }" class="border-b border-arena py-5">
+                        <button type="button" @click="open = !open" :aria-expanded="open" class="flex w-full items-center justify-between text-left font-display text-2xl">
+                            Sección <span class="text-laton" x-text="open ? '−' : '+'" aria-hidden="true"></span>
+                        </button>
+                        <ul x-show="open" class="mt-4 space-y-2.5">
+                            @foreach ($sectionsFamily as $item)
+                                <li><label class="flex cursor-pointer items-center gap-3 text-sm">
+                                    <input type="checkbox" name="seccion[]" value="{{ $item['value'] }}" @checked($item['checked']) class="{{ $check }}">
+                                    <span class="flex-1">{{ $item['label'] }}</span><span class="text-xs text-gris-calido">{{ $item['count'] }}</span>
+                                </label></li>
+                            @endforeach
+                        </ul>
+                    </div>
+                @endif
 
                 {{-- Categoría --}}
                 <div x-data="{ open: true }" class="border-b border-arena py-5">
@@ -214,9 +254,11 @@
                     </div>
                 @else
                     <div class="rounded-3xl border border-arena bg-crema/70 px-6 py-16 text-center">
-                        <p class="font-display text-3xl">No hay prendas con estos filtros</p>
-                        <p class="mt-2 text-sm text-gris-calido">Quita alguno o empieza de nuevo.</p>
-                        <a href="{{ $clearUrl }}" class="mt-6 inline-block rounded-full border border-laton px-6 py-2.5 text-sm text-verde">Limpiar filtros</a>
+                        <p class="font-display text-3xl">{{ $emptyMessage ?? 'No hay prendas con estos filtros' }}</p>
+                        @if ($emptyMessage === null)
+                            <p class="mt-2 text-sm text-gris-calido">Quita alguno o empieza de nuevo.</p>
+                            <a href="{{ $clearUrl }}" class="mt-6 inline-block rounded-full border border-laton px-6 py-2.5 text-sm text-verde">Limpiar filtros</a>
+                        @endif
                     </div>
                 @endif
             </div>

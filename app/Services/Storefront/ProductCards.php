@@ -4,7 +4,6 @@ namespace App\Services\Storefront;
 
 use App\Models\Color;
 use App\Models\Product;
-use Carbon\Carbon;
 
 /**
  * La tarjeta de producto que pintan la portada y la ficha (relacionados), con
@@ -18,11 +17,6 @@ use Carbon\Carbon;
  */
 class ProductCards
 {
-    /**
-     * Días que un producto recién creado conserva el distintivo «nuevo».
-     */
-    private const BADGE_NUEVO_DIAS = 30;
-
     /**
      * Las tarjetas de una lista de productos, en el orden en que llegan.
      *
@@ -49,7 +43,7 @@ class ProductCards
 
         if ($product->stock_total <= 0) {
             $badge = 'agotado';
-        } elseif (static::isNewProduct($product)) {
+        } elseif ($product->isNew()) {
             $badge = 'nuevo';
         }
 
@@ -87,21 +81,5 @@ class ProductCards
             ])
             ->values()
             ->all();
-    }
-
-    /**
-     * Si el producto entró en el catálogo hace menos de 30 días.
-     */
-    private static function isNewProduct(Product $product): bool
-    {
-        if (! $product->created_at) {
-            return false;
-        }
-
-        $created = $product->created_at instanceof Carbon
-            ? $product->created_at
-            : Carbon::parse($product->created_at);
-
-        return $created->greaterThanOrEqualTo(now()->subDays(self::BADGE_NUEVO_DIAS)->startOfDay());
     }
 }

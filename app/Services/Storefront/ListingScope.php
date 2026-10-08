@@ -19,7 +19,9 @@ use InvalidArgumentException;
  *
  * El conjunto base es el que una sección siempre tuvo: prendas visibles — ni
  * apagadas ni sin ninguna variante activa — cuya categoría esté activa y sea de
- * una de las secciones del alcance. Aplicarlo está escrito una sola vez en
+ * una de las secciones del alcance. Un alcance puede pedir además, con
+ * `onlyNew()`, que solo cubra prendas nuevas, que es la regla de la insignia
+ * «Nuevo» leída desde Product. Aplicarlo está escrito una sola vez en
  * `applyTo()`, para que la consulta de prendas, el límite del deslizador y las
  * listas de opciones del catálogo no puedan divergir sobre qué es una prenda
  * del alcance. El resto de las reglas (los filtros, los conteos, el orden) son
@@ -34,11 +36,13 @@ class ListingScope
     /**
      * @param  list<StoreSection>  $sections  Las secciones que cubre, sin repetir y al menos una.
      * @param  array<string, mixed>  $routeParams  Los parámetros de la ruta nombrada.
+     * @param  bool  $newOnly  Si solo cubre prendas nuevas (la regla de la insignia «Nuevo»).
      */
     private function __construct(
         private readonly array $sections,
         private readonly string $routeName,
         private readonly array $routeParams = [],
+        private readonly bool $newOnly = false,
     ) {}
 
     /**
@@ -76,6 +80,16 @@ class ListingScope
     public static function all(string $routeName, array $routeParams = []): self
     {
         return self::covering(StoreSection::cases(), $routeName, $routeParams);
+    }
+
+    /**
+     * El mismo alcance restringido a las prendas nuevas: las creadas hace
+     * Product::NUEVO_DIAS días o menos, que es la misma regla de la insignia
+     * «Nuevo» de las tarjetas (la fuente única vive en Product).
+     */
+    public function onlyNew(): self
+    {
+        return new self($this->sections, $this->routeName, $this->routeParams, true);
     }
 
     /**
@@ -126,7 +140,11 @@ class ListingScope
 
     /**
      * La restricción del conjunto base sobre una consulta de prendas: visibles,
-     * de categoría activa y de una de las secciones del alcance.
+     * de categoría activa, de una de las secciones del alcance y, cuando el
+     * alcance lo pide, nuevas (creadas desde Product::newCutoff()).
+     *
+     * `products.created_at` va calificada porque la consulta de conteos por
+     * sección une la tabla categories, que también tiene created_at.
      *
      * @param  Builder<Product>  $products
      * @return Builder<Product>
@@ -135,6 +153,7 @@ class ListingScope
     {
         return $products
             ->visible()
+            ->when($this->newOnly, fn (Builder $query): Builder => $query->where('products.created_at', '>=', Product::newCutoff()))
             ->whereHas('category', fn (Builder $categories): Builder => $categories
                 ->whereIn('section', $this->sectionValues())
                 ->where('is_active', true));

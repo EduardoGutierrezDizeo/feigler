@@ -2,6 +2,7 @@
 
 namespace App\Services\Storefront;
 
+use App\Enums\StoreSection;
 use App\Models\Category;
 use App\Models\Color;
 use App\Models\Material;
@@ -68,6 +69,7 @@ class ListingPage
      *     sort: array{value: string, options: list<array{value: string, label: string}>},
      *     active: list<array{label: string, removeUrl: string}>,
      *     filters: array{
+     *         sections: list<array{value: string, label: string, count: int, checked: bool}>|null,
      *         categories: list<array{value: string, label: string, count: int, checked: bool}>,
      *         sizes: list<array{value: string, label: string, checked: bool}>,
      *         colors: list<array{value: string, label: string, hex: string, checked: bool}>,
@@ -84,6 +86,18 @@ class ListingPage
         $sizeGroups = $this->catalog->sizeNamesForFilter($scope);
         $colors = $this->catalog->colorsForFilter($scope);
         $materials = $this->catalog->materialsForFilter($scope);
+
+        $coversMany = count($scope->sections()) > 1;
+
+        // La familia de sección solo existe en páginas de varias secciones: en
+        // una de sola, el parámetro seccion[] se ignora entero (N3).
+        $selectedSections = $coversMany
+            ? $this->intersectSections($filters->sections, $scope->sectionValues())
+            : [];
+
+        $categoryLabels = $coversMany
+            ? $this->disambiguatedCategoryLabels($scopeCategories)
+            : $scopeCategories->mapWithKeys(fn (Category $category): array => [$category->getKey() => $category->name])->all();
 
         $selectedCategories = $this->intersectIds($filters->categories, $scopeCategories->pluck('id'));
         $selectedColors = $this->intersectIds($filters->colors, $colors->pluck('id'));
@@ -102,6 +116,7 @@ class ListingPage
 
         $productsQuery = $this->productsQuery(
             $scope,
+            $selectedSections,
             $selectedCategories,
             $selectedMaterials,
             $from,
@@ -123,6 +138,7 @@ class ListingPage
 
         $categoryCounts = $this->productsQuery(
             $scope,
+            $selectedSections,
             [],
             $selectedMaterials,
             $from,
@@ -135,6 +151,7 @@ class ListingPage
 
         $materialCounts = $this->productsQuery(
             $scope,
+            $selectedSections,
             $selectedCategories,
             [],
             $from,
@@ -146,8 +163,20 @@ class ListingPage
             ->selectRaw('material_product.material_id, count(*) as total')
             ->pluck('total', 'material_product.material_id');
 
+        // Los conteos de la familia de sección ignoran su propia familia y
+        // aplican las demás, como cualquier otra (D4): una sola consulta
+        // agrupada, y solo cuando el alcance cubre varias secciones.
+        $sectionCounts = $coversMany
+            ? $this->productsQuery($scope, [], $selectedCategories, $selectedMaterials, $from, $to, $variantClause)
+                ->join('categories', 'categories.id', '=', 'products.category_id')
+                ->groupBy('categories.section')
+                ->selectRaw('categories.section as section, count(*) as total')
+                ->pluck('total', 'section')
+            : new Collection;
+
         $stockCount = $this->productsQuery(
             $scope,
+            $selectedSections,
             $selectedCategories,
             $selectedMaterials,
             $from,
@@ -157,6 +186,7 @@ class ListingPage
 
         $params = $this->queryParams(
             $filters,
+            $selectedSections,
             $selectedCategories,
             $selectedSizes,
             $selectedColors,
@@ -183,9 +213,12 @@ class ListingPage
                     SectionFilters::SORT_OPTIONS,
                 ),
             ],
-            'active' => $this->activeFilters($scope, $params, $scopeCategories, $selectedSizes, $colors, $selectedColors, $materials, $selectedMaterials, $from, $to, $filters->inStockOnly),
+            'active' => $this->activeFilters($scope, $params, $selectedSections, $categoryLabels, $selectedSizes, $colors, $selectedColors, $materials, $selectedMaterials, $from, $to, $filters->inStockOnly),
             'filters' => [
-                'categories' => $this->categoriesOptions($scopeCategories, $selectedCategories, $categoryCounts),
+                'sections' => $coversMany
+                    ? $this->sectionsOptions($scope->sections(), $selectedSections, $sectionCounts)
+                    : null,
+                'categories' => $this->categoriesOptions($scopeCategories, $categoryLabels, $selectedCategories, $categoryCounts),
                 'sizes' => $this->sizesOptions($sizeGroups, $selectedSizes),
                 'colors' => $this->colorsOptions($colors, $selectedColors),
                 'materials' => $this->materialsOptions($materials, $selectedMaterials, $materialCounts),
@@ -209,18 +242,22 @@ class ListingPage
      * La consulta de prendas del alcance con los filtros ya aplicados.
      *
      * El conjunto base lo aplica el propio alcance (visibles, de categoría
-     * activa y de sus secciones); encima, las categorías y los materiales se
-     * aplican al producto (Y con todo lo demás), el precio se aplica al producto
-     * y la talla, el color y el stock se exigen sobre la misma variante activa.
-     * Sin filtros de variante, `visible()` ya garantiza que el producto se vende
-     * en una variante activa, así que no se añade nada más.
+     * activa, de sus secciones y, si el alcance lo pide, nuevas); encima, la
+     * familia de sección se exige sobre la sección de la categoría, y las
+     * categorías y los materiales se aplican al producto (Y con todo lo demás).
+     * El precio se aplica al producto y la talla, el color y el stock se exigen
+     * sobre la misma variante activa. Sin filtros de variante, `visible()` ya
+     * garantiza que el producto se vende en una variante activa, así que no se
+     * añade nada más.
      *
+     * @param  list<string>  $sections  Valores de sección de la familia seccion[].
      * @param  list<int>  $categories
      * @param  list<int>  $materials
      * @return Builder<Product>
      */
     private function productsQuery(
         ListingScope $scope,
+        array $sections,
         array $categories,
         array $materials,
         ?int $from,
@@ -228,6 +265,7 @@ class ListingPage
         ?Closure $variantClause,
     ): Builder {
         return $scope->applyTo(Product::query())
+            ->when($sections !== [], fn (Builder $query): Builder => $query->whereHas('category', fn (Builder $categoryQuery): Builder => $categoryQuery->whereIn('section', $sections)))
             ->when($categories !== [], fn (Builder $query): Builder => $query->whereIn('category_id', $categories))
             ->when($materials !== [], fn (Builder $query): Builder => $query->whereHas('materials', fn (Builder $query): Builder => $query->whereIn('materials.id', $materials)))
             ->when($from !== null, fn (Builder $query): Builder => $query->where('base_price', '>=', $from))
@@ -258,7 +296,11 @@ class ListingPage
 
     /**
      * Las categorías activas de las secciones del alcance que tienen al menos
-     * una prenda visible: solo lo que se puede mostrar se ofrece.
+     * una prenda del conjunto base: solo lo que se puede mostrar se ofrece.
+     *
+     * El cruce con «al menos una prenda» es el propio `applyTo()` del alcance,
+     * así que una categoría sin prendas nuevas desaparece de Novedades sin que
+     * esta lista tenga una segunda copia de la regla.
      *
      * @return Collection<int, Category>
      */
@@ -267,7 +309,7 @@ class ListingPage
         return Category::query()
             ->whereIn('section', $scope->sectionValues())
             ->where('is_active', true)
-            ->whereHas('products', fn (Builder $query): Builder => $query->visible())
+            ->whereHas('products', fn (Builder $query): Builder => $scope->applyTo($query))
             ->orderBy('order')
             ->orderBy('id')
             ->get();
@@ -335,6 +377,46 @@ class ListingPage
     }
 
     /**
+     * Los valores de las secciones pedidas que el alcance cubre, en el orden en
+     * que llegaron: una sección fuera del alcance se ignora igual que un id de
+     * categoría de otra sección.
+     *
+     * @param  list<StoreSection>  $candidates
+     * @param  list<string>  $scopeValues
+     * @return list<string>
+     */
+    private function intersectSections(array $candidates, array $scopeValues): array
+    {
+        $values = array_map(fn (StoreSection $section): string => $section->value, $candidates);
+
+        return array_values(array_filter($values, fn (string $value): bool => in_array($value, $scopeValues, true)));
+    }
+
+    /**
+     * Los nombres de las categorías con la sección detrás solo a los que se
+     * repiten en más de una (N4): en una página de varias secciones «Camisas»
+     * de Hombre y «Camisas» de Mujer no pueden llamarse igual, y las que no se
+     * confunden se quedan con su nombre tal cual.
+     *
+     * @param  Collection<int, Category>  $categories
+     * @return array<int, string>
+     */
+    private function disambiguatedCategoryLabels(Collection $categories): array
+    {
+        $repeated = $categories->countBy(fn (Category $category): string => $category->name)
+            ->filter(fn (int $times): bool => $times > 1)
+            ->keys();
+
+        return $categories->mapWithKeys(function (Category $category) use ($repeated): array {
+            $label = $repeated->contains($category->name)
+                ? $category->name.' · '.$category->section->label()
+                : $category->name;
+
+            return [$category->getKey() => $label];
+        })->all();
+    }
+
+    /**
      * Los nombres de talla que el alcance ofrece, con su ortografía canónica
      * (la del grupo que viene primero en orden de catálogo).
      *
@@ -399,6 +481,7 @@ class ListingPage
      * trae una página sin él. «mostrar» no entra: los enlaces se construyen
      * aparte con el paso que corresponda.
      *
+     * @param  list<string>  $sections
      * @param  list<int>  $categories
      * @param  list<string>  $sizes
      * @param  list<int>  $colors
@@ -407,6 +490,7 @@ class ListingPage
      */
     private function queryParams(
         SectionFilters $filters,
+        array $sections,
         array $categories,
         array $sizes,
         array $colors,
@@ -415,6 +499,10 @@ class ListingPage
         ?int $to,
     ): array {
         $params = [];
+
+        if ($sections !== []) {
+            $params['seccion[]'] = $sections;
+        }
 
         if ($categories !== []) {
             $params['categoria[]'] = $categories;
@@ -472,10 +560,13 @@ class ListingPage
 
     /**
      * Los chips de los filtros activos: uno por valor elegido, con el enlace que
-     * quita solo ese valor y sin «mostrar».
+     * quita solo ese valor y sin «mostrar». La familia de sección abre la fila,
+     * como la primera de la lista de filtros, y solo aparece en páginas de
+     * varias secciones.
      *
      * @param  array<string, mixed>  $params
-     * @param  Collection<int, Category>  $scopeCategories
+     * @param  list<string>  $sections  Valores de sección ya saneados.
+     * @param  array<int, string>  $categoryLabels  Id de categoría => etiqueta ya desambiguada.
      * @param  list<string>  $selectedSizes
      * @param  list<int>  $selectedColors
      * @param  list<int>  $selectedMaterials
@@ -484,7 +575,8 @@ class ListingPage
     private function activeFilters(
         ListingScope $scope,
         array $params,
-        Collection $scopeCategories,
+        array $sections,
+        array $categoryLabels,
         array $selectedSizes,
         Collection $colors,
         array $selectedColors,
@@ -496,9 +588,16 @@ class ListingPage
     ): array {
         $active = [];
 
+        foreach ($sections as $value) {
+            $active[] = [
+                'label' => StoreSection::from($value)->label(),
+                'removeUrl' => $scope->url($this->withoutValue($params, 'seccion[]', $value)),
+            ];
+        }
+
         foreach ($selectedCategories = $this->selectedOf($params, 'categoria[]') as $id) {
             $active[] = [
-                'label' => $scopeCategories->firstWhere('id', $id)?->name ?? (string) $id,
+                'label' => $categoryLabels[$id] ?? (string) $id,
                 'removeUrl' => $scope->url($this->withoutValue($params, 'categoria[]', $id)),
             ];
         }
@@ -591,21 +690,42 @@ class ListingPage
 
     /**
      * @param  Collection<int, Category>  $categories
+     * @param  array<int, string>  $labels  Id de categoría => etiqueta ya desambiguada (N4).
      * @param  list<int>  $selected
      * @param  Collection<int, mixed>  $counts
      * @return list<array{value: string, label: string, count: int, checked: bool}>
      */
-    private function categoriesOptions(Collection $categories, array $selected, Collection $counts): array
+    private function categoriesOptions(Collection $categories, array $labels, array $selected, Collection $counts): array
     {
         return $categories
             ->map(fn (Category $category): array => [
                 'value' => (string) $category->getKey(),
-                'label' => $category->name,
+                'label' => $labels[$category->getKey()] ?? $category->name,
                 'count' => (int) ($counts[$category->getKey()] ?? 0),
                 'checked' => in_array($category->getKey(), $selected, true),
             ])
             ->values()
             ->all();
+    }
+
+    /**
+     * Las opciones de la familia de sección: el conteo de cada una (con el mismo
+     * planteamiento que el resto — ignora su propia familia —) y la marca de las
+     * elegidas.
+     *
+     * @param  list<StoreSection>  $sections
+     * @param  list<string>  $selected  Valores de sección ya saneados.
+     * @param  Collection<int, int|string>  $counts  Conteos por valor de sección.
+     * @return list<array{value: string, label: string, count: int, checked: bool}>
+     */
+    private function sectionsOptions(array $sections, array $selected, Collection $counts): array
+    {
+        return array_map(fn (StoreSection $section): array => [
+            'value' => $section->value,
+            'label' => $section->label(),
+            'count' => (int) ($counts[$section->value] ?? 0),
+            'checked' => in_array($section->value, $selected, true),
+        ], $sections);
     }
 
     /**

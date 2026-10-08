@@ -3,6 +3,8 @@
 use App\Enums\StoreSection;
 use App\Http\Controllers\ProfileController;
 use App\Services\Storefront\HomePage;
+use App\Services\Storefront\ListingPage;
+use App\Services\Storefront\ListingScope;
 use App\Services\Storefront\ProductPage;
 use App\Services\Storefront\SectionFilters;
 use App\Services\Storefront\SectionPage;
@@ -31,6 +33,39 @@ foreach (StoreSection::cases() as $section) {
         return view('storefront.section', app(SectionPage::class)->for($section, SectionFilters::fromRequest($request, $section)));
     })->name('storefront.section.'.$section->value);
 }
+
+// Novedades: toda la tienda, pero solo las prendas creadas en los últimos
+// Product::NUEVO_DIAS días, con la misma regla que la insignia «Nuevo» (N2).
+Route::get('/novedades', function (Request $request) {
+    $page = app(ListingPage::class)->for(
+        ListingScope::all('storefront.novedades')->onlyNew(),
+        SectionFilters::fromRequest($request),
+    );
+
+    $page['section'] = ['key' => 'novedades', 'label' => 'Novedades', 'url' => $page['section']['url']];
+
+    return view('storefront.section', $page + [
+        'subtitle' => 'Últimos 30 días',
+        'emptyMessage' => $page['total'] === 0 && $page['active'] === []
+            ? 'Aún no hay novedades. Vuelve pronto.'
+            : null,
+    ]);
+})->name('storefront.novedades');
+
+// Tienda: las prendas visibles de las tres secciones, con la misma página y los
+// mismos filtros que una sección.
+Route::get('/tienda', function (Request $request) {
+    $page = app(ListingPage::class)->for(
+        ListingScope::all('storefront.tienda'),
+        SectionFilters::fromRequest($request),
+    );
+
+    $page['section'] = ['key' => 'tienda', 'label' => 'Tienda', 'url' => $page['section']['url']];
+
+    return view('storefront.section', $page + [
+        'subtitle' => 'Todas las secciones',
+    ]);
+})->name('storefront.tienda');
 
 Route::get('/dashboard', function () {
     return view('dashboard');

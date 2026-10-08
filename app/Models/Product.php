@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Enums\StoreSection;
+use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Database\Factories\ProductFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -19,6 +21,13 @@ class Product extends Model
 {
     /** @use HasFactory<ProductFactory> */
     use HasFactory;
+
+    /**
+     * The days a freshly created product is considered new. The «Nuevo» badge
+     * on the cards and the Novedades page both read this single rule, so the
+     * two can never disagree about what counts as a novelty.
+     */
+    public const NUEVO_DIAS = 30;
 
     /**
      * The attributes that are mass assignable.
@@ -326,6 +335,36 @@ class Product extends Model
     {
         $query->where('status', '!=', 'inactive')
             ->whereHas('variants', fn (Builder $variants): Builder => $variants->where('is_active', true));
+    }
+
+    /**
+     * The instant from which a product counts as new: the start of today minus
+     * NUEVO_DIAS days. The «Nuevo» badge and the Novedades page both compare
+     * against this same boundary, which is what makes the rule a single source.
+     */
+    public static function newCutoff(): CarbonInterface
+    {
+        return now()->subDays(static::NUEVO_DIAS)->startOfDay();
+    }
+
+    /**
+     * Whether the product entered the catalog NUEVO_DIAS days ago or less.
+     *
+     * A product with no creation date is never new: there is nothing to compare
+     * against, and treating it as new would put a product of unknown age on a
+     * page that promises recency.
+     */
+    public function isNew(): bool
+    {
+        if (! $this->created_at) {
+            return false;
+        }
+
+        $created = $this->created_at instanceof Carbon
+            ? $this->created_at
+            : Carbon::parse($this->created_at);
+
+        return $created->greaterThanOrEqualTo(static::newCutoff());
     }
 
     /**

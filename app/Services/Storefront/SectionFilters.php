@@ -9,11 +9,11 @@ use Illuminate\Http\Request;
  * Los filtros que la URL de una sección puede llevar, ya saneados.
  *
  * Es un objeto de valor: no consulta la base de datos. El saneo aquí es puramente
- * sintáctico — solo números para los ids, valores conocidos para el orden, un
- * rango 12..120 para «mostrar» — y el chequeo de que un valor pertenezca a la
- * sección (un id de otra sección se ignora, una talla que no existe se ignora)
- * lo hace ListingPage al cruzar estos valores con las opciones que la sección
- * ofrece, porque ese cruce tiene a mano la base de datos.
+ * sintáctico — solo números para los ids, valores conocidos para el orden, casos
+ * del enum para «seccion[]», un rango 12..120 para «mostrar» — y el chequeo de
+ * que un valor pertenezca a la sección (un id de otra sección se ignora, una
+ * talla que no existe se ignora) lo hace ListingPage al cruzar estos valores con
+ * las opciones que la sección ofrece, porque ese cruce tiene a mano la base de datos.
  *
  * Un filtro que llega mal escrito no es un error: la página se sirve igual sin
  * ese valor, que es lo que la URL de una tienda compartida puede legítimamente
@@ -49,9 +49,11 @@ class SectionFilters
      * @param  list<string>  $sizes  Nombres de talla tal y como llegaron.
      * @param  list<int>  $colors  Ids de colores tal y como llegaron.
      * @param  list<int>  $materials  Ids de materiales tal y como llegaron.
+     * @param  StoreSection|null  $section  La sección de la página, cuando la hay.
+     * @param  list<StoreSection>  $sections  Las secciones pedidas con seccion[], solo con casos válidos.
      */
     public function __construct(
-        public readonly StoreSection $section,
+        public readonly ?StoreSection $section = null,
         public readonly array $categories = [],
         public readonly array $sizes = [],
         public readonly array $colors = [],
@@ -61,9 +63,10 @@ class SectionFilters
         public readonly bool $inStockOnly = false,
         public readonly string $sort = 'novedades',
         public readonly int $show = SectionFilters::SHOW_STEP,
+        public readonly array $sections = [],
     ) {}
 
-    public static function fromRequest(Request $request, StoreSection $section): self
+    public static function fromRequest(Request $request, ?StoreSection $section = null): self
     {
         $from = self::priceBound($request->input('precio_min'));
         $to = self::priceBound($request->input('precio_max'));
@@ -83,6 +86,7 @@ class SectionFilters
             inStockOnly: (string) $request->input('stock') === '1',
             sort: self::canonicalSort($request->input('orden', 'novedades')),
             show: self::boundedShow($request->input('mostrar')),
+            sections: self::sectionValues($request->input('seccion')),
         );
     }
 
@@ -135,6 +139,35 @@ class SectionFilters
                 : null,
             $items,
         ))));
+    }
+
+    /**
+     * Las secciones pedidas con «seccion[]», como casos del enum, en el orden
+     * en que llegaron y sin repetir. Un valor que no es una sección («zapatos»,
+     * «M») se descarta igual que un id desconocido: la familia entera se sanea
+     * aquí y la cruza ListingPage con las secciones que el alcance cubre.
+     *
+     * @return list<StoreSection>
+     */
+    private static function sectionValues(mixed $values): array
+    {
+        $items = is_array($values) ? $values : [$values];
+
+        $sections = [];
+
+        foreach ($items as $item) {
+            if (! is_scalar($item)) {
+                continue;
+            }
+
+            $section = StoreSection::tryFrom(trim((string) $item));
+
+            if ($section !== null && ! in_array($section, $sections, true)) {
+                $sections[] = $section;
+            }
+        }
+
+        return $sections;
     }
 
     /**
