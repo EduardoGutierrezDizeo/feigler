@@ -4,12 +4,13 @@ use App\Models\User;
 use Database\Seeders\RoleSeeder;
 use Spatie\Permission\Models\Role;
 
-test('role seeder creates the four application roles', function () {
+test('role seeder creates the five application roles', function () {
     $this->seed(RoleSeeder::class);
 
     expect(Role::pluck('name')->sort()->values()->all())->toBe([
         'admin',
         'bodega',
+        'cliente',
         'contador',
         'vendedor',
     ]);
