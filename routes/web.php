@@ -2,6 +2,7 @@
 
 use App\Enums\StoreSection;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\Storefront\SearchController;
 use App\Services\Storefront\HomePage;
 use App\Services\Storefront\ListingPage;
 use App\Services\Storefront\ListingScope;
@@ -66,6 +67,11 @@ Route::get('/tienda', function (Request $request) {
         'subtitle' => 'Todas las secciones',
     ]);
 })->name('storefront.tienda');
+
+// Buscador del encabezado: el texto de `q` busca por nombre, referencia o
+// categoría en todas las secciones, con la misma página que la tienda. Sin
+// texto que buscar responde 200 y pide escribirlo.
+Route::get('/buscar', SearchController::class)->name('storefront.search');
 
 Route::get('/dashboard', function () {
     return view('dashboard');

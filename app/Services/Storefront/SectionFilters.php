@@ -10,7 +10,8 @@ use Illuminate\Http\Request;
  *
  * Es un objeto de valor: no consulta la base de datos. El saneo aquí es puramente
  * sintáctico — solo números para los ids, valores conocidos para el orden, casos
- * del enum para «seccion[]», un rango 12..120 para «mostrar» — y el chequeo de
+ * del enum para «seccion[]», un rango 12..120 para «mostrar» y el texto de «q»
+ * pasado por SearchTerm — y el chequeo de
  * que un valor pertenezca a la sección (un id de otra sección se ignora, una
  * talla que no existe se ignora) lo hace ListingPage al cruzar estos valores con
  * las opciones que la sección ofrece, porque ese cruce tiene a mano la base de datos.
@@ -51,6 +52,7 @@ class SectionFilters
      * @param  list<int>  $materials  Ids de materiales tal y como llegaron.
      * @param  StoreSection|null  $section  La sección de la página, cuando la hay.
      * @param  list<StoreSection>  $sections  Las secciones pedidas con seccion[], solo con casos válidos.
+     * @param  SearchTerm|null  $search  El texto de la búsqueda, saneado, cuando lo hay.
      */
     public function __construct(
         public readonly ?StoreSection $section = null,
@@ -64,6 +66,7 @@ class SectionFilters
         public readonly string $sort = 'novedades',
         public readonly int $show = SectionFilters::SHOW_STEP,
         public readonly array $sections = [],
+        public readonly ?SearchTerm $search = null,
     ) {}
 
     public static function fromRequest(Request $request, ?StoreSection $section = null): self
@@ -87,6 +90,7 @@ class SectionFilters
             sort: self::canonicalSort($request->input('orden', 'novedades')),
             show: self::boundedShow($request->input('mostrar')),
             sections: self::sectionValues($request->input('seccion')),
+            search: SearchTerm::from($request->input('q')),
         );
     }
 

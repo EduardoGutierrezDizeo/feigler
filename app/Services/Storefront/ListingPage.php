@@ -89,6 +89,11 @@ class ListingPage
 
         $coversMany = count($scope->sections()) > 1;
 
+        // El texto buscado, cuando lo hay, viaja en todas las URLs que la página
+        // genera (la canónica, el limpiar, los chips y el «Mostrar más»): quitar
+        // los demás filtros no debe perder la búsqueda.
+        $searchParams = $this->searchParams($filters);
+
         // La familia de sección solo existe en páginas de varias secciones: en
         // una de sola, el parámetro seccion[] se ignora entero (N3).
         $selectedSections = $coversMany
@@ -199,13 +204,13 @@ class ListingPage
             'section' => [
                 'key' => $scope->key(),
                 'label' => $scope->label(),
-                'url' => $scope->url(),
+                'url' => $scope->url($searchParams),
             ],
             'total' => $total,
             'shown' => $shown,
             'products' => ProductCards::makeAll($products),
             'nextUrl' => $this->nextUrl($filters, $scope, $params, $total, $shown),
-            'clearUrl' => $scope->url(),
+            'clearUrl' => $scope->url($searchParams),
             'sort' => [
                 'value' => $filters->sort,
                 'options' => array_map(
@@ -213,7 +218,7 @@ class ListingPage
                     SectionFilters::SORT_OPTIONS,
                 ),
             ],
-            'active' => $this->activeFilters($scope, $params, $selectedSections, $categoryLabels, $selectedSizes, $colors, $selectedColors, $materials, $selectedMaterials, $from, $to, $filters->inStockOnly),
+            'active' => $this->activeFilters($scope, $params, $filters->search, $selectedSections, $categoryLabels, $selectedSizes, $colors, $selectedColors, $materials, $selectedMaterials, $from, $to, $filters->inStockOnly),
             'filters' => [
                 'sections' => $coversMany
                     ? $this->sectionsOptions($scope->sections(), $selectedSections, $sectionCounts)
@@ -473,6 +478,17 @@ class ListingPage
     }
 
     /**
+     * El texto buscado como parámetro de la URL, cuando lo hay: es lo primero
+     * que llevan todas las URLs de la página del buscador.
+     *
+     * @return array<string, mixed>
+     */
+    private function searchParams(SectionFilters $filters): array
+    {
+        return $filters->search !== null ? ['q' => $filters->search->text] : [];
+    }
+
+    /**
      * Los parámetros canónicos de la página, tal y como los serializa la URL.
      *
      * Los arreglos se serializan planos y sin índices (categoria[]=5, no
@@ -498,7 +514,7 @@ class ListingPage
         ?int $from,
         ?int $to,
     ): array {
-        $params = [];
+        $params = $this->searchParams($filters);
 
         if ($sections !== []) {
             $params['seccion[]'] = $sections;
@@ -565,6 +581,7 @@ class ListingPage
      * varias secciones.
      *
      * @param  array<string, mixed>  $params
+     * @param  SearchTerm|null  $search  El texto buscado, cuando lo hay.
      * @param  list<string>  $sections  Valores de sección ya saneados.
      * @param  array<int, string>  $categoryLabels  Id de categoría => etiqueta ya desambiguada.
      * @param  list<string>  $selectedSizes
@@ -575,6 +592,7 @@ class ListingPage
     private function activeFilters(
         ListingScope $scope,
         array $params,
+        ?SearchTerm $search,
         array $sections,
         array $categoryLabels,
         array $selectedSizes,
@@ -587,6 +605,15 @@ class ListingPage
         bool $inStockOnly,
     ): array {
         $active = [];
+
+        // El texto buscado va primero y su enlace lo quita entero: sin texto la
+        // página del buscador vuelve a su estado de «escribe qué prenda buscas».
+        if ($search !== null) {
+            $active[] = [
+                'label' => $search->text,
+                'removeUrl' => $scope->url(),
+            ];
+        }
 
         foreach ($sections as $value) {
             $active[] = [

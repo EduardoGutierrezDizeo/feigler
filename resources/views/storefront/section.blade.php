@@ -11,6 +11,11 @@
       $crumbs:   [{ label, url|null }]  (migas de pan; por defecto Inicio / la página)
       $emptyMessage: string|null  (título del estado vacío; por defecto el de siempre,
                                    y entonces se ven también la pista y el botón de limpiar)
+      $emptyLink: { url, label }|null  (enlace propio del estado vacío, cuando lo hay;
+                                   sustituye a la pista y al botón de limpiar)
+      $searchQuery: string|null  (texto buscado; viaja oculto para no perderse al
+                                   cambiar un filtro)
+      $searchPrompt: bool  (cuando falta el texto buscado: no se pintan filtros)
       $total:    int (prendas que cumplen los filtros)
       $shown:    int (prendas visibles en esta página)
       $products: lista de tarjetas
@@ -43,13 +48,22 @@
     ];
     $sectionsFamily = $filters['sections'] ?? null;
     $emptyMessage = $emptyMessage ?? null;
+    $emptyLink = $emptyLink ?? null;
+    $searchQuery = $searchQuery ?? null;
+    $searchPrompt = $searchPrompt ?? false;
 @endphp
 
-<x-store.layout :title="$section['label'] . ' · Feigler'" :active="$section['key']" :cart-count="$cartCount ?? 0">
+<x-store.layout :title="$section['label'] . ' · Feigler'" :active="$section['key']" :cart-count="$cartCount ?? 0" :search-query="$searchQuery">
     <form method="GET" action="{{ $section['url'] }}" x-data="{ filtersOpen: false }"
           @change.debounce.400ms="$el.requestSubmit()" @keydown.escape.window="filtersOpen = false"
           x-effect="document.body.classList.toggle('overflow-hidden', filtersOpen)"
           class="mx-auto max-w-7xl px-4 pt-6 sm:px-8">
+
+        @if ($searchQuery !== null)
+            {{-- El texto buscado viaja con cada envío del formulario: cambiar un
+                 filtro no debe perder la búsqueda. --}}
+            <input type="hidden" name="q" value="{{ $searchQuery }}">
+        @endif
 
         <nav aria-label="Ruta" class="text-xs text-gris-calido">
             @foreach ($crumbs as $crumb)
@@ -68,21 +82,27 @@
                 <h1 class="mt-1 font-display text-5xl leading-none sm:text-7xl">{{ $section['label'] }}</h1>
                 <p class="mt-2 text-sm text-gris-calido">{{ $total }} {{ $total === 1 ? 'prenda' : 'prendas' }}</p>
             </div>
-            <div class="flex items-center gap-3">
-                <button type="button" @click="filtersOpen = true" aria-controls="filtros"
-                        class="rounded-full border border-laton px-5 py-2 text-sm text-verde lg:hidden">Filtros</button>
-                <x-select-input variant="pill" name="orden" aria-label="Ordenar productos">
-                    @foreach ($sort['options'] as $option)
-                        <option value="{{ $option['value'] }}" @selected($sort['value'] === $option['value'])>{{ $option['label'] }}</option>
-                    @endforeach
-                </x-select-input>
-            </div>
+            @unless ($searchPrompt)
+                <div class="flex items-center gap-3">
+                    <button type="button" @click="filtersOpen = true" aria-controls="filtros"
+                            class="rounded-full border border-laton px-5 py-2 text-sm text-verde lg:hidden">Filtros</button>
+                    <x-select-input variant="pill" name="orden" aria-label="Ordenar productos">
+                        @foreach ($sort['options'] as $option)
+                            <option value="{{ $option['value'] }}" @selected($sort['value'] === $option['value'])>{{ $option['label'] }}</option>
+                        @endforeach
+                    </x-select-input>
+                </div>
+            @endunless
         </div>
 
-        <div class="mt-8 lg:grid lg:grid-cols-[16rem_minmax(0,1fr)] lg:gap-10">
+        <div @class([
+            'mt-8 lg:grid lg:gap-10',
+            'lg:grid-cols-[16rem_minmax(0,1fr)]' => ! $searchPrompt,
+        ])>
 
-            <div x-show="filtersOpen" x-transition.opacity @click="filtersOpen = false" style="display: none"
-                 class="fixed inset-0 z-40 bg-tinta/40 lg:hidden" aria-hidden="true"></div>
+            @unless ($searchPrompt)
+                <div x-show="filtersOpen" x-transition.opacity @click="filtersOpen = false" style="display: none"
+                     class="fixed inset-0 z-40 bg-tinta/40 lg:hidden" aria-hidden="true"></div>
 
             {{-- Filtros: panel lateral en móvil, columna fija en escritorio --}}
             <aside id="filtros" aria-label="Filtros"
@@ -223,6 +243,7 @@
 
                 <button type="submit" class="mt-2 w-full rounded-full bg-linear-to-b from-verde to-verde-hondo py-3 text-sm text-crema lg:hidden">Ver {{ $total }} {{ $total === 1 ? 'prenda' : 'prendas' }}</button>
             </aside>
+            @endunless
 
             {{-- Resultados --}}
             <div class="min-w-0" x-data="loadMore({ url: @js($nextUrl), shown: @js($shown), total: @js($total) })">
@@ -255,7 +276,9 @@
                 @else
                     <div class="rounded-3xl border border-arena bg-crema/70 px-6 py-16 text-center">
                         <p class="font-display text-3xl">{{ $emptyMessage ?? 'No hay prendas con estos filtros' }}</p>
-                        @if ($emptyMessage === null)
+                        @if ($emptyLink !== null)
+                            <a href="{{ $emptyLink['url'] }}" class="mt-6 inline-block rounded-full border border-laton px-6 py-2.5 text-sm text-verde">{{ $emptyLink['label'] }}</a>
+                        @elseif ($emptyMessage === null)
                             <p class="mt-2 text-sm text-gris-calido">Quita alguno o empieza de nuevo.</p>
                             <a href="{{ $clearUrl }}" class="mt-6 inline-block rounded-full border border-laton px-6 py-2.5 text-sm text-verde">Limpiar filtros</a>
                         @endif

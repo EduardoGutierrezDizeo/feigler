@@ -1,4 +1,4 @@
-@props(['title' => 'Feigler', 'active' => null, 'cartCount' => 0])
+@props(['title' => 'Feigler', 'active' => null, 'cartCount' => 0, 'searchQuery' => null])
 
 @php
     $nav = [
@@ -37,11 +37,11 @@
         <div class="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4 sm:px-8">
             <a href="{{ url('/') }}" class="font-display text-xl tracking-[0.45em] text-verde">FEIGLER</a>
 
-            <form action="{{ url('/buscar') }}" method="get" role="search" class="mx-auto hidden w-full max-w-xs md:block">
+            <form action="{{ route('storefront.search') }}" method="get" role="search" class="mx-auto hidden w-full max-w-xs md:block">
                 <label class="relative block">
                     <span class="sr-only">Buscar productos</span>
                     <svg class="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-gris-calido" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4" stroke-linecap="round"/></svg>
-                    <input type="search" name="q" placeholder="Buscar productos"
+                    <input type="search" name="q" value="{{ $searchQuery }}" placeholder="Buscar productos"
                            class="w-full rounded-full border border-arena bg-crema/70 py-2 pl-10 pr-4 text-sm placeholder:text-gris-calido focus:border-verde focus:ring-verde/20">
                 </label>
             </form>
@@ -66,9 +66,9 @@
 
         <div id="menu-movil" x-show="open" x-transition.opacity style="display: none"
              class="border-t border-arena/70 bg-crema px-4 pb-5 pt-4 lg:hidden">
-            <form action="{{ url('/buscar') }}" method="get" role="search" class="mb-4">
+            <form action="{{ route('storefront.search') }}" method="get" role="search" class="mb-4">
                 <label class="sr-only" for="buscar-movil">Buscar productos</label>
-                <input id="buscar-movil" type="search" name="q" placeholder="Buscar productos"
+                <input id="buscar-movil" type="search" name="q" value="{{ $searchQuery }}" placeholder="Buscar productos"
                        class="w-full rounded-full border border-arena bg-crema py-2 px-4 text-sm focus:border-verde focus:ring-verde/20">
             </form>
             <nav aria-label="Principal móvil" class="grid grid-cols-2 gap-1 text-base">

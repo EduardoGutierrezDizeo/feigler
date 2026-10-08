@@ -10,6 +10,7 @@ use App\Livewire\Concerns\Notifies;
 use App\Models\HomeFeaturedProduct;
 use App\Models\Product;
 use App\Services\Storefront\HomeNewProducts;
+use App\Support\LikePattern;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Collection as SupportCollection;
@@ -163,12 +164,12 @@ class Featured extends Component
             $query->whereNotIn('id', $chosenIds);
         }
 
-        $pattern = '%'.addcslashes($this->search, '%_\\').'%';
+        $pattern = LikePattern::contains($this->search);
 
         return $query
             ->where(function (Builder $q) use ($pattern): void {
-                $q->whereRaw('LOWER(name) LIKE ?', [$pattern])
-                    ->orWhereRaw('LOWER(reference) LIKE ?', [$pattern]);
+                $q->whereRaw('LOWER(name) LIKE ? ESCAPE ?', [$pattern, LikePattern::escapeCharacter()])
+                    ->orWhereRaw('LOWER(reference) LIKE ? ESCAPE ?', [$pattern, LikePattern::escapeCharacter()]);
             })
             ->get();
     }

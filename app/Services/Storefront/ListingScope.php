@@ -4,6 +4,7 @@ namespace App\Services\Storefront;
 
 use App\Enums\StoreSection;
 use App\Models\Product;
+use App\Support\LikePattern;
 use Illuminate\Database\Eloquent\Builder;
 use InvalidArgumentException;
 
@@ -37,12 +38,14 @@ class ListingScope
      * @param  list<StoreSection>  $sections  Las secciones que cubre, sin repetir y al menos una.
      * @param  array<string, mixed>  $routeParams  Los parámetros de la ruta nombrada.
      * @param  bool  $newOnly  Si solo cubre prendas nuevas (la regla de la insignia «Nuevo»).
+     * @param  SearchTerm|null  $search  El texto buscado, cuando la página es un buscador.
      */
     private function __construct(
         private readonly array $sections,
         private readonly string $routeName,
         private readonly array $routeParams = [],
         private readonly bool $newOnly = false,
+        private readonly ?SearchTerm $search = null,
     ) {}
 
     /**
@@ -93,6 +96,16 @@ class ListingScope
     }
 
     /**
+     * El mismo alcance restringido a un texto buscado: el nombre del producto, su
+     * referencia (`PREFIJO-NNN`) o el nombre de su categoría tienen que contener
+     * cada palabra. Un texto nulo deja el alcance como estaba.
+     */
+    public function searching(?SearchTerm $term): self
+    {
+        return new self($this->sections, $this->routeName, $this->routeParams, $this->newOnly, $term);
+    }
+
+    /**
      * Las secciones que cubre, al menos una.
      *
      * @return list<StoreSection>
@@ -140,8 +153,9 @@ class ListingScope
 
     /**
      * La restricción del conjunto base sobre una consulta de prendas: visibles,
-     * de categoría activa, de una de las secciones del alcance y, cuando el
-     * alcance lo pide, nuevas (creadas desde Product::newCutoff()).
+     * de categoría activa, de una de las secciones del alcance, cuando el
+     * alcance lo pide nuevas (creadas desde Product::newCutoff()) y, cuando hay
+     * un texto buscado, las que coinciden con él.
      *
      * `products.created_at` va calificada porque la consulta de conteos por
      * sección une la tabla categories, que también tiene created_at.
@@ -151,12 +165,44 @@ class ListingScope
      */
     public function applyTo(Builder $products): Builder
     {
-        return $products
+        $products = $products
             ->visible()
             ->when($this->newOnly, fn (Builder $query): Builder => $query->where('products.created_at', '>=', Product::newCutoff()))
             ->whereHas('category', fn (Builder $categories): Builder => $categories
                 ->whereIn('section', $this->sectionValues())
                 ->where('is_active', true));
+
+        return $this->search === null ? $products : $this->applySearch($products);
+    }
+
+    /**
+     * La restricción del texto buscado: cada palabra tiene que aparecer en al
+     * menos uno de los tres campos (nombre, referencia o nombre de la categoría),
+     * y todas las palabras tienen que aparecer.
+     *
+     * Los comodines de `LIKE` van escapados con el ayudante compartido, así que
+     * un `%` o un `_` escritos se buscan como los caracteres que son. El nombre
+     * de la categoría se lee por la relación, en su propia subconsulta.
+     *
+     * @param  Builder<Product>  $products
+     * @return Builder<Product>
+     */
+    private function applySearch(Builder $products): Builder
+    {
+        $escape = LikePattern::escapeCharacter();
+
+        foreach ($this->search->words as $word) {
+            $pattern = LikePattern::contains($word);
+
+            $products->where(function (Builder $query) use ($pattern, $escape): void {
+                $query
+                    ->whereRaw('LOWER(products.name) LIKE ? ESCAPE ?', [$pattern, $escape])
+                    ->orWhereRaw('LOWER(products.reference) LIKE ? ESCAPE ?', [$pattern, $escape])
+                    ->orWhereHas('category', fn (Builder $categories): Builder => $categories->whereRaw('LOWER(categories.name) LIKE ? ESCAPE ?', [$pattern, $escape]));
+            });
+        }
+
+        return $products;
     }
 
     /**
