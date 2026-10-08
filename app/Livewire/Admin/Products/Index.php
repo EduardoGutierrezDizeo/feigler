@@ -13,6 +13,7 @@ use App\Exceptions\InvalidProductStatusException;
 use App\Exceptions\MaterialNotFoundException;
 use App\Exceptions\RepeatedProductMaterialException;
 use App\Livewire\Concerns\Notifies;
+use App\Livewire\Concerns\RequiresAdmin;
 use App\Models\Category;
 use App\Models\Material;
 use App\Models\Product;
@@ -31,6 +32,7 @@ use Livewire\Component;
 class Index extends Component
 {
     use Notifies;
+    use RequiresAdmin;
 
     /**
      * The stored states the panel may write, which are the ones the column holds:

@@ -23,7 +23,7 @@ test('renders the users page for users with the admin role', function () {
 test('the user form uses the same full-viewport modal as the category form', function () {
     $this->seed(RoleSeeder::class);
 
-    Livewire::test(Index::class)
+    Livewire::actingAs(adminForPanel())->test(Index::class)
         ->assertSet('showForm', false)
         // Mismo componente y, sobre todo, mismo contrato de visibilidad: el
         // nodo se renderiza siempre y Alpine lo muestra y lo oculta, de modo que
@@ -60,7 +60,7 @@ test('creates a vendedor with a random password and sends the password reset ema
     Notification::fake();
     $this->seed(RoleSeeder::class);
 
-    Livewire::test(Index::class)
+    Livewire::actingAs(adminForPanel())->test(Index::class)
         ->call('create')
         ->set('name', 'Ana López')
         ->set('email', 'ana@feigler.test')
@@ -85,7 +85,7 @@ test('creates a vendedor with a random password and sends the password reset ema
 test('validates name, email and role when creating a user', function () {
     $this->seed(RoleSeeder::class);
 
-    Livewire::test(Index::class)
+    Livewire::actingAs(adminForPanel())->test(Index::class)
         ->call('create')
         ->call('save')
         ->assertHasErrors(['name', 'email', 'role']);
@@ -96,7 +96,7 @@ test('rejects an email already in use', function () {
 
     User::factory()->create(['email' => 'ana@feigler.test']);
 
-    Livewire::test(Index::class)
+    Livewire::actingAs(adminForPanel())->test(Index::class)
         ->call('create')
         ->set('name', 'Ana López')
         ->set('email', 'ana@feigler.test')
@@ -112,7 +112,7 @@ test('updates a user and replaces the role without accumulating', function () {
     $user = User::factory()->create(['name' => 'Ana López']);
     $user->assignRole('vendedor');
 
-    Livewire::test(Index::class)
+    Livewire::actingAs(adminForPanel())->test(Index::class)
         ->call('edit', $user->id)
         ->assertSet('editingId', $user->id)
         ->set('name', 'Ana López Rojas')
@@ -137,13 +137,13 @@ test('deactivates and reactivates a user account', function () {
     $user = User::factory()->create();
     $user->assignRole('vendedor');
 
-    Livewire::test(Index::class)
+    Livewire::actingAs(adminForPanel())->test(Index::class)
         ->call('toggleActive', $user->id)
         ->assertSet('noticeType', 'success');
 
     expect($user->refresh()->is_active)->toBeFalse();
 
-    Livewire::test(Index::class)
+    Livewire::actingAs(adminForPanel())->test(Index::class)
         ->call('toggleActive', $user->id)
         ->assertSet('noticeType', 'success');
 
@@ -173,7 +173,7 @@ test('resends the password reset email for an existing user', function () {
     $user = User::factory()->create(['name' => 'Ana López', 'email' => 'ana@feigler.test']);
     $user->assignRole('vendedor');
 
-    Livewire::test(Index::class)
+    Livewire::actingAs(adminForPanel())->test(Index::class)
         ->call('resendInvitation', $user->id)
         ->assertSet('noticeType', 'success')
         ->assertDispatched('toast', function (string $name, array $params) {
@@ -224,7 +224,7 @@ test('lists only internal users and excludes customers without roles', function 
 
     User::factory()->create(['name' => 'Cliente Común', 'email' => 'cliente@example.test']);
 
-    Livewire::test(Index::class)
+    Livewire::actingAs(adminForPanel())->test(Index::class)
         ->assertSee('Carlos Admin')
         ->assertSee('Ana Vend')
         ->assertDontSee('Cliente Común')
@@ -240,7 +240,7 @@ test('filters internal users by role', function () {
     $warehouse = User::factory()->create(['name' => 'Luis Bodega', 'email' => 'luis@feigler.test']);
     $warehouse->assignRole('bodega');
 
-    Livewire::test(Index::class)
+    Livewire::actingAs(adminForPanel())->test(Index::class)
         ->set('roleFilter', 'vendedor')
         ->assertSee('Ana Vend')
         ->assertDontSee('Luis Bodega');
@@ -255,12 +255,12 @@ test('searches internal users by name or email', function () {
     $warehouse = User::factory()->create(['name' => 'Luis Bodega', 'email' => 'luis@feigler.test']);
     $warehouse->assignRole('bodega');
 
-    Livewire::test(Index::class)
+    Livewire::actingAs(adminForPanel())->test(Index::class)
         ->set('search', 'ana@')
         ->assertSee('Ana Vend')
         ->assertDontSee('Luis Bodega');
 
-    Livewire::test(Index::class)
+    Livewire::actingAs(adminForPanel())->test(Index::class)
         ->set('search', 'Luis')
         ->assertSee('Luis Bodega')
         ->assertDontSee('Ana Vend');

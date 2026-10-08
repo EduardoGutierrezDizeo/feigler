@@ -864,6 +864,11 @@ test('the listing runs the same number of queries with three products as with fi
     $queriesFor = function (int $cantidad) use ($admin, $polos): int {
         Product::factory()->count($cantidad)->for($polos)->create();
 
+        // El guardia del panel vuelve a preguntar el rol en cada petición. En una
+        // petición real el modelo llega recién hecho, así que se suelta la relación
+        // para que las dos medidas paguen esa consulta por igual.
+        $admin->unsetRelation('roles');
+
         DB::connection()->flushQueryLog();
         DB::connection()->enableQueryLog();
 

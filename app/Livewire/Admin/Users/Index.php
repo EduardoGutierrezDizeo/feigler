@@ -3,6 +3,7 @@
 namespace App\Livewire\Admin\Users;
 
 use App\Livewire\Concerns\Notifies;
+use App\Livewire\Concerns\RequiresAdmin;
 use App\Models\User;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
@@ -16,6 +17,7 @@ use Livewire\Component;
 class Index extends Component
 {
     use Notifies;
+    use RequiresAdmin;
 
     /** @var list<string> */
     public const INTERNAL_ROLES = ['admin', 'vendedor', 'bodega', 'contador'];
@@ -40,8 +42,10 @@ class Index extends Component
         $this->showForm = true;
     }
 
-    public function edit(User $user): void
+    public function edit(int $id): void
     {
+        $user = $this->internalUser($id);
+
         $this->resetForm();
         $this->editingId = $user->id;
         $this->name = $user->name;
@@ -87,7 +91,7 @@ class Index extends Component
         ]);
 
         if ($this->editingId !== null) {
-            $user = User::query()->findOrFail($this->editingId);
+            $user = $this->internalUser($this->editingId);
 
             $user->update([
                 'name' => $validated['name'],
@@ -117,8 +121,10 @@ class Index extends Component
         $this->resetForm();
     }
 
-    public function toggleActive(User $user): void
+    public function toggleActive(int $id): void
     {
+        $user = $this->internalUser($id);
+
         if ($user->id === auth()->id() && $user->is_active) {
             $this->notifyError('No puedes desactivar tu propia cuenta de administrador.');
 
@@ -132,8 +138,10 @@ class Index extends Component
             : "Cuenta de «{$user->name}» desactivada correctamente.");
     }
 
-    public function resendInvitation(User $user): void
+    public function resendInvitation(int $id): void
     {
+        $user = $this->internalUser($id);
+
         Password::deleteToken($user);
 
         $this->sendInvitation($user);
@@ -160,6 +168,18 @@ class Index extends Component
             'users' => $users,
             'internalRoles' => self::INTERNAL_ROLES,
         ]);
+    }
+
+    /**
+     * Resolve the user the panel is allowed to act on. Anyone outside the internal
+     * roles does not exist as far as this panel goes, so a customer id — or a user
+     * with no role — answers 404 just like an unknown id would.
+     */
+    private function internalUser(int $id): User
+    {
+        return User::query()
+            ->role(self::INTERNAL_ROLES)
+            ->findOrFail($id);
     }
 
     private function sendInvitation(User $user): void
