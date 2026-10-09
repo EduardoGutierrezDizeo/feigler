@@ -33,6 +33,7 @@ export default function addressModal(config = {}) {
         updateUrl: config.updateUrl ?? '',
         deleteUrl: config.deleteUrl ?? '',
         form: {},
+        openSelect: null,
         deleteSummary: '',
         departments: config.ubicaciones?.departments ?? [],
         citiesByDepartment: config.ubicaciones?.cities ?? {},
@@ -53,6 +54,22 @@ export default function addressModal(config = {}) {
             return this.citiesByDepartment[this.form.department_code] ?? [];
         },
 
+        get departmentLabel() {
+            const selected = this.departments.find((dept) => dept.code === this.form.department_code);
+
+            return selected?.name ?? 'Elige un departamento';
+        },
+
+        get cityLabel() {
+            if (! this.form.department_code) {
+                return 'Elige una ciudad';
+            }
+
+            const selected = this.cityOptions.find((city) => city.code === this.form.city_code);
+
+            return selected?.name ?? 'Elige una ciudad';
+        },
+
         get editAddress() {
             return this.addressId ? (addresses[this.addressId] ?? null) : null;
         },
@@ -68,6 +85,7 @@ export default function addressModal(config = {}) {
                 ? (this.editAddress ?? createDefault)
                 : createDefault;
 
+            this.openSelect = null;
             this.form = Object.fromEntries(fieldNames.map((field) => [
                 field,
                 Object.hasOwn(oldInput, field) ? oldInput[field] : (base[field] ?? ''),
@@ -103,15 +121,43 @@ export default function addressModal(config = {}) {
         },
 
         /**
-         * Al cambiar de departamento se limpia la ciudad: la dependencia vive en
-         * el cliente, porque los municipios ya están en la página.
+         * Alterna el listbox abierto (crear/editar). Cerrar al elegir o al hacer
+         * clic fuera queda a cargo del propio blade con `@click.outside`.
          */
-        changeDepartment() {
+        openDropdown(which) {
+            this.openSelect = this.openSelect === which ? null : which;
+        },
+
+        /**
+         * Cierra solo el listbox indicado. Alpine dispara `click.outside` en la
+         * fase de burbuja para cada contenedor, por eso conviene una guarda por
+         * selección: abrir la ciudad al hacer clic en su botón no debe cerrar el
+         * listbox recién abierto por el del departamento.
+         */
+        closeSelector(which) {
+            if (this.openSelect === which) {
+                this.openSelect = null;
+            }
+        },
+
+        /**
+         * Al elegir departamento se limpia la ciudad: la dependencia vive en el
+         * cliente, porque los municipios ya están en la página.
+         */
+        chooseDepartment(code) {
+            this.form.department_code = code;
             this.form.city_code = '';
+            this.openSelect = null;
+        },
+
+        chooseCity(code) {
+            this.form.city_code = code;
+            this.openSelect = null;
         },
 
         close() {
             this.open = false;
+            this.openSelect = null;
         },
 
         summaryOf(address) {

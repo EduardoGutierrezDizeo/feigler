@@ -56,7 +56,7 @@
             </div>
         </div>
 
-        <div class="mt-8" role="tabpanel" aria-label="{{ $activeTab->label() }}">
+        <div class="mt-8" role="tabpanel" aria-label="{{ $activeTab->label() }}" x-data="{ open: false }">
             @include($activeTab->view())
         </div>
     </div>

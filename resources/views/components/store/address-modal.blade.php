@@ -83,21 +83,55 @@
             <input type="hidden" name="_method" value="PUT" x-bind:disabled="mode === 'create'">
             <input type="hidden" name="address_mode" x-bind:value="mode === 'edit' ? addressId : 'create'">
 
+            <p class="text-xs text-gris-calido">Los campos marcados con <span class="text-ladrillo" aria-hidden="true">*</span> son obligatorios.</p>
+
             <x-store.field label="Nombre de quien recibe" name="recipient_name" :messages="$errors->address->get('recipient_name')" x-model="form.recipient_name" required maxlength="100" autocomplete="name" />
 
             <x-store.field label="Teléfono" name="phone" type="tel" inputmode="tel" :messages="$errors->address->get('phone')" x-model="form.phone" required maxlength="10" autocomplete="tel" />
 
             <div class="grid gap-5 sm:grid-cols-2">
-                <div>
-                    <label for="address-departamento" class="block text-[0.6875rem] font-medium uppercase tracking-[0.18em] text-gris-calido">Departamento</label>
-                    <select id="address-departamento" name="department_code" x-model="form.department_code" required
-                            @change="changeDepartment()"
-                            class="mt-1.5 block w-full rounded-xl border border-arena bg-crema px-4 py-2.5 text-sm text-tinta focus:border-verde focus:ring-1 focus:ring-verde/20">
-                        <option value="">Elige un departamento</option>
+                {{-- Departamento: listbox propio (mismo estilo de opciones que el selector de
+                     categorías del panel), sin `x-if`; el <select> nativo se sustituye por un
+                     campo oculto para no cambiar el cuerpo del POST. --}}
+                <div class="relative" @keydown.escape.stop="openSelect = null" @click.outside="closeSelector('department')">
+                    <label for="address-departamento" class="block text-[0.6875rem] font-medium uppercase tracking-[0.18em] text-gris-calido">
+                        Departamento
+                        <span class="text-ladrillo" aria-hidden="true">*</span>
+                    </label>
+
+                    <button type="button" id="address-departamento" aria-haspopup="listbox"
+                            :aria-expanded="(openSelect === 'department').toString()"
+                            @click="openDropdown('department')"
+                            class="mt-1.5 flex w-full items-center justify-between rounded-xl border border-arena bg-crema px-4 py-2.5 text-sm shadow-none transition focus:border-verde focus:ring-1 focus:ring-verde/20 {{ $errors->address->has('department_code') ? 'border-ladrillo focus:border-ladrillo focus:ring-ladrillo' : '' }}">
+                        <span class="truncate" x-text="departmentLabel" :class="form.department_code ? 'text-tinta' : 'text-gris-calido/70'"></span>
+                        <svg class="pointer-events-none h-5 w-5 shrink-0 text-gris-calido" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
+                        </svg>
+                    </button>
+
+                    <input type="hidden" name="department_code" :value="form.department_code">
+
+                    <div x-show="openSelect === 'department'" x-cloak role="listbox" aria-label="Departamento"
+                         class="absolute z-20 mt-1.5 max-h-64 w-full overflow-y-auto rounded-xl border border-arena bg-crema shadow-suave"
+                         style="display: none">
+                        <button type="button" role="option" :aria-selected="(form.department_code === '').toString()"
+                                @click="chooseDepartment('')"
+                                class="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-gris-calido hover:bg-hueso focus:bg-hueso focus:outline-none">
+                            Elige un departamento
+                        </button>
                         <template x-for="dept in departments" :key="dept.code">
-                            <option :value="dept.code" x-text="dept.name"></option>
+                            <button type="button" role="option" :aria-selected="(form.department_code === dept.code).toString()"
+                                    @click="chooseDepartment(dept.code)"
+                                    :class="form.department_code === dept.code ? 'bg-hueso' : ''"
+                                    class="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-tinta hover:bg-hueso focus:bg-hueso focus:outline-none">
+                                <span class="truncate" x-text="dept.name"></span>
+                                <svg x-show="form.department_code === dept.code" class="h-4 w-4 shrink-0 text-verde" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                    <path fill-rule="evenodd" d="M16.704 5.29a1 1 0 0 1 0 1.42l-7.5 7.5a1 1 0 0 1-1.42 0l-3.5-3.5a1 1 0 1 1 1.42-1.42L8.5 12.08l6.79-6.79a1 1 0 0 1 1.42 0Z" clip-rule="evenodd" />
+                                </svg>
+                            </button>
                         </template>
-                    </select>
+                    </div>
+
                     @if ($errors->address->get('department_code'))
                         <ul class="mt-1.5 space-y-1 text-sm text-ladrillo">
                             @foreach ($errors->address->get('department_code') as $message)
@@ -107,15 +141,47 @@
                     @endif
                 </div>
 
-                <div>
-                    <label for="address-ciudad" class="block text-[0.6875rem] font-medium uppercase tracking-[0.18em] text-gris-calido">Ciudad</label>
-                    <select id="address-ciudad" name="city_code" x-model="form.city_code" required
-                            class="mt-1.5 block w-full rounded-xl border border-arena bg-crema px-4 py-2.5 text-sm text-tinta focus:border-verde focus:ring-1 focus:ring-verde/20">
-                        <option value="">Elige una ciudad</option>
+                {{-- Ciudad: depende del departamento; se deshabilita mientras no haya uno elegido. --}}
+                <div class="relative" @keydown.escape.stop="openSelect = null" @click.outside="closeSelector('city')">
+                    <label for="address-ciudad" class="block text-[0.6875rem] font-medium uppercase tracking-[0.18em] text-gris-calido">
+                        Ciudad
+                        <span class="text-ladrillo" aria-hidden="true">*</span>
+                    </label>
+
+                    <button type="button" id="address-ciudad" aria-haspopup="listbox"
+                            :aria-expanded="(openSelect === 'city').toString()"
+                            :disabled="! form.department_code"
+                            @click="openDropdown('city')"
+                            class="mt-1.5 flex w-full items-center justify-between rounded-xl border border-arena bg-crema px-4 py-2.5 text-sm shadow-none transition focus:border-verde focus:ring-1 focus:ring-verde/20 disabled:cursor-not-allowed disabled:opacity-60 {{ $errors->address->has('city_code') ? 'border-ladrillo focus:border-ladrillo focus:ring-ladrillo' : '' }}">
+                        <span class="truncate" x-text="cityLabel" :class="form.city_code ? 'text-tinta' : 'text-gris-calido/70'"></span>
+                        <svg class="pointer-events-none h-5 w-5 shrink-0 text-gris-calido" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                            <path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" />
+                        </svg>
+                    </button>
+
+                    <input type="hidden" name="city_code" :value="form.city_code">
+
+                    <div x-show="openSelect === 'city'" x-cloak role="listbox" aria-label="Ciudad"
+                         class="absolute z-20 mt-1.5 max-h-64 w-full overflow-y-auto rounded-xl border border-arena bg-crema shadow-suave"
+                         style="display: none">
+                        <button type="button" role="option" :aria-selected="(form.city_code === '').toString()"
+                                @click="chooseCity('')"
+                                class="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-gris-calido hover:bg-hueso focus:bg-hueso focus:outline-none">
+                            Elige una ciudad
+                        </button>
                         <template x-for="city in cityOptions" :key="city.code">
-                            <option :value="city.code" x-text="city.name"></option>
+                            <button type="button" role="option" :aria-selected="(form.city_code === city.code).toString()"
+                                    @click="chooseCity(city.code)"
+                                    :class="form.city_code === city.code ? 'bg-hueso' : ''"
+                                    class="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-tinta hover:bg-hueso focus:bg-hueso focus:outline-none">
+                                <span class="truncate" x-text="city.name"></span>
+                                <svg x-show="form.city_code === city.code" class="h-4 w-4 shrink-0 text-verde" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                    <path fill-rule="evenodd" d="M16.704 5.29a1 1 0 0 1 0 1.42l-7.5 7.5a1 1 0 0 1-1.42 0l-3.5-3.5a1 1 0 1 1 1.42-1.42L8.5 12.08l6.79-6.79a1 1 0 0 1 1.42 0Z" clip-rule="evenodd" />
+                                </svg>
+                            </button>
                         </template>
-                    </select>
+                    </div>
+
                     @if ($errors->address->get('city_code'))
                         <ul class="mt-1.5 space-y-1 text-sm text-ladrillo">
                             @foreach ($errors->address->get('city_code') as $message)

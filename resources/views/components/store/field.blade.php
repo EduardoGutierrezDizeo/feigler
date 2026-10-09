@@ -12,7 +12,12 @@
 @endphp
 
 <div>
-    <label for="{{ $fieldId }}" class="block text-[0.6875rem] font-medium uppercase tracking-[0.18em] text-gris-calido">{{ $label }}</label>
+    <label for="{{ $fieldId }}" class="block text-[0.6875rem] font-medium uppercase tracking-[0.18em] text-gris-calido">
+        {{ $label }}
+        @if ($attributes->has('required'))
+            <span class="text-ladrillo" aria-hidden="true">*</span>
+        @endif
+    </label>
 
     <input
         id="{{ $fieldId }}"

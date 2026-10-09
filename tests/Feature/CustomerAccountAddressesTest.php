@@ -86,6 +86,26 @@ test('la pestaña Direcciones aparece tras Perfil y Seguridad, activa y con su e
         ->assertSeeInOrder(['Agregar dirección', 'Aún no tienes direcciones guardadas.']);
 });
 
+test('los controles de Direcciones viven en el ámbito Alpine del tabpanel para abrir el modal', function () {
+    $user = clienteConCuenta();
+
+    $address = Address::factory()->for($user)->create();
+
+    $html = $this->actingAs($user)->get('/cuenta?tab=direcciones')
+        ->assertOk()
+        ->getContent();
+
+    expect(preg_match('/<div\s+class="mt-8"\s+role="tabpanel"[^>]*x-data="\{ open: false \}"/', $html))->toBe(1);
+
+    foreach ([
+        "\$dispatch('open-address', { mode: 'create' })",
+        "\$dispatch('open-address', { mode: 'edit', id: $address->id })",
+        "\$dispatch('open-address', { mode: 'delete', id: $address->id })",
+    ] as $disparo) {
+        expect(str_contains($html, $disparo))->toBeTrue();
+    }
+});
+
 test('un cliente guarda una dirección completa, la primera queda predeterminada y redirige con el mensaje', function () {
     $user = clienteConCuenta();
 
