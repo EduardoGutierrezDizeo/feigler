@@ -16,10 +16,13 @@ enum AccountTab: string
 {
     case Perfil = 'perfil';
 
+    case Seguridad = 'seguridad';
+
     public function label(): string
     {
         return match ($this) {
             self::Perfil => 'Perfil',
+            self::Seguridad => 'Seguridad',
         };
     }
 
@@ -30,6 +33,7 @@ enum AccountTab: string
     {
         return match ($this) {
             self::Perfil => 'storefront.account.tabs.perfil',
+            self::Seguridad => 'storefront.account.tabs.seguridad',
         };
     }
 
