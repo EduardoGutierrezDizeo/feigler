@@ -3,6 +3,7 @@
 use App\Enums\StoreSection;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Storefront\AccountController;
+use App\Http\Controllers\Storefront\AddressController;
 use App\Http\Controllers\Storefront\SearchController;
 use App\Services\Storefront\HomePage;
 use App\Services\Storefront\ListingPage;
@@ -89,6 +90,25 @@ Route::get('/cuenta', [AccountController::class, 'index'])
 Route::patch('/cuenta/perfil', [AccountController::class, 'updateProfile'])
     ->middleware(['auth', 'role:cliente'])
     ->name('account.profile.update');
+
+// Direcciones del cliente: todas resuelven la dirección acotada al usuario
+// autenticado (la de otro cliente da 404) y ninguna de los verbos expone un
+// closure. Las reglas de negocio viven en CustomerAddresses.
+Route::post('/cuenta/direcciones', [AddressController::class, 'store'])
+    ->middleware(['auth', 'role:cliente'])
+    ->name('account.addresses.store');
+
+Route::put('/cuenta/direcciones/{address}', [AddressController::class, 'update'])
+    ->middleware(['auth', 'role:cliente'])
+    ->name('account.addresses.update');
+
+Route::patch('/cuenta/direcciones/{address}/predeterminada', [AddressController::class, 'makeDefault'])
+    ->middleware(['auth', 'role:cliente'])
+    ->name('account.addresses.default');
+
+Route::delete('/cuenta/direcciones/{address}', [AddressController::class, 'destroy'])
+    ->middleware(['auth', 'role:cliente'])
+    ->name('account.addresses.destroy');
 
 Route::get('/staff', function () {
     $modules = [

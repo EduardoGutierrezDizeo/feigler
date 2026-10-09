@@ -20,10 +20,16 @@ class AddressFactory extends Factory
     {
         return [
             'user_id' => User::factory(),
+            'recipient_name' => fake()->name(),
             'line1' => fake()->streetAddress(),
             'line2' => fake()->secondaryAddress(),
-            'city' => fake()->city(),
-            'phone' => fake()->phoneNumber(),
+            'department_code' => '11',
+            'department' => 'BOGOTÁ, D.C.',
+            'city_code' => '11001',
+            'city' => 'BOGOTÁ, D.C.',
+            'label' => fake()->randomElement(['Casa', 'Trabajo']),
+            'instructions' => fake()->sentence(),
+            'phone' => '3001234567',
         ];
     }
 

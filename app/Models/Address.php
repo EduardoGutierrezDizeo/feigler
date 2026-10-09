@@ -13,18 +13,23 @@ class Address extends Model
     use HasFactory;
 
     /**
-     * The attributes that are mass assignable.
+     * Los únicos campos que el cliente puede escribir. El dueño (user_id), la
+     * predeterminada (is_default) y la zona de envío no se asignan en masa desde
+     * un request: los decide la tienda (CustomerAddresses).
      *
      * @var list<string>
      */
     protected $fillable = [
-        'user_id',
-        'shipping_zone_id',
+        'recipient_name',
+        'phone',
+        'department_code',
+        'department',
+        'city_code',
+        'city',
+        'label',
         'line1',
         'line2',
-        'city',
-        'phone',
-        'is_default',
+        'instructions',
     ];
 
     /**

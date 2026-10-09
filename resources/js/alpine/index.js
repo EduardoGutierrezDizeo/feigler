@@ -25,6 +25,7 @@ import './plugins.js';
 
 // Componentes Alpine.data.
 import accessModal from './access-modal.js';
+import addressModal from './address-modal.js';
 import './admin-modal.js';
 import categoryCarousel from './category-carousel.js';
 import './color-hex-input.js';
@@ -45,6 +46,7 @@ import './select-input.js';
 // efectos ocurran.
 document.addEventListener('alpine:init', () => {
     Alpine.data('accessModal', accessModal);
+    Alpine.data('addressModal', addressModal);
     Alpine.data('categoryCarousel', categoryCarousel);
     Alpine.data('loadMore', loadMore);
     Alpine.data('priceRange', priceRange);
