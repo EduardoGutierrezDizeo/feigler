@@ -2,6 +2,7 @@
 
 use App\Enums\StoreSection;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\Storefront\AccountController;
 use App\Http\Controllers\Storefront\SearchController;
 use App\Services\Storefront\HomePage;
 use App\Services\Storefront\ListingPage;
@@ -77,11 +78,17 @@ Route::get('/dashboard', function () {
     return view('dashboard');
 })->middleware(['auth', 'redirect.customer', 'verified'])->name('dashboard');
 
-// Mi cuenta: la página mínima del cliente. El dueño de la sesión entra aquí; el
-// personal y los invitados no. La verificación del correo todavía no bloquea nada.
-Route::get('/cuenta', function () {
-    return view('storefront.account', ['user' => auth()->user()]);
-})->middleware(['auth', 'role:cliente'])->name('account.index');
+// Mi cuenta: la página del cliente con sus pestañas. El personal y los
+// invitados no entran. La verificación del correo todavía no bloquea nada.
+Route::get('/cuenta', [AccountController::class, 'index'])
+    ->middleware(['auth', 'role:cliente'])
+    ->name('account.index');
+
+// El cliente solo edita nombre, apellido y teléfono; el correo y la cuenta los
+// gestiona la tienda, así que el servidor ignora cualquier otro campo.
+Route::patch('/cuenta/perfil', [AccountController::class, 'updateProfile'])
+    ->middleware(['auth', 'role:cliente'])
+    ->name('account.profile.update');
 
 Route::get('/staff', function () {
     $modules = [
@@ -95,7 +102,10 @@ Route::get('/staff', function () {
     return view('staff.placeholder', ['module' => $modules[$role] ?? 'Portal de personal']);
 })->middleware(['auth', 'role:vendedor|bodega|contador'])->name('staff.placeholder');
 
-Route::middleware('auth')->group(function () {
+// /profile queda solo para el personal: un cliente no lee (va a Mi cuenta) ni
+// muta (403), porque cambiar el correo o borrar la cuenta son decisiones de la
+// tienda.
+Route::middleware(['auth', 'profile.staff'])->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');

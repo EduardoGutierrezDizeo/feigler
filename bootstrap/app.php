@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\RedirectCustomersFromProfile;
 use App\Http\Middleware\RedirectCustomersToAccount;
 use Illuminate\Auth\Middleware\RedirectIfAuthenticated;
 use Illuminate\Foundation\Application;
@@ -22,6 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'permission' => PermissionMiddleware::class,
             'role_or_permission' => RoleOrPermissionMiddleware::class,
             'redirect.customer' => RedirectCustomersToAccount::class,
+            'profile.staff' => RedirectCustomersFromProfile::class,
         ]);
 
         // A signed-in customer is sent to their account instead of the panel when

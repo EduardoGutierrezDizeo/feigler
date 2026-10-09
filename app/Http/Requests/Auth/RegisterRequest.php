@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Auth;
 
 use App\Models\User;
+use App\Support\ColombianPhone;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Str;
@@ -30,7 +31,7 @@ class RegisterRequest extends FormRequest
             'last_name' => ['required', 'string', 'max:100'],
             'email' => ['required', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
             'password' => ['required', 'confirmed', Password::defaults()],
-            'phone' => ['required', 'string', 'regex:/^3\d{9}$/'],
+            'phone' => ColombianPhone::rules(),
             'terms' => ['accepted'],
         ];
     }
@@ -43,21 +44,11 @@ class RegisterRequest extends FormRequest
     {
         $this->errorBag = $this->accessErrorBag();
 
-        $phone = $this->input('phone');
-
-        if (is_string($phone)) {
-            $phone = preg_replace('/\D+/', '', $phone);
-
-            if (strlen($phone) === 12 && str_starts_with($phone, '57')) {
-                $phone = substr($phone, 2);
-            }
-        }
-
         $this->merge([
             'name' => $this->trimmed('name'),
             'last_name' => $this->trimmed('last_name'),
             'email' => $this->lowercasedEmail(),
-            'phone' => $phone,
+            'phone' => ColombianPhone::normalize($this->input('phone')),
         ]);
     }
 
