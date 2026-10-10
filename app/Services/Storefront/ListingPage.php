@@ -239,7 +239,7 @@ class ListingPage
                     'checked' => $filters->inStockOnly,
                 ],
             ],
-            'cartCount' => 0,
+            'cartCount' => app(CartService::class)->currentCount(),
         ];
     }
 

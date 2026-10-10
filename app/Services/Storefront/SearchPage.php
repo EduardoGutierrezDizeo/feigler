@@ -111,7 +111,7 @@ class SearchPage
                 'price' => ['min' => 0, 'max' => 0, 'from' => null, 'to' => null, 'step' => 1000],
                 'stock' => ['count' => 0, 'checked' => false],
             ],
-            'cartCount' => 0,
+            'cartCount' => app(CartService::class)->currentCount(),
             'subtitle' => 'Búsqueda',
             'searchQuery' => null,
             'searchPrompt' => true,

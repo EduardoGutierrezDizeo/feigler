@@ -4,6 +4,7 @@ use App\Enums\StoreSection;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Storefront\AccountController;
 use App\Http\Controllers\Storefront\AddressController;
+use App\Http\Controllers\Storefront\CartController;
 use App\Http\Controllers\Storefront\SearchController;
 use App\Services\Storefront\HomePage;
 use App\Services\Storefront\ListingPage;
@@ -28,6 +29,24 @@ Route::get('/', function () {
 Route::get('/producto/{slug}', function (string $slug) {
     return view('storefront.product', (new ProductPage)->forSlug($slug));
 })->name('storefront.product');
+
+// Sumar una unidad al carrito desde la ficha. El límite de intentos por minuto
+// es el mismo patrón de la baja de cuenta: una acción pública como esta no
+// puede dejarse sin tope.
+Route::post('/carrito/agregar', [CartController::class, 'add'])
+    ->middleware('throttle:30,1')
+    ->name('storefront.cart.add');
+
+// La página y las acciones del carrito. Cambiar la cantidad y eliminar son
+// escrituras públicas con el mismo tope que agregar; cada una valida en el
+// servidor la propiedad y la cantidad de la línea antes de tocar nada.
+Route::get('/carrito', [CartController::class, 'show'])->name('storefront.cart.show');
+Route::patch('/carrito/lineas/{item}', [CartController::class, 'updateQuantity'])
+    ->middleware('throttle:30,1')
+    ->name('storefront.cart.update');
+Route::delete('/carrito/lineas/{item}', [CartController::class, 'destroy'])
+    ->middleware('throttle:30,1')
+    ->name('storefront.cart.destroy');
 
 // Una ruta por sección, con el nombre de su pestaña en la portada. Un valor que
 // no es una sección no tiene ruta, así que devuelve 404 él solo.

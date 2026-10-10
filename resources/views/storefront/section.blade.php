@@ -16,6 +16,7 @@
       $searchQuery: string|null  (texto buscado; viaja oculto para no perderse al
                                    cambiar un filtro)
       $searchPrompt: bool  (cuando falta el texto buscado: no se pintan filtros)
+      $cartCount:   int (unidades del encabezado; opcional)
       $total:    int (prendas que cumplen los filtros)
       $shown:    int (prendas visibles en esta página)
       $products: lista de tarjetas

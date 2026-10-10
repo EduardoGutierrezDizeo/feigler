@@ -129,6 +129,20 @@ test('un producto visible responde 200 y ofrece cada talla de la categoría', fu
         ->and(array_column($purchase['variants'], 'size'))->toBe(['S', 'M']);
 });
 
+test('la ficha trae el selector de cantidad, de 1 a 10, enlazado al componente de compra', function () {
+    $product = productoDeFicha();
+
+    get('/producto/'.$product->slug)
+        ->assertOk()
+        ->assertSee('for="cantidad"', false)
+        ->assertSee('>Cantidad<', false)
+        ->assertSee('x-model.number="quantity"', false)
+        ->assertSee(':disabled="quantityDisabled"', false)
+        ->assertSee('x-for="n in quantityOptions"', false)
+        ->assertSee(':disabled="!quantityEnabled(n)"', false)
+        ->assertSee('[&>option:disabled]:text-gris-calido/50', false);
+});
+
 test('slug inexistente, producto apagado y producto sin variantes activas devuelven 404', function () {
     $data = catalogoDeFicha();
 

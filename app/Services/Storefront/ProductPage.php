@@ -96,7 +96,7 @@ class ProductPage
                 'breadcrumb' => $this->breadcrumbFor($product),
             ],
             'related' => $this->relatedFor($product),
-            'cartCount' => 0,
+            'cartCount' => app(CartService::class)->currentCount(),
         ];
     }
 

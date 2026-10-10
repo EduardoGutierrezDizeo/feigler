@@ -34,6 +34,8 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    {{-- El token que el botón «Agregar al carrito» manda en el fetch. --}}
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ $title }}</title>
 
     <!-- Fonts -->
@@ -94,9 +96,9 @@
                 @endforeach
             </nav>
 
-            <a href="{{ url('/carrito') }}"
+            <a href="{{ route('storefront.cart.show') }}" x-data="cartBadge({ count: {{ $cartCount }} })"
                class="ml-auto whitespace-nowrap rounded-full border border-laton px-4 py-1.5 text-sm text-verde transition hover:bg-verde hover:text-crema lg:ml-0">
-                Carrito · {{ $cartCount }}
+                <span x-text="label()">Carrito{{ $cartCount > 0 ? ' · '.$cartCount : '' }}</span>
             </a>
 
             <button type="button" class="grid size-10 place-items-center rounded-full border border-arena text-verde lg:hidden"

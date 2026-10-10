@@ -6,6 +6,8 @@ use App\Exceptions\InsufficientStockException;
 use App\Exceptions\ProductVariantNotDeletableException;
 use App\Livewire\Admin\Products\Index;
 use App\Livewire\Admin\Products\Variants;
+use App\Models\Cart;
+use App\Models\CartItem;
 use App\Models\Color;
 use App\Models\Product;
 use App\Models\ProductVariant;
@@ -786,6 +788,47 @@ test('deletes a variant nobody has touched', function () {
         ->assertSee('Aún no hay variantes');
 
     expect($producto->variants()->count())->toBe(0);
+});
+
+test('deletes a variant that is in carts and takes its lines with it', function () {
+    $this->seed(RoleSeeder::class);
+
+    $producto = Product::factory()->create();
+
+    variantPanel($producto)
+        ->call('startCreating')
+        ->set('sizeId', sizeOfProduct($producto, 'M')->getKey())
+        ->set('colorId', Color::factory()->create()->getKey())
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $variante = $producto->variants()->sole();
+
+    // La misma variante está en dos carritos de visitante.
+    $primero = Cart::factory()->create();
+    $segundo = Cart::factory()->create();
+
+    CartItem::factory()->create([
+        'cart_id' => $primero->getKey(),
+        'product_variant_id' => $variante->getKey(),
+        'quantity' => 2,
+    ]);
+    CartItem::factory()->create([
+        'cart_id' => $segundo->getKey(),
+        'product_variant_id' => $variante->getKey(),
+        'quantity' => 1,
+    ]);
+
+    variantPanel($producto)
+        ->call('delete', $variante->getKey())
+        ->assertSet('notice', 'Variante eliminada correctamente.')
+        ->assertDispatched('product-variants-changed')
+        ->assertSee('Aún no hay variantes');
+
+    expect($producto->variants()->count())->toBe(0)
+        ->and(CartItem::query()->where('product_variant_id', $variante->getKey())->count())->toBe(0)
+        ->and($primero->refresh()->items()->count())->toBe(0)
+        ->and($segundo->refresh()->items()->count())->toBe(0);
 });
 
 test('a variant with movements stays in place and says why', function () {

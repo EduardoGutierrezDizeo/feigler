@@ -23,7 +23,7 @@ class HomePage
                 'mapUrl' => config('tienda.como_llegar_url'),
                 'image' => config('tienda.imagen'),
             ],
-            'cartCount' => 0,
+            'cartCount' => app(CartService::class)->currentCount(),
         ];
     }
 

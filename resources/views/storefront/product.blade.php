@@ -120,23 +120,43 @@
                         </template>
                     </div>
                     <p x-show="showLowStock" class="mt-3 text-sm text-ladrillo" style="display: none" role="status">Quedan pocas unidades en esta talla</p>
+                    <p x-show="sizeMessage" class="mt-3 text-sm text-ladrillo" style="display: none" role="status" x-text="sizeMessage"></p>
                 </div>
 
-                {{-- Cantidad y carrito --}}
-                <div class="mt-8 flex flex-wrap items-center gap-3">
-                    <div class="inline-flex items-center rounded-full border border-arena" role="group" aria-label="Cantidad">
-                        <button type="button" @click="step(-1)" aria-label="Menos" class="grid size-11 place-items-center text-lg text-gris-calido hover:text-verde">−</button>
-                        <span class="w-8 text-center text-sm" x-text="quantity" aria-live="polite"></span>
-                        <button type="button" @click="step(1)" aria-label="Más" class="grid size-11 place-items-center text-lg text-gris-calido hover:text-verde">+</button>
+                {{-- Carrito --}}
+                <div class="mt-8 flex flex-wrap items-end gap-3">
+                    <div>
+                        <label for="cantidad" class="block text-sm">Cantidad</label>
+                        <div class="mt-3 flex items-center gap-2">
+                            <button type="button" @click="step(-1)" :disabled="quantityDisabled || quantity <= 1"
+                                    aria-label="Disminuir cantidad"
+                                    class="grid size-10 shrink-0 place-items-center rounded-full border border-arena bg-crema text-lg text-verde transition hover:border-laton focus:outline-none disabled:cursor-not-allowed disabled:opacity-50">−</button>
+                            <div class="relative w-28">
+                                <select id="cantidad" x-model.number="quantity" :disabled="quantityDisabled"
+                                        class="w-full appearance-none bg-none rounded-full border border-arena bg-crema py-3 ps-5 pe-12 text-sm text-tinta shadow-lift transition focus:border-verde focus:ring-1 focus:ring-verde focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 [&>option:disabled]:text-gris-calido/50">
+                                    <template x-for="n in quantityOptions" :key="n">
+                                        <option :value="n" :disabled="!quantityEnabled(n)" x-text="n"></option>
+                                    </template>
+                                </select>
+                                <svg class="pointer-events-none absolute right-4 top-1/2 size-5 -translate-y-1/2 text-gris-calido" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                    <path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/>
+                                </svg>
+                            </div>
+                            <button type="button" @click="step(1)" :disabled="quantityDisabled || quantity >= selectedStock"
+                                    aria-label="Aumentar cantidad"
+                                    class="grid size-10 shrink-0 place-items-center rounded-full border border-arena bg-crema text-lg text-verde transition hover:border-laton focus:outline-none disabled:cursor-not-allowed disabled:opacity-50">+</button>
+                        </div>
                     </div>
-                    <button type="button" @click="addToCart()" :disabled="!canAdd"
+                    <button type="button" @click="addToCart()" :disabled="adding"
                             class="min-w-0 flex-1 rounded-full bg-linear-to-b from-verde to-verde-hondo px-6 py-3 text-sm text-crema shadow-[0_10px_20px_-10px_rgba(7,63,37,0.7)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
-                            x-text="size === null ? 'Elige una talla' : (selectedStock <= 0 ? 'Agotado' : 'Agregar al carrito')"></button>
+                            x-text="size === null ? 'Elige una talla' : (selectedStock <= 0 ? 'Agotado' : (adding ? 'Agregando…' : 'Agregar al carrito'))"></button>
                     <button type="button" data-wishlist aria-label="Agregar a favoritos"
                             class="grid size-12 place-items-center rounded-full border border-laton text-verde transition hover:bg-verde hover:text-crema">
                         <svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10Z" stroke-linejoin="round"/></svg>
                     </button>
                 </div>
+
+                <p x-show="message" class="mt-4 text-sm" style="display: none" role="status" aria-live="polite" x-text="message"></p>
 
                 <p class="mt-6 flex flex-wrap gap-x-6 gap-y-1 text-sm text-gris-calido"><span>{{ config('tienda.envio_resumen') }}</span><span>{{ config('tienda.cambios_resumen') }}</span></p>
 
