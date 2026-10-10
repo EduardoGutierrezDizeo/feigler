@@ -2,6 +2,8 @@
 
 use App\Livewire\Admin\Users\Index;
 use App\Models\Address;
+use App\Models\Cart;
+use App\Models\CartItem;
 use App\Models\Order;
 use App\Models\User;
 use App\Models\Wishlist;
@@ -269,6 +271,25 @@ test('el sexto intento de eliminación en un minuto recibe 429', function () {
         ->delete(route('account.destroy'), ['current_password' => 'incorrecta'])
         ->assertStatus(429);
 });
+
+test('el carrito de la cuenta se borra con ella, en ambos caminos', function (bool $conPedidos) {
+    $user = clienteQueElimina();
+
+    if ($conPedidos) {
+        Order::factory()->for($user)->create();
+    }
+
+    $carrito = Cart::factory()->account($user)->create();
+    CartItem::factory()->for($carrito)->create();
+
+    $this->actingAs($user)
+        ->from('/cuenta?tab=eliminar')
+        ->delete(route('account.destroy'), ['current_password' => 'password'])
+        ->assertRedirect('/');
+
+    expect(Cart::query()->whereKey($carrito->getKey())->exists())->toBeFalse()
+        ->and(CartItem::query()->where('cart_id', $carrito->getKey())->count())->toBe(0);
+})->with(['sin pedidos' => [false], 'con pedidos' => [true]]);
 
 test('las sesiones activas y los tokens de restablecimiento del correo se limpian', function () {
     $user = clienteQueElimina();

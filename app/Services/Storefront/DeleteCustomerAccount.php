@@ -18,10 +18,10 @@ use Illuminate\Support\Str;
  *   enlazados a su id y son obligación contable de la tienda. Nunca se invoca
  *   `delete()` sobre el usuario en este camino.
  *
- * En ambos caminos se limpian los tokens de restablecimiento del correo y las
- * sesiones activas de la tabla `sessions`. Los movimientos de inventario
- * quedan a cargo de su clave foránea (`nullOnDelete` cuando se borra la fila;
- * intactos cuando la fila se conserva).
+ * En ambos caminos se limpian el carrito de la cuenta, los tokens de
+ * restablecimiento del correo y las sesiones activas de la tabla `sessions`.
+ * Los movimientos de inventario quedan a cargo de su clave foránea
+ * (`nullOnDelete` cuando se borra la fila; intactos cuando la fila se conserva).
  */
 class DeleteCustomerAccount
 {
@@ -39,6 +39,7 @@ class DeleteCustomerAccount
         return DB::transaction(function () use ($user): string {
             $user->addresses()->delete();
             $user->wishlists()->delete();
+            $user->cart()->delete();
 
             DB::table('password_reset_tokens')->where('email', $user->email)->delete();
             DB::table('sessions')->where('user_id', $user->id)->delete();

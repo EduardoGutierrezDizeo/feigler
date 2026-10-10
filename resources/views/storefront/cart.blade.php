@@ -29,6 +29,12 @@
             <p class="mt-2 text-sm text-gris-calido">Tus prendas a tu medida, listas para el siguiente paso.</p>
         </header>
 
+        @if ($notice !== null)
+            <div class="mt-6">
+                <x-store.status :status="$notice" />
+            </div>
+        @endif
+
         <div x-show="empty" @if (! $cart['empty']) style="display:none" @endif
              class="mt-6">
             <div class="rounded-3xl border border-arena bg-crema/70 px-6 py-12 text-center">

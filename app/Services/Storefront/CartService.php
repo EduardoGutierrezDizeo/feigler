@@ -7,6 +7,7 @@ use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
@@ -75,6 +76,19 @@ class CartService
      * producto no visible.
      */
     public const STATUS_UNAVAILABLE = 'unavailable';
+
+    /**
+     * La clave de sesión donde la fusión deja su aviso para que el carrito lo
+     * lea una sola vez.
+     */
+    public const FUSION_NOTICE_SESSION_KEY = 'cart.fusion_notice';
+
+    /**
+     * El aviso de la fusión, cuando hubo que topar alguna cantidad al stock:
+     * «Unimos tu carrito con el de tu cuenta. Ajustamos algunas cantidades al
+     * stock disponible.»
+     */
+    public const MESSAGE_FUSION_CAPPED = 'Unimos tu carrito con el de tu cuenta. Ajustamos algunas cantidades al stock disponible.';
 
     /**
      * El carrito ya resuelto de esta instancia, para que dos llamadas del mismo
@@ -318,6 +332,64 @@ class CartService
             $cart->items()->delete();
             $cart->touchActivity();
         });
+    }
+
+    /**
+     * Entregar el carrito de un visitante a su cuenta en el momento en que entra.
+     *
+     * Se llama desde el evento `Login`, cuando alguien que venía navegando pasa a
+     * cliente. Solo actúa si la cookie `cart_token` de la petición en curso
+     * señala un carrito de visitante con líneas: un carrito vacío, un token que
+     * ya no existe o el de un carrito que ya está en manos de una cuenta se
+     * ignoran y no se toca nada. Una cuenta que todavía no tiene carrito adopta
+     * el del visitante tal cual; si ambos tienen líneas, las de la misma variante
+     * se suman con el mismo tope al stock que add(), las variantes que solo uno
+     * tiene se conservan y las que ya no se pueden comprar se conservan también
+     * con su cantidad, para que la fusión no borre nada de lo pedido. La cookie
+     * del visitante se olvida y se devuelve `true` solo cuando alguna cantidad se
+     * topó al stock, que es lo que pide el aviso de la página del carrito.
+     *
+     * No pasa por {@see resolve()}: toca únicamente los carritos que ya existen
+     * y nunca crea uno de más para reunir la fusión. Todo va en una transacción;
+     * un fallo deja los dos carritos como estaban y quien llama (el inicio de
+     * sesión) no se entera.
+     */
+    public function mergeVisitorCartIntoAccount(User $user): bool
+    {
+        $token = $this->currentRequest()->cookie(Cart::TOKEN_COOKIE);
+
+        if ($token === null) {
+            return false;
+        }
+
+        $visitor = Cart::query()
+            ->where('token', $token)
+            ->whereNull('user_id')
+            ->first();
+
+        if ($visitor === null || ! $visitor->items()->exists()) {
+            return false;
+        }
+
+        $account = Cart::query()->where('user_id', $user->getKey())->first();
+
+        $capped = DB::transaction(function () use ($visitor, $account, $user): bool {
+            if ($account === null) {
+                $visitor->forceFill([
+                    'user_id' => $user->getKey(),
+                    'token' => null,
+                ])->save();
+                $visitor->touchActivity();
+
+                return false;
+            }
+
+            return $this->mergeVisitorLinesIntoAccount($visitor, $account);
+        });
+
+        $this->forgetVisitorCookie();
+
+        return $capped;
     }
 
     /**
@@ -578,10 +650,10 @@ class CartService
      * «agregar» y «fijar cantidad» no decidan con una copia vieja. Devuelve
      * `null` cuando la variante ya no se puede vender.
      */
-    private function freshSellableVariant(ProductVariant $variant): ?ProductVariant
+    private function freshSellableVariant(ProductVariant|int $variant): ?ProductVariant
     {
         return ProductVariant::query()
-            ->whereKey($variant->getKey())
+            ->whereKey($variant instanceof ProductVariant ? $variant->getKey() : $variant)
             ->where('is_active', true)
             ->whereHas('product', fn (Builder $query): Builder => $query->visible())
             ->first();
@@ -669,6 +741,78 @@ class CartService
         // Toda respuesta que pase por el grupo `web` manda esta cookie en su
         // Set-Cookie (el middleware AddQueuedCookiesToResponse), sin que cada
         // pantalla tenga que acordarse de adjuntarla.
+        CookieQueue::queue($this->queuedCookie);
+    }
+
+    /**
+     * Sumar las líneas del carrito de un visitante al de la cuenta.
+     *
+     * Trabaja sobre los dos carritos que ya existen. La línea de una variante
+     * que la cuenta no tenía pasa a la cuenta tal cual; la que ya estaba se
+     * suma con el mismo tope que add(): si la variante se puede vender, la
+     * cantidad quedada es la menor entre la suma y el stock actual (y si hubo
+     * tope, se devuelve eso), y si ya no se vende o no le queda stock se
+     * conservan las unidades sumadas para que el cliente decida, porque la
+     * fusión no puede borrar lo que se pidió. Al terminar, el carrito del
+     * visitante deja de existir.
+     *
+     * @return bool `true` cuando alguna cantidad se topó al stock disponible.
+     */
+    private function mergeVisitorLinesIntoAccount(Cart $visitor, Cart $account): bool
+    {
+        $accountItems = $account->items()->get()->keyBy('product_variant_id');
+
+        $capped = false;
+
+        foreach ($visitor->items()->get() as $item) {
+            $existing = $accountItems->get($item->product_variant_id);
+
+            if ($existing === null) {
+                $item->forceFill(['cart_id' => $account->getKey()])->save();
+
+                continue;
+            }
+
+            $sum = $existing->quantity + $item->quantity;
+            $sellable = $this->freshSellableVariant($item->product_variant_id);
+
+            if ($sellable === null || (int) $sellable->stock <= 0) {
+                if ($existing->quantity !== $sum) {
+                    $existing->forceFill(['quantity' => $sum])->save();
+                }
+
+                $item->delete();
+
+                continue;
+            }
+
+            $stock = (int) $sellable->stock;
+            $target = min($sum, $stock);
+            $capped = $capped || $target < $sum;
+
+            if ($existing->quantity !== $target) {
+                $existing->forceFill(['quantity' => $target])->save();
+            }
+
+            $item->delete();
+        }
+
+        $visitor->delete();
+        $account->touchActivity();
+
+        return $capped;
+    }
+
+    /**
+     * Olvidar la cookie del visitante, cuyo carrito ya pasó a una cuenta.
+     *
+     * Igual que la de estreno, se encola para que la respuesta la mande; esta
+     * vez con una fecha de expiración pasada, de modo que el navegador la deje
+     * de enviar. Una cuenta no se identifica por cookie: la suya no hace falta.
+     */
+    private function forgetVisitorCookie(): void
+    {
+        $this->queuedCookie = CookieQueue::forget(Cart::TOKEN_COOKIE);
         CookieQueue::queue($this->queuedCookie);
     }
 

@@ -161,11 +161,16 @@ class CartController extends Controller
      * Las líneas salen del resumen de CartService ya decoradas para la vista:
      * cada una trae el aviso que le corresponde (disponible, stock insuficiente
      * o no disponible) y las direcciones de sus acciones. Un visitante sin
-     * carrito ve la página vacía sin que ningún carrito ni cookie nazcan.
+     * carrito ve la página vacía sin que ningún carrito ni cookie nazcan. Si el
+     * login acabó de unir un carrito de visita con el de la cuenta y hubo que
+     * topar cantidades, el aviso de la fusión se lee de la sesión una sola vez.
      */
-    public function show(CartService $cart): View
+    public function show(Request $request, CartService $cart): View
     {
-        return view('storefront.cart', ['cart' => $this->page($cart)]);
+        return view('storefront.cart', [
+            'cart' => $this->page($cart),
+            'notice' => $request->session()->pull(CartService::FUSION_NOTICE_SESSION_KEY),
+        ]);
     }
 
     /**
