@@ -174,6 +174,23 @@ class CartController extends Controller
     }
 
     /**
+     * El contador de unidades del carrito, para el encabezado de la tienda.
+     *
+     * Responde solo el número y nunca crea carrito ni cookie: `currentCount()`
+     * lee el agregado del carrito actual (de la cuenta o de la cookie del
+     * visitante) y devuelve 0 sin tocar la base cuando no hay ninguno. La
+     * respuesta no se cachea, porque el número cambia a espaldas del navegador:
+     * el encabezado lo pide al volver con el botón «atrás», cuando la página se
+     * restauró desde la caché de sesión con el contador viejo.
+     */
+    public function count(CartService $cart): JsonResponse
+    {
+        return response()
+            ->json(['count' => $cart->currentCount()])
+            ->header('Cache-Control', 'no-store');
+    }
+
+    /**
      * Fijar la cantidad de una línea desde la página del carrito.
      *
      * La cantidad se valida como entero mayor que cero (0 no elimina por esta

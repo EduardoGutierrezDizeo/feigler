@@ -528,17 +528,16 @@
                              acaba en la columna. Con wire:model, Livewire leería del DOM
                              el texto con puntos y coma, la validación numeric lo
                              rechazaría y la base guardaría ese string en vez del 89900.50. --}}
-                        <div x-data="priceInput($wire, 'basePrice', '{{ $basePriceFormateado }}')">
-                            <x-text-input
-                                id="product-price"
-                                type="text"
-                                inputmode="decimal"
-                                class="mt-1 block w-full"
-                                placeholder="89.900"
-                                x-bind:value="display"
-                                x-on:input="format"
-                            />
-                        </div>
+                        <x-text-input
+                            id="product-price"
+                            type="text"
+                            inputmode="decimal"
+                            class="mt-1 block w-full"
+                            placeholder="89.900"
+                            x-data="priceInput($wire, 'basePrice', '{{ $basePriceFormateado }}')"
+                            x-bind:value="display"
+                            x-on:input="format"
+                        />
                         <x-input-error :messages="$errors->get('basePrice')" class="mt-2" />
                     </div>
 

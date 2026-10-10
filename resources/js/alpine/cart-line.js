@@ -29,6 +29,14 @@ export default function cartLine(line) {
         failed: '',
         busy: false,
         urls: line.urls,
+        root: null,
+
+        init() {
+            // La raíz del componente solo es fiable acá: en un método llamado
+            // desde `@click`, el magic `$el` apunta al botón que disparó el clic,
+            // no a la fila. Se guarda una vez para que `remove()` saque la fila.
+            this.root = this.$el;
+        },
 
         get quantityLabel() {
             return this.unavailable ? `${this.quantity} unidades` : `Unidades: ${this.quantity}`;
@@ -62,7 +70,7 @@ export default function cartLine(line) {
             const line = (data.summary?.items ?? []).find((item) => item.id === this.id) ?? null;
 
             if (line === null) {
-                this.$el.remove();
+                this.root.remove();
 
                 this.dispatch(data);
 

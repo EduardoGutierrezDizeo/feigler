@@ -227,6 +227,104 @@ function modulesUsingBareAlpineMagics(string $projectPath): array
     return $offenders;
 }
 
+/**
+ * Quita de JavaScript todo lo que vive entre comillas: cadenas simples y dobles
+ * y plantillas. Se conservan las comillas como marcador para que las posiciones
+ * del código resultante sean estables, pero desaparece su contenido —incluidas
+ * las llaves de un selector o de una plantilla—, de modo que contar llaves sobre
+ * el resultado mide el código y no los textos.
+ */
+function stripJavascriptStrings(string $source): string
+{
+    return (string) preg_replace(
+        [
+            '/\'(?:\\\\.|[^\'\\\\])*\'/s',
+            '/"(?:\\\\.|[^"\\\\])*"/s',
+            '/`(?:\\\\.|[^`\\\\])*`/s',
+        ],
+        ['\'\'', '""', '``'],
+        $source
+    );
+}
+
+/**
+ * Devuelve el fuente sin el cuerpo de `init()`.
+ *
+ * `init()` es el único sitio donde Alpine garantiza que `$el` es la raíz del
+ * componente, así que se localiza su cuerpo contando llaves sobre el código sin
+ * cadenas y se recorta. Lo que quede es donde `$el` no debería asomar.
+ */
+function withoutInitBody(string $source): string
+{
+    $code = stripJavascriptStrings($source);
+
+    if (! preg_match('/\binit\s*\(\s*\)\s*\{/', $code, $match, PREG_OFFSET_CAPTURE)) {
+        return $code;
+    }
+
+    $open = strpos($code, '{', (int) $match[0][1]);
+    $depth = 0;
+    $close = $open;
+
+    for ($i = $open, $length = strlen($code); $i < $length; $i++) {
+        if ($code[$i] === '{') {
+            $depth++;
+        } elseif ($code[$i] === '}') {
+            $depth--;
+
+            if ($depth === 0) {
+                $close = $i;
+
+                break;
+            }
+        }
+    }
+
+    return substr($code, 0, $open).substr($code, $close + 1);
+}
+
+/**
+ * Modulos de resources/js que leen la raiz de su componente con `$el` fuera de
+ * `init()`.
+ *
+ * Alpine solo garantiza `this.$el` como la raiz del componente dentro de
+ * `init()`: en un metodo invocado desde una expresion (`@click="remove()"`) el
+ * magic `$el` se resuelve al elemento que lleva esa expresion —el boton, no la
+ * fila—, asi que leerlo ahi falla en silencio. La convencion es guardar la raiz
+ * en `init()` (`this.root = this.$el`) y leerla despues de ahi.
+ *
+ * @return list<string>
+ */
+function modulesUsingRootElementOutsideInit(string $projectPath): array
+{
+    $files = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($projectPath.'/resources/js', RecursiveDirectoryIterator::SKIP_DOTS)
+    );
+
+    $offenders = [];
+
+    foreach ($files as $file) {
+        if ($file->getExtension() !== 'js') {
+            continue;
+        }
+
+        $path = $file->getPathname();
+        $source = javascriptSource($path);
+
+        if (! str_contains($source, '$el')) {
+            continue;
+        }
+
+        if (preg_match('/\$el\b/', withoutInitBody($source))) {
+            $offenders[] = str_replace('\\', '/', substr($path, strlen($projectPath) + 1));
+        }
+    }
+
+    sort($offenders);
+
+    return $offenders;
+}
+
 test('every javascript entry point reaches the Alpine barrel', function () {
     $projectPath = dirname(__DIR__, 2);
 
@@ -303,7 +401,30 @@ test('Alpine component methods must use this.$el, this.$refs, this.$dispatch, th
     // Aborta el bucle `releaseNextTicks()` de Alpine y, con ello, la transición
     // que lo estaba invocando.
     expect(javascriptSource($projectPath.'/resources/js/alpine/confirm-dialog.js'))
-        ->toMatch('/this\.\$el\.querySelectorAll\(selector\)/');
+        ->toMatch('/this\.root\.querySelectorAll\(selector\)/');
 
     // El componente selectInput también debe respetar estas reglas (sin magics sueltos).
+});
+
+test('Alpine components keep the component root out of every method other than init', function () {
+    $projectPath = dirname(__DIR__, 2);
+
+    expect(modulesUsingRootElementOutsideInit($projectPath))->toBeEmpty();
+
+    // La fila del carrito es el caso que mostro el fallo real: `remove()` corria
+    // con el `this` de la expresion del boton, asi que `this.$el.remove()` borraba
+    // el boton y dejaba la fila en su sitio. Ahora la raiz se guarda en `init()`.
+    expect(javascriptSource($projectPath.'/resources/js/alpine/cart-line.js'))
+        ->toMatch('/init\s*\(\s*\)\s*\{[^}]*this\.root\s*=\s*this\.\$el/s')
+        ->toMatch('/this\.root\.remove\(\)/');
+
+    // La ficha del precio: `format()` corre con el `this` de la expresion del
+    // input, y ese input es ahora la propia raiz del componente.
+    expect(javascriptSource($projectPath.'/resources/js/alpine/price-input.js'))
+        ->toMatch('/this\.root\s*=\s*this\.\$el/');
+
+    // El carrusel guarda la raiz en `init()` y la lee de ahi: es el patron que la
+    // regla espera, y por eso no aparece entre los infractores.
+    expect(javascriptSource($projectPath.'/resources/js/alpine/category-carousel.js'))
+        ->toMatch('/init\s*\(\s*\)\s*\{[^}]*this\.root\s*=\s*this\.\$el/s');
 });

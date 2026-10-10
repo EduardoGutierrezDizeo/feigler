@@ -345,7 +345,7 @@ test('las vistas previas /_vista/* siguen sirviendo con el contrato actualizado'
         $html = view($view, $data)->render();
 
         expect($html)->toBeString()
-            ->and($html)->toContain('x-data="cartBadge({ count: 2 })"')
+            ->and($html)->toContain("cartBadge({ count: 2, countUrl: '".route('storefront.cart.count')."' })")
             ->and($html)->toContain('Carrito · 2');
     }
 });

@@ -20,6 +20,18 @@ export default function cartPage(config) {
         units: Number(config.units),
         empty: Boolean(config.empty),
 
+        init() {
+            // Volver con el botón «atrás» puede restaurar la página desde la
+            // caché de sesión (bfcache) sin volver a ejecutar nada: se vería el
+            // carrito de cuando se dejó, con líneas que ya se pudieron quitar o
+            // cambiar. Una recarga deja el resumen fresco.
+            window.addEventListener('pageshow', (event) => {
+                if (event.persisted) {
+                    location.reload();
+                }
+            });
+        },
+
         get subtotalLabel() {
             return formatMoney(this.subtotal);
         },

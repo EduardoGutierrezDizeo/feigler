@@ -96,7 +96,7 @@
                 @endforeach
             </nav>
 
-            <a href="{{ route('storefront.cart.show') }}" x-data="cartBadge({ count: {{ $cartCount }} })"
+            <a href="{{ route('storefront.cart.show') }}" x-data="cartBadge({ count: {{ $cartCount }}, countUrl: '{{ route('storefront.cart.count') }}' })"
                class="ml-auto whitespace-nowrap rounded-full border border-laton px-4 py-1.5 text-sm text-verde transition hover:bg-verde hover:text-crema lg:ml-0">
                 <span x-text="label()">Carrito{{ $cartCount > 0 ? ' · '.$cartCount : '' }}</span>
             </a>

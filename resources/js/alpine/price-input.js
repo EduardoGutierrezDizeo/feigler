@@ -211,7 +211,15 @@ document.addEventListener('alpine:init', () => {
         /** El número sin formatear que hay detrás de lo que se ve. */
         amount: unformatPrice(formatPrice(initial)),
 
+        /** La raíz del componente: el propio input que lleva el `x-data`. */
+        root: null,
+
         init() {
+            // La raíz se guarda en `init()` porque en `format()` —llamado desde
+            // `x-on:input` del input— el magic `$el` apunta al elemento de la
+            // expresión, no a la raíz del componente.
+            this.root = this.$el
+
             wire.$watch(property, (value) => {
                 // Lo que llega es el mismo número que ya está escrito —el eco de
                 // `$set`, o el `resetForm()` que vacía el modal—, así que no se
@@ -236,7 +244,7 @@ document.addEventListener('alpine:init', () => {
          * campo acabaría en «899.005».
          */
         format() {
-            const element = this.$el
+            const element = this.root
             const before = this.display
             const after = element.value
             const caretAtEnd = element.selectionStart === after.length && element.selectionEnd === after.length

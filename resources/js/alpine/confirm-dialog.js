@@ -16,6 +16,7 @@ document.addEventListener('alpine:init', () => {
         confirmLabel: 'Confirmar',
         destructive: false,
         onConfirm: null,
+        root: null,
 
         ask(event) {
             const options = event.detail ?? {}
@@ -50,15 +51,17 @@ document.addEventListener('alpine:init', () => {
         focusables() {
             const selector = 'a[href], button:not([disabled]), input:not([type="hidden"]), select, textarea, [tabindex]:not([tabindex="-1"])'
 
-            // `this.$el`, y no el magic suelto `$el`: dentro de un metodo de
-            // `Alpine.data()` los magics solo existen como propiedades del
-            // componente. Un `$el` a secas es un ReferenceError que Alpine
-            // ejecuta dentro de su cola de `nextTick`, y ahi el fallo no se queda
-            // en este componente: aborta `releaseNextTicks()`, el bucle que drena
-            // esa cola, y con el la transicion que la estaba invocando. Un toast
-            // recien insertado se queda en su estado `enter-start` (`opacity-0`),
-            // de modo que el aviso existe en el DOM pero nunca se ve.
-            return [...this.$el.querySelectorAll(selector)].filter(
+            // `this.root`, la raíz guardada en `init()`, y no el magic `$el`.
+            // Dentro de un método de `Alpine.data()` los magics solo existen como
+            // propiedades del componente, y `$el` apunta al elemento de la
+            // expresión que invocó el método —el botón, no el diálogo—. Un `$el` a
+            // secas es además un ReferenceError que Alpine ejecuta dentro de su
+            // cola de `nextTick`, y ahí el fallo no se queda en este componente:
+            // aborta `releaseNextTicks()`, el bucle que drena esa cola, y con él
+            // la transición que lo estaba invocando. Un toast recién insertado se
+            // queda en su estado `enter-start` (`opacity-0`), de modo que el aviso
+            // existe en el DOM pero nunca se ve.
+            return [...this.root.querySelectorAll(selector)].filter(
                 (el) => el.offsetParent !== null || el === document.activeElement,
             )
         },
@@ -85,6 +88,8 @@ document.addEventListener('alpine:init', () => {
         },
 
         init() {
+            this.root = this.$el
+
             this.$watch('open', (value) => {
                 if (value) {
                     document.body.classList.add('overflow-y-hidden')

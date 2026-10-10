@@ -41,6 +41,12 @@ Route::post('/carrito/agregar', [CartController::class, 'add'])
 // escrituras públicas con el mismo tope que agregar; cada una valida en el
 // servidor la propiedad y la cantidad de la línea antes de tocar nada.
 Route::get('/carrito', [CartController::class, 'show'])->name('storefront.cart.show');
+
+// El contador del encabezado, para refrescarlo sin recargar. El encabezado lo
+// pide al volver de la caché del navegador (bfcache), donde el HTML quedo viejo.
+Route::get('/carrito/contador', [CartController::class, 'count'])
+    ->middleware('throttle:30,1')
+    ->name('storefront.cart.count');
 Route::patch('/carrito/lineas/{item}', [CartController::class, 'updateQuantity'])
     ->middleware('throttle:30,1')
     ->name('storefront.cart.update');
