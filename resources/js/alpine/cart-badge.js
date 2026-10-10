@@ -10,7 +10,9 @@
  * El aviso llega por el evento de ventana `cart-updated` (detail.count), que
  * el botón agregar dispara después de una respuesta exitosa; así el encabezado
  * no necesita conocer la ficha, igual que el modal de acceso con
- * `open-access`. Con cero se muestra solo «Carrito», sin el número.
+ * `open-access`. El enlace del encabezado se pinta como icono con la insignia
+ * numérica encima, así que el número también viaja en el nombre accesible
+ * (`ariaLabel()`): «Carrito (N unidades)» o solo «Carrito» cuando está vacío.
  *
  * Al volver con el botón «atrás» el navegador puede restaurar la página desde
  * la caché de sesión (bfcache) sin volver a ejecutar nada: el HTML trae el
@@ -59,8 +61,14 @@ export default function cartBadge(config = {}) {
             }
         },
 
-        label() {
-            return this.count > 0 ? `Carrito · ${this.count}` : 'Carrito';
+        // Nombre accesible del enlace del carrito, que ahora se pinta como icono
+        // con la insignia numérica: «Carrito (N unidades)» o «Carrito» vacío.
+        ariaLabel() {
+            if (this.count <= 0) {
+                return 'Carrito';
+            }
+
+            return `Carrito (${this.count} ${this.count === 1 ? 'unidad' : 'unidades'})`;
         },
     };
 }

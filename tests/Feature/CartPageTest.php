@@ -69,7 +69,7 @@ test('un visitante sin carrito ve la página vacía y no crea carrito ni manda c
         ->assertSee('Tu carrito está vacío.')
         ->assertSee('Ir a la tienda')
         ->assertSee('Ver novedades')
-        ->assertSee('>Carrito</span>', false)
+        ->assertSee('aria-label="Carrito"', false)
         ->assertCookieMissing(Cart::TOKEN_COOKIE);
 
     expect(Cart::count())->toBe(0);
@@ -94,7 +94,7 @@ test('la página con líneas muestra sus prendas, precios, total y contador de u
         ->assertSee('$130.000', false)
         ->assertSee('$310.000', false)
         ->assertSee('3 unidades', false)
-        ->assertSee('Carrito · 3');
+        ->assertSee('aria-label="Carrito (3 unidades)"', false);
 });
 
 test('un cliente autenticado ve el carrito de su cuenta', function () {
@@ -108,7 +108,7 @@ test('un cliente autenticado ve el carrito de su cuenta', function () {
         ->get('/carrito')
         ->assertOk()
         ->assertSee($variante->product->name, false)
-        ->assertSee('Carrito · 3')
+        ->assertSee('aria-label="Carrito (3 unidades)"', false)
         ->assertCookieMissing(Cart::TOKEN_COOKIE);
 });
 
@@ -340,7 +340,7 @@ test('el contador del encabezado refleja la cantidad cambiada al recargar', func
     $this->withCookie(Cart::TOKEN_COOKIE, $carrito->token)
         ->get('/carrito')
         ->assertOk()
-        ->assertSee('Carrito · 4');
+        ->assertSee('aria-label="Carrito (4 unidades)"', false);
 });
 
 test('el control de cantidad ofrece de uno a diez, marca la actual y deshabilita lo que supera el stock', function () {

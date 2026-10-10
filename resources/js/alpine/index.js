@@ -40,6 +40,7 @@ import './page-enter.js';
 import './price-input.js';
 import priceRange from './price-range.js';
 import productPurchase from './product-purchase.js';
+import quantitySelect from './quantity-select.js';
 import './select-input.js';
 
 // La tienda pública: los módulos solo exportan la fábrica
@@ -59,4 +60,5 @@ document.addEventListener('alpine:init', () => {
     Alpine.data('loadMore', loadMore);
     Alpine.data('priceRange', priceRange);
     Alpine.data('productPurchase', productPurchase);
+    Alpine.data('quantitySelect', quantitySelect);
 });

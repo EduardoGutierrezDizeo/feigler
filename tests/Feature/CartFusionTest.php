@@ -465,5 +465,5 @@ test('la verificación del correo es solo para pagar: el visitante se registra s
         ->assertOk()
         ->assertSee($primera->product->name, false)
         ->assertSee($segunda->product->name, false)
-        ->assertSee('Carrito · 2');
+        ->assertSee('aria-label="Carrito (2 unidades)"', false);
 });

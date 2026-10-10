@@ -107,7 +107,7 @@ test('tras registrarse, la primera pantalla (Mi cuenta) ya trae el número del c
     $this->get(route('account.index'))
         ->assertOk()
         ->assertSee('cartBadge({ count: 2', false)
-        ->assertSee('Carrito · 2', false);
+        ->assertSee('aria-label="Carrito (2 unidades)"', false);
 });
 
 test('un cliente con unidades ve su número en Mi cuenta', function () {
@@ -125,7 +125,7 @@ test('un cliente con unidades ve su número en Mi cuenta', function () {
         ->get(route('account.index'))
         ->assertOk()
         ->assertSee('cartBadge({ count: 3', false)
-        ->assertSee('Carrito · 3', false);
+        ->assertSee('aria-label="Carrito (3 unidades)"', false);
 });
 
 test('un visitante sin carrito ve la insignia en cero y no nace carrito ni cookie', function () {

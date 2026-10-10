@@ -84,17 +84,12 @@
                                     <button type="button" @click="stepQuantity(-1)" :disabled="busy || quantity <= 1"
                                             aria-label="Disminuir cantidad"
                                             class="grid size-10 shrink-0 place-items-center rounded-full border border-arena bg-crema text-lg text-verde transition hover:border-laton focus:outline-none disabled:cursor-not-allowed disabled:opacity-50">−</button>
-                                    <div class="relative">
-                                        <select id="cantidad-{{ $line['id'] }}" x-ref="quantity" @change="setQuantity($event)"
-                                                class="appearance-none bg-none rounded-full border border-arena bg-crema py-2.5 ps-4 pe-10 text-sm text-tinta shadow-lift transition focus:border-laton focus:ring-1 focus:ring-laton focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
-                                                :disabled="busy">
+                                    <div class="w-24">
+                                        <x-store.quantity-select id="cantidad-{{ $line['id'] }}" label="quantity" disabled="busy" @change="setQuantity($event)">
                                             @for ($n = 1; $n <= $line['max_options']; $n++)
                                                 <option value="{{ $n }}" @selected($n === $line['quantity']) @disabled($n > $line['available_stock']) :disabled="{{ $n }} > availableStock">{{ $n }}</option>
                                             @endfor
-                                        </select>
-                                        <svg class="pointer-events-none absolute right-3.5 top-1/2 size-4 -translate-y-1/2 text-gris-calido" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                            <path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/>
-                                        </svg>
+                                        </x-store.quantity-select>
                                     </div>
                                     <button type="button" @click="stepQuantity(1)" :disabled="busy || quantity >= availableStock"
                                             aria-label="Aumentar cantidad"

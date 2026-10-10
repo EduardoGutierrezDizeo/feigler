@@ -131,16 +131,12 @@
                             <button type="button" @click="step(-1)" :disabled="quantityDisabled || quantity <= 1"
                                     aria-label="Disminuir cantidad"
                                     class="grid size-10 shrink-0 place-items-center rounded-full border border-arena bg-crema text-lg text-verde transition hover:border-laton focus:outline-none disabled:cursor-not-allowed disabled:opacity-50">−</button>
-                            <div class="relative w-28">
-                                <select id="cantidad" x-model.number="quantity" :disabled="quantityDisabled"
-                                        class="w-full appearance-none bg-none rounded-full border border-arena bg-crema py-3 ps-5 pe-12 text-sm text-tinta shadow-lift transition focus:border-verde focus:ring-1 focus:ring-verde focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 [&>option:disabled]:text-gris-calido/50">
+                            <div class="w-28">
+                                <x-store.quantity-select id="cantidad" label="quantity" disabled="quantityDisabled" x-model.number="quantity">
                                     <template x-for="n in quantityOptions" :key="n">
                                         <option :value="n" :disabled="!quantityEnabled(n)" x-text="n"></option>
                                     </template>
-                                </select>
-                                <svg class="pointer-events-none absolute right-4 top-1/2 size-5 -translate-y-1/2 text-gris-calido" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                    <path fill-rule="evenodd" d="M5.22 8.22a.75.75 0 0 1 1.06 0L10 11.94l3.72-3.72a.75.75 0 1 1 1.06 1.06l-4.25 4.25a.75.75 0 0 1-1.06 0L5.22 9.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd"/>
-                                </svg>
+                                </x-store.quantity-select>
                             </div>
                             <button type="button" @click="step(1)" :disabled="quantityDisabled || quantity >= selectedStock"
                                     aria-label="Aumentar cantidad"

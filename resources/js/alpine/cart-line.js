@@ -38,6 +38,13 @@ export default function cartLine(line) {
             this.root = this.$el;
         },
 
+        // El <select> nativo vive dentro del componente quantitySelect de la
+        // línea; se localiza por la raíz guardada en init() en vez de por un
+        // x-ref, que ahora pertenece al componente del desplegable.
+        get quantitySelect() {
+            return this.root?.querySelector?.('select') ?? null;
+        },
+
         get quantityLabel() {
             return this.unavailable ? `${this.quantity} unidades` : `Unidades: ${this.quantity}`;
         },
@@ -128,8 +135,10 @@ export default function cartLine(line) {
             } catch (error) {
                 this.failed = error.message;
 
-                if (this.$refs.quantity) {
-                    this.$refs.quantity.value = this.quantity;
+                const select = this.quantitySelect;
+
+                if (select) {
+                    select.value = this.quantity;
                 }
             } finally {
                 this.busy = false;
@@ -137,9 +146,9 @@ export default function cartLine(line) {
         },
 
         rebuildOptions() {
-            const select = this.$refs.quantity;
+            const select = this.quantitySelect;
 
-            if (select === undefined) {
+            if (select === null) {
                 return;
             }
 

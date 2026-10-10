@@ -130,8 +130,7 @@ test('quitar la última línea deja la página en estado vacío', () => {
     assert.equal(page.subtotal, 0);
 });
 
-test('el contador del encabezado solo pide el recuento al volver de la caché', async () => {
-    globalThis.window = fakeWindow();
+test('el contador del encabezado solo pide el recuento al volver de la caché', async () => {    globalThis.window = fakeWindow();
 
     let fetches = 0;
     globalThis.fetch = async () => {
@@ -166,4 +165,17 @@ test('la página del carrito se recarga al volver de la caché', () => {
 
     globalThis.window.dispatchEvent({ type: 'pageshow', persisted: true });
     assert.equal(globalThis.location.reloads, 1, 'la vuelta desde la caché recarga');
+});
+
+test('el nombre accesible del carrito cuenta las unidades y concuerda el singular', () => {
+    globalThis.window = fakeWindow();
+
+    const vacio = cartBadge({ count: 0, countUrl: '/carrito/contador' });
+    assert.equal(vacio.ariaLabel(), 'Carrito', 'sin unidades no hay número');
+
+    const una = cartBadge({ count: 1, countUrl: '/carrito/contador' });
+    assert.equal(una.ariaLabel(), 'Carrito (1 unidad)', 'una unidad va en singular');
+
+    const varias = cartBadge({ count: 4, countUrl: '/carrito/contador' });
+    assert.equal(varias.ariaLabel(), 'Carrito (4 unidades)', 'varias van en plural');
 });

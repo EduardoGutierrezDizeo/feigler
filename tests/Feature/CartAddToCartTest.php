@@ -103,7 +103,7 @@ test('una segunda petición con la misma cookie ve el mismo carrito: sobrevive a
     $this->withCookie(Cart::TOKEN_COOKIE, $token)
         ->get('/producto/'.$variante->product->slug)
         ->assertOk()
-        ->assertSee('Carrito · 2');
+        ->assertSee('aria-label="Carrito (2 unidades)"', false);
 });
 
 test('navegar la tienda sin agregar no crea carrito ni manda cookie, y el contador queda en cero', function () {
@@ -118,8 +118,8 @@ test('navegar la tienda sin agregar no crea carrito ni manda cookie, y el contad
 
     $ficha->assertOk()
         ->assertCookieMissing(Cart::TOKEN_COOKIE)
-        ->assertDontSee('Carrito · 1')
-        ->assertSee('>Carrito</span>', false);
+        ->assertDontSee('Carrito (1 unidad)')
+        ->assertSee('aria-label="Carrito"', false);
 });
 
 test('un cliente autenticado agrega al carrito de su cuenta y no recibe cookie', function () {
@@ -289,12 +289,12 @@ test('el contador aparece con el número en la ficha y en el listado', function 
     $this->withCookie(Cart::TOKEN_COOKIE, $carrito->token)
         ->get('/producto/'.$variante->product->slug)
         ->assertOk()
-        ->assertSee('Carrito · 2');
+        ->assertSee('aria-label="Carrito (2 unidades)"', false);
 
     $this->withCookie(Cart::TOKEN_COOKIE, $carrito->token)
         ->get('/tienda')
         ->assertOk()
-        ->assertSee('Carrito · 2');
+        ->assertSee('aria-label="Carrito (2 unidades)"', false);
 });
 
 test('el contador aparece con el número también en la portada', function () {
@@ -313,7 +313,7 @@ test('el contador aparece con el número también en la portada', function () {
     $this->withCookie(Cart::TOKEN_COOKIE, $carrito->token)
         ->get('/')
         ->assertOk()
-        ->assertSee('Carrito · 2');
+        ->assertSee('aria-label="Carrito (2 unidades)"', false);
 });
 
 test('la cookie cart_token viaja cifrada, nunca con el uuid en claro', function () {
@@ -346,7 +346,7 @@ test('las vistas previas /_vista/* siguen sirviendo con el contrato actualizado'
 
         expect($html)->toBeString()
             ->and($html)->toContain("cartBadge({ count: 2, countUrl: '".route('storefront.cart.count')."' })")
-            ->and($html)->toContain('Carrito · 2');
+            ->and($html)->toContain('aria-label="Carrito (2 unidades)"');
     }
 });
 

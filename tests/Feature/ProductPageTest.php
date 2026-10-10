@@ -140,7 +140,8 @@ test('la ficha trae el selector de cantidad, de 1 a 10, enlazado al componente d
         ->assertSee(':disabled="quantityDisabled"', false)
         ->assertSee('x-for="n in quantityOptions"', false)
         ->assertSee(':disabled="!quantityEnabled(n)"', false)
-        ->assertSee('[&>option:disabled]:text-gris-calido/50', false);
+        ->assertSee('x-data="quantitySelect()"', false)
+        ->assertSee('role="listbox"', false);
 });
 
 test('slug inexistente, producto apagado y producto sin variantes activas devuelven 404', function () {

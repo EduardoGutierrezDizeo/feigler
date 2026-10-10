@@ -28,6 +28,11 @@
     }
 
     $accessView = in_array($accessView, $accessBags, true) ? $accessView : 'login';
+
+    // Nombre accesible del enlace del carrito (icono en el encabezado).
+    $cartLabel = $cartCount > 0
+        ? 'Carrito ('.$cartCount.' '.($cartCount === 1 ? 'unidad' : 'unidades').')'
+        : 'Carrito';
 @endphp
 <!DOCTYPE html>
 <html lang="es">
@@ -72,8 +77,9 @@
                     @if ($key === 'cuenta' && auth()->user()?->hasRole('cliente'))
                         <div class="relative" x-data="{ open: false }" @keydown.escape.window="open = false" @click.outside="open = false">
                             <button type="button" @click="open = !open" :aria-expanded="open"
-                                    class="flex items-center gap-1 border-b pb-0.5 transition {{ $active === $key ? 'border-laton text-verde' : 'border-transparent text-gris-calido hover:text-verde' }}">
-                                {{ $label }}
+                                    aria-label="Mi cuenta" title="Mi cuenta"
+                                    class="flex items-center gap-1 rounded-full p-1 text-verde transition hover:bg-hueso/60">
+                                <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 19.5a7 7 0 0 1 14 0"/></svg>
                                 <svg class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
                             </button>
                             <div x-show="open" x-transition.opacity style="display: none"
@@ -88,7 +94,10 @@
                     @elseif ($key === 'cuenta' && ! auth()->check())
                         <a href="{{ route('login') }}" @click.prevent="$dispatch('open-access', { view: 'login' })"
                            @if ($active === $key) aria-current="page" @endif
-                           class="border-b pb-0.5 transition {{ $active === $key ? 'border-laton text-verde' : 'border-transparent text-gris-calido hover:text-verde' }}">{{ $label }}</a>
+                           aria-label="Iniciar sesión" title="Iniciar sesión"
+                           class="grid size-10 place-items-center rounded-full transition {{ $active === $key ? 'text-verde' : 'text-gris-calido hover:bg-hueso/60 hover:text-verde' }}">
+                            <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 19.5a7 7 0 0 1 14 0"/></svg>
+                        </a>
                     @else
                         <a href="{{ url($href) }}" @if ($active === $key) aria-current="page" @endif
                            class="border-b pb-0.5 transition {{ $active === $key ? 'border-laton text-verde' : 'border-transparent text-gris-calido hover:text-verde' }}">{{ $label }}</a>
@@ -97,8 +106,15 @@
             </nav>
 
             <a href="{{ route('storefront.cart.show') }}" x-data="cartBadge({ count: {{ $cartCount }}, countUrl: '{{ route('storefront.cart.count') }}' })"
-               class="ml-auto whitespace-nowrap rounded-full border border-laton px-4 py-1.5 text-sm text-verde transition hover:bg-verde hover:text-crema lg:ml-0">
-                <span x-text="label()">Carrito{{ $cartCount > 0 ? ' · '.$cartCount : '' }}</span>
+               aria-label="{{ $cartLabel }}" :aria-label="ariaLabel()" title="Carrito"
+               class="relative ml-auto grid size-10 shrink-0 place-items-center rounded-full border border-laton text-verde transition hover:bg-verde hover:text-crema lg:ml-0">
+                <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M4.5 8h15l-1.2 11.1a1 1 0 0 1-1 .9H6.7a1 1 0 0 1-1-.9L4.5 8Z"/>
+                    <path d="M9 8a3 3 0 0 1 6 0"/>
+                </svg>
+                <span x-show="count > 0" @if (! $cartCount) style="display: none" @endif
+                      x-text="count"
+                      class="absolute -right-1.5 -top-1.5 grid min-w-5 place-items-center rounded-full bg-verde px-1 text-[0.65rem] font-semibold leading-5 text-crema">{{ $cartCount > 0 ? $cartCount : '' }}</span>
             </a>
 
             <button type="button" class="grid size-10 place-items-center rounded-full border border-arena text-verde lg:hidden"
@@ -118,9 +134,18 @@
                 @foreach ($nav as $key => [$label, $href])
                     @if ($key === 'cuenta' && ! auth()->check())
                         <a href="{{ route('login') }}" @click.prevent="open = false; $dispatch('open-access', { view: 'login' })"
-                           class="rounded-xl px-3 py-2.5 {{ $active === $key ? 'bg-hueso/60 text-verde' : 'text-tinta hover:bg-hueso/40' }}">{{ $label }}</a>
+                           aria-label="Iniciar sesión"
+                           class="flex items-center gap-2.5 rounded-xl px-3 py-2.5 {{ $active === $key ? 'bg-hueso/60 text-verde' : 'text-tinta hover:bg-hueso/40' }}">
+                            <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 19.5a7 7 0 0 1 14 0"/></svg>
+                            {{ $label }}
+                        </a>
                     @else
-                        <a href="{{ url($href) }}" class="rounded-xl px-3 py-2.5 {{ $active === $key ? 'bg-hueso/60 text-verde' : 'text-tinta hover:bg-hueso/40' }}">{{ $label }}</a>
+                        <a href="{{ url($href) }}" class="flex items-center gap-2.5 rounded-xl px-3 py-2.5 {{ $active === $key ? 'bg-hueso/60 text-verde' : 'text-tinta hover:bg-hueso/40' }}">
+                            @if ($key === 'cuenta')
+                                <svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 19.5a7 7 0 0 1 14 0"/></svg>
+                            @endif
+                            {{ $label }}
+                        </a>
                     @endif
                 @endforeach
             </nav>
