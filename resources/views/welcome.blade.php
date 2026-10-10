@@ -73,6 +73,12 @@
                 class="flex-1 transition-[opacity,transform] duration-300 ease-out"
                 :class="entered ? 'opacity-100' : 'translate-y-2 opacity-0'"
             >
+                @if (session('status') === 'account-deleted')
+                    <div class="mx-auto max-w-6xl px-6 pt-10 lg:px-8">
+                        <x-store.status status="Tu cuenta fue eliminada." />
+                    </div>
+                @endif
+
                 <!-- Hero -->
                 <section class="mx-auto max-w-6xl px-6 py-16 sm:py-20 lg:px-8 lg:py-28">
                     <div class="max-w-2xl">

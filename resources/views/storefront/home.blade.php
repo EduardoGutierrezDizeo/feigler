@@ -14,6 +14,12 @@
 <x-store.layout title="Feigler · Ropa con tradición" :cart-count="$cartCount ?? 0">
     <div class="mx-auto max-w-7xl px-4 sm:px-8">
 
+        @if (session('status') === 'account-deleted')
+            <div class="pt-8">
+                <x-store.status status="Tu cuenta fue eliminada." />
+            </div>
+        @endif
+
         {{-- Categorías por sección --}}
         <section class="pt-10 sm:pt-14" aria-labelledby="titulo-categorias"
                  x-data="categoryCarousel(@js($carousel))" @resize.window.debounce.150ms="measure()">

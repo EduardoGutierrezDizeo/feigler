@@ -31,4 +31,6 @@ return [
     'envios_cambios_texto' => 'Enviamos a todo el país. Si no te queda bien, tienes 30 días para cambiarla.',
     // CONFIRMAR CON UN PROFESIONAL: texto de la autorización de tratamiento de datos del registro.
     'datos_personales_texto' => 'Autorizo el tratamiento de mis datos personales de acuerdo con la política de tratamiento de datos de Feigler.',
+    // CONFIRMAR CON UN PROFESIONAL: explicación de lo que implica borrar la cuenta en Mi cuenta.
+    'eliminar_cuenta_texto' => 'Al eliminar tu cuenta se borran tus datos personales, tus direcciones y tus favoritos, y ya no podrás iniciar sesión. Si tienes compras, conservaremos el registro de esos pedidos sin tus datos personales, por obligaciones contables. Esta acción no se puede deshacer.',
 ];

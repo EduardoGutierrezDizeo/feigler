@@ -91,6 +91,13 @@ Route::patch('/cuenta/perfil', [AccountController::class, 'updateProfile'])
     ->middleware(['auth', 'role:cliente'])
     ->name('account.profile.update');
 
+// Baja de la cuenta: solo el cliente autenticado, con su contraseña actual y
+// 5 intentos por minuto. La ruta no recibe id: opera sobre el usuario que
+// está en la sesión, y el borrado o la anonimización los decide el servicio.
+Route::delete('/cuenta', [AccountController::class, 'destroy'])
+    ->middleware(['auth', 'role:cliente', 'throttle:5,1'])
+    ->name('account.destroy');
+
 // Direcciones del cliente: todas resuelven la dirección acotada al usuario
 // autenticado (la de otro cliente da 404) y ninguna de los verbos expone un
 // closure. Las reglas de negocio viven en CustomerAddresses.

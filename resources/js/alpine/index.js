@@ -30,6 +30,7 @@ import './admin-modal.js';
 import categoryCarousel from './category-carousel.js';
 import './color-hex-input.js';
 import './confirm-dialog.js';
+import deleteAccountModal from './delete-account-modal.js';
 import './home-image-upload-preview.js';
 import loadMore from './load-more.js';
 import './page-enter.js';
@@ -48,6 +49,7 @@ document.addEventListener('alpine:init', () => {
     Alpine.data('accessModal', accessModal);
     Alpine.data('addressModal', addressModal);
     Alpine.data('categoryCarousel', categoryCarousel);
+    Alpine.data('deleteAccountModal', deleteAccountModal);
     Alpine.data('loadMore', loadMore);
     Alpine.data('priceRange', priceRange);
     Alpine.data('productPurchase', productPurchase);

@@ -20,12 +20,15 @@ enum AccountTab: string
 
     case Direcciones = 'direcciones';
 
+    case Eliminar = 'eliminar';
+
     public function label(): string
     {
         return match ($this) {
             self::Perfil => 'Perfil',
             self::Seguridad => 'Seguridad',
             self::Direcciones => 'Direcciones',
+            self::Eliminar => 'Eliminar cuenta',
         };
     }
 
@@ -38,6 +41,7 @@ enum AccountTab: string
             self::Perfil => 'storefront.account.tabs.perfil',
             self::Seguridad => 'storefront.account.tabs.seguridad',
             self::Direcciones => 'storefront.account.tabs.direcciones',
+            self::Eliminar => 'storefront.account.tabs.eliminar',
         };
     }
 
