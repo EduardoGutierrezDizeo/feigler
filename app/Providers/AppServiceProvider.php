@@ -3,6 +3,8 @@
 namespace App\Providers;
 
 use App\Services\Storefront\CartService;
+use App\View\Composers\CartCountComposer;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use Intervention\Image\Drivers\Gd\Driver as GdDriver;
 use Intervention\Image\ImageManager;
@@ -33,6 +35,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        // La insignia del carrito en el encabezado de la tienda: el composer
+        // entrega `cartCount` a las páginas que no lo calculan (Mi cuenta y las
+        // pantallas de acceso) y respeta el valor de las que sí lo pasan.
+        View::composer('components.store.layout', CartCountComposer::class);
     }
 }
