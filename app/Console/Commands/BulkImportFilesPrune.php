@@ -13,7 +13,11 @@ use Illuminate\Console\Command;
  * que un archivo cuya pestaña se cerró se queda ahí sin que nadie lo reclame. La
  * copia se descarta al confirmar y al cancelar, así que lo que este barrido
  * encuentra es justo lo que quedó a medias: se borra a las 24 horas por defecto.
- * Al final imprime cuántos archivos se borraron.
+ *
+ * El barrido mira la carpeta entera, así que se lleva también los reportes de
+ * rechazados que dejó una carga cuyo informe nadie descargó: viven en la misma
+ * carpeta y solo se distinguen por la extensión. Al final imprime cuántos
+ * archivos se borraron.
  */
 class BulkImportFilesPrune extends Command
 {

@@ -6,6 +6,7 @@ use App\Exceptions\ImportFileEmptyException;
 use App\Exceptions\ImportFileTooLargeException;
 use App\Exceptions\ImportHeadersMissingException;
 use App\Exceptions\ImportRowLimitExceededException;
+use App\Exceptions\InvalidStoredImportPathException;
 use App\Exceptions\UnsupportedImportFormatException;
 use App\Livewire\Concerns\Notifies;
 use App\Livewire\Concerns\RequiresAdmin;
@@ -13,8 +14,10 @@ use App\Models\User;
 use App\Services\ProductImport\BulkImportFileStore;
 use App\Services\ProductImport\BulkProductImporter;
 use App\Services\ProductImport\BulkProductImportValidator;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\Title;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -41,8 +44,13 @@ use OpenSpout\Common\Exception\OpenSpoutException;
  * **The confirmation is a fresh reading.** `BulkProductImporter::import()` re-reads
  * the file and creates only what is still valid at that moment, so the preview is a
  * picture to look at and not a promise the panel then writes blindly. Whatever fails
- * to be created is reported under the `creacion` column and kept in `result`, which
- * is what the downloadable report of the next step reads.
+ * to be created is reported under the `creacion` column.
+ *
+ * **The state does not grow with the file.** `result` keeps the counts of the whole
+ * load and only the first rows of each side; the full list of refusals is written to a
+ * private file whose path alone is kept, so the next step can offer the report without
+ * carrying it. The state is also read-only from the browser (`#[Locked]`), and the load
+ * itself runs under a per-admin lock so a double click creates the articles once.
  */
 #[Layout('layouts::admin')]
 #[Title('Carga masiva')]
@@ -80,6 +88,33 @@ class BulkUpload extends Component
     public const REJECTED_PREVIEW_LIMIT = 100;
 
     /**
+     * How long the per-admin lock of a confirmation is held before it frees itself.
+     *
+     * It only has to outlive a normal load: the lock is released in a `finally`, so
+     * the seconds are a safety net for a process that dies mid-load, not the expected
+     * duration.
+     */
+    private const CONFIRM_LOCK_SECONDS = 30;
+
+    /**
+     * The name of the per-admin lock. The user is in it so two admins loading at the
+     * same time do not wait for each other.
+     */
+    private const CONFIRM_LOCK_PREFIX = 'bulk-import:';
+
+    /**
+     * What the admin is told when the path of the reviewed file no longer names a file
+     * of the private folder, either because it was tampered with or because the file is
+     * gone.
+     */
+    private const INVALID_FILE_MESSAGE = 'El archivo de la carga no es válido o ya no está disponible. Vuelve a subirlo.';
+
+    /**
+     * What the admin is told when a load is already running for them.
+     */
+    private const BUSY_MESSAGE = 'Ya hay una carga en proceso. Espera a que termine e inténtalo de nuevo.';
+
+    /**
      * What the admin is told when the file cannot be opened at all, which is not a
      * refusal by a row but a file that is not the workbook it claims to be.
      */
@@ -98,18 +133,25 @@ class BulkUpload extends Component
 
     /**
      * The step being shown.
+     *
+     * Locked because the step is only ever moved by the component itself: a request
+     * that could set it from the browser could jump to the preview with a path of its
+     * own and make the confirmation read a file that is not the one that was reviewed.
      */
+    #[Locked]
     public string $step = self::STEP_UPLOAD;
 
     /**
      * Where the reviewed file waits, as a path on the private disk, or `null` when
      * there is nothing to confirm.
      */
+    #[Locked]
     public ?string $storedPath = null;
 
     /**
      * The name the file had when the admin chose it, kept to name it in the screen.
      */
+    #[Locked]
     public string $originalName = '';
 
     /**
@@ -122,19 +164,36 @@ class BulkUpload extends Component
      *     rejected?: list<array<string, mixed>>
      * }
      */
+    #[Locked]
     public array $preview = [];
 
     /**
-     * What the load created and refused. It is kept after the load because the
-     * downloadable report is built from its `rejected` list.
+     * The summary of the load: the counts of the whole load and the first rows of each
+     * side, and never the whole file.
+     *
+     * It is trimmed on purpose. A file of two thousand rows would otherwise leave a
+     * hundred kilobytes of state to send back on every request, and the rest of the
+     * refusals do not need to be here: the full list lives in the report file whose
+     * path is `reportPath`.
      *
      * @var array{
-     *     created?: list<array<string, mixed>>,
-     *     rejected?: list<array<string, mixed>>,
-     *     totals?: array{created_articles: int, created_variants: int, rejected_articles: int, rejected_rows: int}
+     *     totals?: array{created_articles: int, created_variants: int, rejected_articles: int, rejected_rows: int},
+     *     created?: list<array{name: string, reference: string, category: string, variants: int}>,
+     *     rejected?: list<array<string, mixed>>
      * }
      */
+    #[Locked]
     public array $result = [];
+
+    /**
+     * Where the full report of refusals waits, as a path on the private disk, or `null`
+     * when the load refused nothing.
+     *
+     * The list itself is not in the state: only this path is, and the report is read
+     * back with `BulkImportFileStore::readReport()` when the next step asks for it.
+     */
+    #[Locked]
+    public ?string $reportPath = null;
 
     /**
      * Read the picked file and move to the preview.
@@ -188,10 +247,11 @@ class BulkUpload extends Component
      * Run the load over the reviewed file and move to the summary.
      *
      * The importer re-reads the file and creates only what is valid now, so this can
-     * say anything different from the preview the admin just read. The temporary file
-     * is deleted as the last thing that happens, before the step changes: a second
-     * call finds nothing to confirm and returns, which is what makes the button safe
-     * to double-click.
+     * say anything different from the preview the admin just read. The whole thing runs
+     * under a lock held per admin: a double click does not start two loads, it tells the
+     * second one that one is already running. The temporary file is deleted as the last
+     * thing that happens, before the step changes, so even a request that slips past the
+     * lock finds nothing to confirm.
      */
     public function confirm(): void
     {
@@ -199,22 +259,35 @@ class BulkUpload extends Component
             return;
         }
 
-        $store = new BulkImportFileStore;
+        $lock = Cache::lock(self::CONFIRM_LOCK_PREFIX.(auth()->id() ?? 'guest'), self::CONFIRM_LOCK_SECONDS);
 
-        $result = $this->read(
-            fn (): array => (new BulkProductImporter)->import($store->absolutePath($this->storedPath), $this->user()),
-        );
+        if (! $lock->get()) {
+            $this->notifyError(self::BUSY_MESSAGE);
 
-        if ($result === null) {
             return;
         }
 
-        $this->result = $result;
-        $this->forgetFile($store);
-        $this->preview = [];
-        $this->step = self::STEP_RESULT;
+        try {
+            $store = new BulkImportFileStore;
 
-        $this->announceResult($result['totals']);
+            $result = $this->read(
+                fn (): array => (new BulkProductImporter)->import($store->absolutePath($this->storedPath), $this->user()),
+            );
+
+            if ($result === null) {
+                return;
+            }
+
+            $this->result = $this->summarize($result);
+            $this->reportPath = $result['rejected'] === [] ? null : $store->storeReport($result['rejected']);
+            $this->forgetUpload($store);
+            $this->preview = [];
+            $this->step = self::STEP_RESULT;
+
+            $this->announceResult($result['totals']);
+        } finally {
+            $lock->release();
+        }
     }
 
     /**
@@ -223,7 +296,10 @@ class BulkUpload extends Component
      */
     public function cancel(): void
     {
-        $this->forgetFile(new BulkImportFileStore);
+        $store = new BulkImportFileStore;
+
+        $this->forgetUpload($store);
+        $this->forgetReport($store);
         $this->resetValidation();
         $this->preview = [];
         $this->result = [];
@@ -255,10 +331,12 @@ class BulkUpload extends Component
      * refusal into a toast instead of a broken screen.
      *
      * Only the refusals about the file as a whole are caught: a missing column, an
-     * empty file, one too heavy or too long, an extension the reader does not know.
-     * A workbook that is corrupt or is not one at all fails inside OpenSpout, which
-     * says nothing an admin can read, so its detail goes to the log and the screen is
-     * told the file could not be read. Anything else is a bug and is left to bubble.
+     * empty file, one too heavy or too long, an extension the reader does not know. A
+     * stored path that no longer names a file of the private folder is a refusal too —
+     * the file is gone or the state was tampered with — and is answered the same way. A
+     * workbook that is corrupt or is not one at all fails inside OpenSpout, which says
+     * nothing an admin can read, so its detail goes to the log and the screen is told
+     * the file could not be read. Anything else is a bug and is left to bubble.
      *
      * @param  callable(): array<string, mixed>  $operation
      * @return array<string, mixed>|null
@@ -269,6 +347,13 @@ class BulkUpload extends Component
             return $operation();
         } catch (ImportFileEmptyException|ImportFileTooLargeException|ImportHeadersMissingException|ImportRowLimitExceededException|UnsupportedImportFormatException $exception) {
             $this->fail($exception->getMessage());
+        } catch (InvalidStoredImportPathException $exception) {
+            Log::error('La ruta de un archivo de la carga masiva no es válida.', [
+                'path' => $this->storedPath,
+                'exception' => $exception,
+            ]);
+
+            $this->fail(self::INVALID_FILE_MESSAGE);
         } catch (OpenSpoutException $exception) {
             Log::error('No se pudo leer un archivo de la carga masiva.', [
                 'file' => $this->originalName,
@@ -287,7 +372,10 @@ class BulkUpload extends Component
      */
     private function fail(string $message): void
     {
-        $this->forgetFile(new BulkImportFileStore);
+        $store = new BulkImportFileStore;
+
+        $this->forgetUpload($store);
+        $this->forgetReport($store);
         $this->resetValidation();
         $this->preview = [];
         $this->result = [];
@@ -328,14 +416,60 @@ class BulkUpload extends Component
     }
 
     /**
-     * Drop the temporary file: the copy on the disk and the reference in the state.
+     * The trimmed copy of the load that travels in the state.
+     *
+     * The counts are the whole load, but the rows are only the first slice of each
+     * side: the ones the screen prints, and a created article is reduced to the four
+     * fields the table shows. The full list of refusals is not here; it is written to
+     * the report file and reached through its path.
+     *
+     * @param  array{
+     *     created: list<array<string, mixed>>,
+     *     rejected: list<array<string, mixed>>,
+     *     totals: array<string, int>
+     * }  $result
+     * @return array{
+     *     totals: array<string, int>,
+     *     created: list<array{name: string, reference: string, category: string, variants: int}>,
+     *     rejected: list<array<string, mixed>>
+     * }
      */
-    private function forgetFile(BulkImportFileStore $store): void
+    private function summarize(array $result): array
+    {
+        return [
+            'totals' => $result['totals'],
+            'created' => array_map(
+                fn (array $article): array => [
+                    'name' => $article['name'],
+                    'reference' => $article['reference'],
+                    'category' => $article['category'],
+                    'variants' => $article['variants'],
+                ],
+                array_slice($result['created'], 0, self::READY_PREVIEW_LIMIT),
+            ),
+            'rejected' => array_slice($result['rejected'], 0, self::REJECTED_PREVIEW_LIMIT),
+        ];
+    }
+
+    /**
+     * Drop the reviewed file: the copy on the disk and the reference in the state.
+     */
+    private function forgetUpload(BulkImportFileStore $store): void
     {
         $store->delete($this->storedPath);
 
         $this->storedPath = null;
         $this->file = null;
+    }
+
+    /**
+     * Drop the report of refusals: the file on the disk and the reference in the state.
+     */
+    private function forgetReport(BulkImportFileStore $store): void
+    {
+        $store->delete($this->reportPath);
+
+        $this->reportPath = null;
     }
 
     /**

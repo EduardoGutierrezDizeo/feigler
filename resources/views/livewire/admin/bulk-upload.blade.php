@@ -287,6 +287,12 @@
             <section class="mt-10">
                 <h2 class="font-display text-2xl font-medium text-tinta">Artículos creados</h2>
 
+                @if ($totals['created_articles'] > count($created))
+                    <p class="mt-1 text-xs text-gris-calido">
+                        Se muestran los primeros {{ count($created) }} de {{ $totals['created_articles'] }} artículos creados.
+                    </p>
+                @endif
+
                 <div class="tarjeta mt-4 overflow-hidden">
                     <div class="overflow-x-auto">
                         <table class="w-full min-w-full text-sm">
@@ -321,6 +327,12 @@
                     El artículo se comprueba otra vez al confirmar. Estos son los que en ese momento ya no se podían
                     crear.
                 </p>
+
+                @if ($totals['rejected_articles'] > count($rejected))
+                    <p class="mt-2 text-xs text-gris-calido">
+                        Se muestran los primeros {{ count($rejected) }} de {{ $totals['rejected_articles'] }} artículos no creados.
+                    </p>
+                @endif
 
                 <div class="tarjeta mt-4 divide-y divide-arena">
                     @foreach ($rejected as $article)
