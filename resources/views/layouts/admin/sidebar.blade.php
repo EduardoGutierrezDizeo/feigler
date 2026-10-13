@@ -25,7 +25,12 @@
     href="{{ route('admin.dashboard') }}"
     class="block shrink-0 px-6 pb-7 pt-8 transition-opacity duration-150 ease-in-out hover:opacity-85 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-laton"
 >
-    <span class="block font-display text-xl font-semibold uppercase tracking-[0.35em] text-crema">Feigler</span>
+    <span class="flex items-center gap-3">
+        {{-- El logo llega en verde sobre PNG transparente: `brightness-0 invert` lo
+             tiñe de blanco para que contraste con el degradado verde del panel. --}}
+        <img src="{{ asset('images/logo.png') }}" alt="" width="36" height="36" class="size-9 shrink-0 brightness-0 invert">
+        <span class="font-display text-xl font-semibold uppercase tracking-[0.35em] text-crema">Feigler</span>
+    </span>
     <span class="mt-0.5 block font-display text-base italic text-laton">Administración</span>
 </a>
 

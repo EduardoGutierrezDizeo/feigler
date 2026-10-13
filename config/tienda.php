@@ -16,7 +16,7 @@ return [
     // TODO: confirmar con el dueño que el mapa siga apuntando a esta dirección.
     'como_llegar_url' => 'https://maps.google.com/?q=Calle+2+Santander',
     // TODO: confirmar con el dueño si hay foto de fachada; null = sin foto.
-    'imagen' => null,
+    'imagen' => '/images/fachada.jpg',
     // TODO: confirmar con el dueño. Los requisitos dicen «Calle 2 #20-27, Barrio Landia».
     'direccion' => 'Calle 2 · Santander',
     // TODO: confirmar con el dueño el enlace real de Instagram.

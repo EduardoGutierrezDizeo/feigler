@@ -169,11 +169,15 @@ test('el sidebar muestra el enlace «Vista principal» con la ruta del panel y l
         }
     }
 
+    // En el dashboard ninguna copia del sidebar queda marcada y la tarjeta del
+    // módulo añade un tercer enlace a la misma ruta.
     $enlacesDashboard = $leerEnlaces($this->actingAs($admin)->get('/admin/dashboard')->assertOk()->getContent());
 
-    expect($enlacesDashboard)->toHaveCount(2)
+    expect($enlacesDashboard)->toHaveCount(3)
         ->and($enlacesDashboard[0]['aria-current'])->toBe('')
-        ->and($enlacesDashboard[1]['aria-current'])->toBe('');
+        ->and($enlacesDashboard[1]['aria-current'])->toBe('')
+        ->and($enlacesDashboard[2]['aria-current'])->toBe('')
+        ->and($enlacesDashboard[2]['texto'])->toContain('Vista principal');
 });
 
 test('la barra de pestañas muestra las dos partes y marca la activa con aria-selected y tabindex', function () {

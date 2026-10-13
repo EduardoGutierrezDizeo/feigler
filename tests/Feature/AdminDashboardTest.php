@@ -34,6 +34,25 @@ test('renders the dashboard for users with the admin role', function () {
         ->assertSee('Dashboard');
 });
 
+test('el dashboard lista todos los módulos del panel con su enlace', function () {
+    $this->seed(RoleSeeder::class);
+
+    $admin = User::factory()->create();
+    $admin->assignRole('admin');
+
+    $response = $this->actingAs($admin)->get('/admin/dashboard');
+
+    $response->assertOk();
+
+    foreach (['Vista principal', 'Detalles de productos', 'Productos', 'Usuarios'] as $label) {
+        $response->assertSee($label);
+    }
+
+    foreach (['admin.home-page.index', 'admin.product-details.index', 'admin.products.index', 'admin.users.index'] as $route) {
+        $response->assertSee(route($route), false);
+    }
+});
+
 test('hides the top bar on desktop but keeps the sidebar toggle below lg', function () {
     $this->seed(RoleSeeder::class);
 

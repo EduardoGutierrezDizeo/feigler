@@ -10,9 +10,12 @@
 
          Solo se monta la pestaña activa: las otras tres no llegan al DOM ni a las
          peticiones, y sus consultas no se ejecutan. --}}
-    <h1 class="font-display text-4xl font-medium text-tinta sm:text-5xl">
-        Detalles de productos
-    </h1>
+    <div class="flex items-center gap-3">
+        <x-admin-module-icon name="product-details" class="h-8 w-8 shrink-0 text-verde" />
+        <h1 class="font-display text-4xl font-medium text-tinta sm:text-5xl">
+            Detalles de productos
+        </h1>
+    </div>
 
     <p class="mt-2 text-sm text-gris-calido">
         {{ $activeTab->hint() }}

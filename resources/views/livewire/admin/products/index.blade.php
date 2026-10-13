@@ -1,9 +1,12 @@
 <div>
     <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-            <h1 class="font-display text-4xl font-medium text-tinta sm:text-5xl">
-                Productos
-            </h1>
+            <div class="flex items-center gap-3">
+                <x-admin-module-icon name="products" class="h-8 w-8 shrink-0 text-verde" />
+                <h1 class="font-display text-4xl font-medium text-tinta sm:text-5xl">
+                    Productos
+                </h1>
+            </div>
 
             <p class="mt-2 text-sm text-gris-calido">
                 Gestiona el catálogo, sus datos generales y su estado en el escaparate.

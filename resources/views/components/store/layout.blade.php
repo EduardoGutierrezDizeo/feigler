@@ -61,7 +61,10 @@
     <header x-data="{ open: false }" @keydown.escape.window="open = false"
             class="sticky top-0 z-40 border-b border-arena/70 bg-crema/90 backdrop-blur">
         <div class="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4 sm:px-8">
-            <a href="{{ url('/') }}" class="font-display text-xl tracking-[0.45em] text-verde">FEIGLER</a>
+            <a href="{{ url('/') }}" class="flex items-center gap-2 font-display text-xl tracking-[0.45em] text-verde">
+                <img src="{{ asset('images/logo.png') }}" alt="" width="32" height="32" class="size-8 shrink-0">
+                <span>FEIGLER</span>
+            </a>
 
             <form action="{{ route('storefront.search') }}" method="get" role="search" class="mx-auto hidden w-full max-w-xs md:block">
                 <label class="relative block">

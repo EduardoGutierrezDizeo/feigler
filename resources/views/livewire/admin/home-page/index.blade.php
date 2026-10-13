@@ -7,9 +7,12 @@
      que hace que Livewire entre de lleno con un componente nuevo y limpio al
      cambiar de tab: un formulario abierto en otra pestaña no sigue esperando
      cuando se vuelve. --}}
-    <h1 class="font-display text-4xl font-medium text-tinta sm:text-5xl">
-        Vista principal
-    </h1>
+    <div class="flex items-center gap-3">
+        <x-admin-module-icon name="home-page" class="h-8 w-8 shrink-0 text-verde" />
+        <h1 class="font-display text-4xl font-medium text-tinta sm:text-5xl">
+            Vista principal
+        </h1>
+    </div>
 
     <p class="mt-2 text-sm text-gris-calido">
         {{ $activeTab->hint() }}
