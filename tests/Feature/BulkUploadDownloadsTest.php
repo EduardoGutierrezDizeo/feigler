@@ -367,6 +367,41 @@ test('the downloaded template loads without a single refusal', function () {
         ->assertSet('preview.totals.ready_articles', 1);
 });
 
+test('the two example rows of the template teach the composition order the parser reads', function () {
+    $this->seed(RoleSeeder::class);
+    Storage::fake('local');
+
+    $category = numberedCategory('EX', 'Camisetas de ejemplo');
+
+    Color::factory()->create(['name' => 'Rojo', 'code' => 'ROJ']);
+    Material::factory()->create(['name' => 'Algodón']);
+    Material::factory()->create(['name' => 'Poliéster']);
+
+    Size::factory()->for($category)->create(['name' => 'M', 'order' => 1]);
+    Size::factory()->for($category)->create(['name' => 'L', 'order' => 2]);
+
+    $panel = bulkDownloadPanel()->call('downloadTemplate');
+
+    $contents = bulkDownloadEffectsContent($panel, BulkImportTemplate::FILENAME);
+    $lines = bulkDownloadSheetRows($contents)['Plantilla'];
+
+    // Con dos materiales activos la plantilla ofrece la composición repartida, y la
+    // escribe con el nombre primero y el porcentaje al final: el orden que
+    // `ProductDetailsCatalog` lee. Al revés se leería un material llamado «80».
+    expect($lines[1][5])->toBe('Algodón 80% | Poliéster 20%')
+        ->and($lines[2][5])->toBe('Algodón 80% | Poliéster 20%');
+
+    // Y el archivo tal como sale es una carga que entra entera: dos variantes de un
+    // mismo artículo, sin un solo rechazo.
+    bulkDownloadPanel()
+        ->set('file', UploadedFile::fake()->createWithContent('plantilla-ejemplos.xlsx', $contents))
+        ->call('review')
+        ->assertHasNoErrors()
+        ->assertSet('preview.totals.rejected_articles', 0)
+        ->assertSet('preview.totals.ready_articles', 1)
+        ->assertSet('preview.totals.ready_variants', 2);
+});
+
 test('starting another review drops a report that would otherwise be left behind', function () {
     $this->seed(RoleSeeder::class);
     Storage::fake('local');

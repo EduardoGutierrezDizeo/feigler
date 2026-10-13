@@ -17,7 +17,12 @@ use App\Services\ProductImport\BulkImportFileStore;
 use App\Services\ProductImport\BulkImportReport;
 use App\Services\ProductImport\BulkProductImporter;
 use App\Services\ProductImport\BulkProductImportValidator;
+use App\Services\Storefront\ListingPage;
+use App\Services\Storefront\ListingScope;
+use App\Services\Storefront\ProductCards;
+use App\Services\Storefront\SectionFilters;
 use Database\Seeders\RoleSeeder;
+use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
@@ -531,4 +536,126 @@ test('la pantalla no guarda nada cuando el archivo supera el máximo', function 
         ->assertSet('storedPath', null);
 
     expect(Storage::disk('local')->files(BulkImportFileStore::DIRECTORY))->toBe([]);
+});
+
+test('un artículo cargado no aparece en su sección y aparece al activarlo, sin colarse en las otras', function () {
+    $this->app->instance('env', 'local');
+    $this->seed(RoleSeeder::class);
+    e2eCatalog();
+
+    $admin = adminForPanel();
+
+    (new BulkProductImporter)->import(e2eCsvFile(e2eRows()), $admin);
+
+    $camisa = Product::query()->where('name', 'Camisa E2E')->sole();
+    $vestido = Product::query()->where('name', 'Vestido E2E')->sole();
+    $camiseta = Product::query()->where('name', 'Camiseta Niño')->sole();
+
+    // Cada prenda nace oculta en su propia sección, y ninguna asoma en otra.
+    $this->get('/hombre')->assertOk()->assertDontSee($camisa->name);
+    $this->get('/mujer')->assertOk()->assertDontSee($vestido->name);
+    $this->get('/ninos')->assertOk()->assertDontSee($camiseta->name);
+    $this->get('/tienda')->assertOk()->assertDontSee($camisa->name);
+
+    Livewire::actingAs($admin)->test(ProductsIndex::class)->call('toggleActive', $vestido->getKey());
+
+    // Publicada la de mujer, su sección la muestra y las demás siguen sin verla.
+    $this->get('/mujer')->assertOk()->assertSee($vestido->name);
+    $this->get('/hombre')->assertOk()->assertDontSee($vestido->name);
+    $this->get('/ninos')->assertOk()->assertDontSee($vestido->name);
+});
+
+test('los relacionados de una ficha no ofrecen prendas sin publicar', function () {
+    $this->app->instance('env', 'local');
+    $this->seed(RoleSeeder::class);
+    e2eCatalog();
+
+    $admin = adminForPanel();
+
+    (new BulkProductImporter)->import(e2eCsvFile(e2eRows()), $admin);
+
+    $camisa = Product::query()->where('name', 'Camisa E2E')->sole();
+    $hermana = Product::query()->where('name', 'Camisa Marca Propia')->sole();
+
+    Livewire::actingAs($admin)->test(ProductsIndex::class)->call('toggleActive', $camisa->getKey());
+
+    // La hermana de categoría sigue inactiva: no es una relacionada.
+    $this->get(route('storefront.product', $camisa->slug))
+        ->assertOk()
+        ->assertSee($camisa->name)
+        ->assertDontSee($hermana->name);
+
+    Livewire::actingAs($admin)->test(ProductsIndex::class)->call('toggleActive', $hermana->getKey());
+
+    $this->get(route('storefront.product', $camisa->slug))
+        ->assertOk()
+        ->assertSee('Más de')
+        ->assertSee($hermana->name);
+});
+
+test('los conteos de los filtros no cuentan los artículos cargados mientras están inactivos', function () {
+    $this->seed(RoleSeeder::class);
+    e2eCatalog();
+
+    $admin = adminForPanel();
+
+    (new BulkProductImporter)->import(e2eCsvFile(e2eRows()), $admin);
+
+    $camisas = Category::query()->where('name', 'Camisas')->sole();
+    $listing = app(ListingPage::class);
+    $hombre = fn (): array => $listing->for(
+        ListingScope::section(StoreSection::Hombre),
+        SectionFilters::fromRequest(Request::create('/hombre')),
+    );
+
+    // Ninguna prenda publicada: el listado está vacío y no ofrece categorías.
+    $page = $hombre();
+
+    expect($page['total'])->toBe(0)
+        ->and($page['filters']['categories'])->toBe([]);
+
+    Livewire::actingAs($admin)->test(ProductsIndex::class)
+        ->call('toggleActive', Product::query()->where('name', 'Camisa E2E')->sole()->getKey());
+
+    // Una publicada: el total y el conteo de su categoría suben a 1, y no a las
+    // tres variantes del artículo ni a las otras camisas del archivo.
+    $page = $hombre();
+    $option = collect($page['filters']['categories'])->firstWhere('value', (string) $camisas->getKey());
+
+    expect($page['total'])->toBe(1)
+        ->and($option['count'])->toBe(1);
+});
+
+test('un artículo publicado sin fotos se ve con su hueco de imagen en tienda, ficha y carrito', function () {
+    $this->seed(RoleSeeder::class);
+    e2eCatalog();
+
+    $admin = adminForPanel();
+
+    (new BulkProductImporter)->import(e2eCsvFile(e2eRows()), $admin);
+
+    $camisa = Product::query()->where('name', 'Camisa E2E')->sole();
+
+    Livewire::actingAs($admin)->test(ProductsIndex::class)->call('toggleActive', $camisa->getKey());
+
+    // La tarjeta no trae foto (queda el degradado), pero sí el nombre.
+    expect(ProductCards::make($camisa->fresh())['image'])->toBeNull();
+    $this->get('/tienda')->assertOk()->assertSee($camisa->name);
+
+    // La ficha se pinta completa y avisa que el color elegido no tiene fotos.
+    $this->get(route('storefront.product', $camisa->slug))
+        ->assertOk()
+        ->assertSee($camisa->name)
+        ->assertSee('Este color todavía no tiene fotos.');
+
+    // Agregar al carrito con una variante con stock y verlo en la página del carrito.
+    $variant = $camisa->variants()->where('stock', '>', 0)->firstOrFail();
+
+    $this->postJson('/carrito/agregar', ['variant_id' => $variant->getKey(), 'quantity' => 1])
+        ->assertOk()
+        ->assertJson(['ok' => true]);
+
+    $this->get('/carrito')
+        ->assertOk()
+        ->assertSee($camisa->name);
 });
