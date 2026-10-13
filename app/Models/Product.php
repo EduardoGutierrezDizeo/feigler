@@ -322,22 +322,19 @@ class Product extends Model
     }
 
     /**
-     * The garments the storefront may show: never turned off, still sold in at
-     * least one variant that is on, and living in a category that is on.
+     * The garments the storefront may show: never turned off, and still sold in
+     * at least one variant that is on.
      *
-     * This is the same rule the home page, the product page, the listings and
-     * the cart all need, so it lives here rather than once per caller: turning a
-     * category off hides its garments everywhere at once, from their own page to
-     * the related products and the cart. Stock is deliberately not part of it: a
-     * garment that sold out is still sold, it has just run out.
+     * This is the same rule the home page and the product page both need, so it
+     * lives here rather than once per caller. Stock is deliberately not part of
+     * it: a garment that sold out is still sold, it has just run out.
      *
      * @param  Builder<Product>  $query
      */
     public function scopeVisible(Builder $query): void
     {
         $query->where('status', '!=', 'inactive')
-            ->whereHas('variants', fn (Builder $variants): Builder => $variants->where('is_active', true))
-            ->whereHas('category', fn (Builder $categories): Builder => $categories->where('is_active', true));
+            ->whereHas('variants', fn (Builder $variants): Builder => $variants->where('is_active', true));
     }
 
     /**

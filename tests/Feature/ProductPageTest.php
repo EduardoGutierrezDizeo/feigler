@@ -144,7 +144,7 @@ test('la ficha trae el selector de cantidad, de 1 a 10, enlazado al componente d
         ->assertSee('role="listbox"', false);
 });
 
-test('slug inexistente, producto apagado, producto sin variantes activas y producto de categoría apagada devuelven 404', function () {
+test('slug inexistente, producto apagado y producto sin variantes activas devuelven 404', function () {
     $data = catalogoDeFicha();
 
     $apagado = Product::factory()->inactive()->create([
@@ -173,54 +173,9 @@ test('slug inexistente, producto apagado, producto sin variantes activas y produ
         'stock' => 5,
     ]);
 
-    $categoriaApagada = numberedCategory('DSC', 'Desactivadas');
-    $categoriaApagada->update(['is_active' => false]);
-
-    $enCategoriaApagada = Product::factory()->create([
-        'category_id' => $categoriaApagada->getKey(),
-        'name' => 'Camisa En Categoría Apagada',
-        'slug' => 'camisa-categoria-apagada-ficha',
-        'status' => 'active',
-    ]);
-    ProductVariant::factory()->create([
-        'product_id' => $enCategoriaApagada->getKey(),
-        'color_id' => $data['negro']->getKey(),
-        'size_id' => $data['sizeS']->getKey(),
-        'is_active' => true,
-        'stock' => 5,
-    ]);
-
     get('/producto/slug-que-no-existe')->assertNotFound();
     get('/producto/'.$apagado->slug)->assertNotFound();
     get('/producto/'.$sinVarianteActiva->slug)->assertNotFound();
-    get('/producto/'.$enCategoriaApagada->slug)->assertNotFound();
-});
-
-test('reactivar la categoría vuelve a mostrar el producto en su ficha', function () {
-    $data = catalogoDeFicha();
-
-    $categoria = numberedCategory('REA', 'Reactivables');
-    $categoria->update(['is_active' => false]);
-
-    $producto = Product::factory()->create([
-        'category_id' => $categoria->getKey(),
-        'name' => 'Camisa Reactivable',
-        'slug' => 'camisa-reactivable',
-        'status' => 'active',
-    ]);
-    ProductVariant::factory()->create([
-        'product_id' => $producto->getKey(),
-        'color_id' => $data['negro']->getKey(),
-        'size_id' => $data['sizeS']->getKey(),
-        'is_active' => true,
-        'stock' => 5,
-    ]);
-
-    get('/producto/'.$producto->slug)->assertNotFound();
-
-    $categoria->update(['is_active' => true]);
-
-    get('/producto/'.$producto->slug)->assertOk()->assertSee($producto->name);
 });
 
 test('un producto con stock total 0 responde 200 y todas sus tallas salen sin stock', function () {
@@ -466,10 +421,6 @@ test('los relacionados ponen la misma categoría primero, completan con la secci
     $invisible = $visible('Pantalón Invisible', $pantalones);
     $invisible->variants()->update(['is_active' => false]);
 
-    $categoriaApagada = numberedCategory('DSC', 'Desactivadas');
-    $categoriaApagada->update(['is_active' => false]);
-    $visible('Camisa Categoría Apagada', $categoriaApagada);
-
     $visible('Vestido Lejano', $vestidos);
 
     // El actual se crea el último: si la exclusión fallara, entraría en los
@@ -491,7 +442,7 @@ test('los relacionados ponen la misma categoría primero, completan con la secci
 
     expect($posiciones)->toBe($enOrden);
 
-    foreach (['Pantalón B1', 'Pantalón B2', 'Camisa Apagada', 'Pantalón Invisible', 'Camisa Categoría Apagada', 'Vestido Lejano'] as $fuera) {
+    foreach (['Pantalón B1', 'Pantalón B2', 'Camisa Apagada', 'Pantalón Invisible', 'Vestido Lejano'] as $fuera) {
         expect($html)->not->toContain($fuera);
     }
 

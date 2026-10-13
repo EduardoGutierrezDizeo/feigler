@@ -19,8 +19,8 @@ use InvalidArgumentException;
  * filtros, y da la URL sobre la que la página construye la suya.
  *
  * El conjunto base es el que una sección siempre tuvo: prendas visibles — ni
- * apagadas, ni sin ninguna variante activa, ni de una categoría apagada — que
- * sean de una de las secciones del alcance. Un alcance puede pedir además, con
+ * apagadas ni sin ninguna variante activa — cuya categoría esté activa y sea de
+ * una de las secciones del alcance. Un alcance puede pedir además, con
  * `onlyNew()`, que solo cubra prendas nuevas, que es la regla de la insignia
  * «Nuevo» leída desde Product. Aplicarlo está escrito una sola vez en
  * `applyTo()`, para que la consulta de prendas, el límite del deslizador y las
@@ -153,12 +153,9 @@ class ListingScope
 
     /**
      * La restricción del conjunto base sobre una consulta de prendas: visibles,
-     * de una de las secciones del alcance, cuando el alcance lo pide nuevas
-     * (creadas desde Product::newCutoff()) y, cuando hay un texto buscado, las
-     * que coinciden con él.
-     *
-     * La categoría activa no se repite aquí: ya la exige Product::visible(),
-     * que es donde vive la regla de lo que la tienda puede enseñar.
+     * de categoría activa, de una de las secciones del alcance, cuando el
+     * alcance lo pide nuevas (creadas desde Product::newCutoff()) y, cuando hay
+     * un texto buscado, las que coinciden con él.
      *
      * `products.created_at` va calificada porque la consulta de conteos por
      * sección une la tabla categories, que también tiene created_at.
@@ -172,7 +169,8 @@ class ListingScope
             ->visible()
             ->when($this->newOnly, fn (Builder $query): Builder => $query->where('products.created_at', '>=', Product::newCutoff()))
             ->whereHas('category', fn (Builder $categories): Builder => $categories
-                ->whereIn('section', $this->sectionValues()));
+                ->whereIn('section', $this->sectionValues())
+                ->where('is_active', true));
 
         return $this->search === null ? $products : $this->applySearch($products);
     }
