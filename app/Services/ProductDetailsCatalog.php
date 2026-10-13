@@ -60,6 +60,31 @@ class ProductDetailsCatalog
     use NormalizesNames;
 
     /**
+     * The catalog read once, when a caller has one to resolve against.
+     *
+     * The panel leaves this null and every name goes to the database, which is
+     * right for a form that sends one name at a time. The import hands a snapshot
+     * over so a file of hundreds of rows asks the database nothing per row; what
+     * a row costs then is a lookup in a list already in memory.
+     */
+    private ?CatalogSnapshot $snapshot = null;
+
+    /**
+     * A copy of this catalog that resolves against lists already read.
+     *
+     * A copy and not this instance, because a service that is shared must not
+     * change under the caller that borrowed it: the snapshot belongs to the file
+     * being read and goes away with it.
+     */
+    public function withSnapshot(CatalogSnapshot $snapshot): self
+    {
+        $clone = clone $this;
+        $clone->snapshot = $snapshot;
+
+        return $clone;
+    }
+
+    /**
      * The size of a category under the name that was written.
      *
      * Only the category asked about is looked at, because a size only means something
@@ -76,7 +101,8 @@ class ProductDetailsCatalog
     public function resolveSize(Category $category, string $name, bool $onlyActive = true): Size
     {
         $written = $this->cleanName($name);
-        $sizes = Size::listedForCategory($category->getKey());
+        $sizes = $this->snapshot?->sizesForCategory((int) $category->getKey())
+            ?? Size::listedForCategory($category->getKey());
 
         $match = $this->firstNamed($sizes, $this->nameKey($written));
 
@@ -107,7 +133,7 @@ class ProductDetailsCatalog
     public function resolveColor(string $name, bool $onlyActive = true): Color
     {
         $written = $this->cleanName($name);
-        $match = $this->firstNamed(Color::listed(), $this->nameKey($written));
+        $match = $this->firstNamed($this->snapshot?->colors() ?? Color::listed(), $this->nameKey($written));
 
         if (! $match instanceof Color) {
             throw UnknownColorException::forColor($written);
@@ -128,7 +154,7 @@ class ProductDetailsCatalog
     public function resolveMaterial(string $name, bool $onlyActive = true): Material
     {
         $written = $this->cleanName($name);
-        $match = $this->firstNamed(Material::listed(), $this->nameKey($written));
+        $match = $this->firstNamed($this->snapshot?->materials() ?? Material::listed(), $this->nameKey($written));
 
         if (! $match instanceof Material) {
             throw UnknownMaterialException::forMaterial($written);
