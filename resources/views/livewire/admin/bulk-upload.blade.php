@@ -137,14 +137,16 @@
             </p>
         </div>
 
-        {{-- Aviso, no un rechazo: el artículo se crea igual, pero nace en una
-             categoría desactivada y por eso no se verá en la tienda hasta que se
-             vuelva a activar. Se agrupa por categoría para no listar cada artículo. --}}
+        {{-- Aviso, no un rechazo: el artículo se crea igual, pero mientras su
+             categoría siga desactivada no será visible en la tienda, ni en su
+             ficha ni en los listados ni en los relacionados. Se agrupa por
+             categoría para no listar cada artículo. --}}
         @if (! empty($warnings))
             <div class="mt-6 rounded-2xl border border-laton/50 bg-laton/10 px-5 py-4 text-sm text-tinta">
                 <p class="font-medium">Algunos artículos son de categorías desactivadas.</p>
                 <p class="mt-1">
-                    Se crearán igual, pero no se verán en la tienda hasta que actives estas categorías desde
+                    Se crearán igual, pero no serán visibles en la tienda mientras su categoría esté desactivada.
+                    Reactívalas cuando quieras que se vean desde
                     <a href="{{ route('admin.product-details.index', ['tab' => 'categorias']) }}" class="font-medium text-verde underline decoration-laton/60 underline-offset-2 hover:text-verde-hondo">Categorías</a>:
                 </p>
 

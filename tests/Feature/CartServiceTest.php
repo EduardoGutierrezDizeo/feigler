@@ -313,7 +313,7 @@ test('el precio del carrito se lee en vivo de la variante y del producto', funct
         ->and($conTope['subtotal'])->toBe(198000);
 });
 
-test('una línea que se quedó sin variante activa o sin producto visible queda no disponible y fuera del subtotal', function () {
+test('una línea que se quedó sin variante activa, sin producto visible o sin categoría activa queda no disponible y fuera del subtotal', function () {
     $catalogo = carritoCatalogo();
     $producto = carritoProducto($catalogo, stock: 5);
 
@@ -334,6 +334,17 @@ test('una línea que se quedó sin variante activa o sin producto visible queda 
     $resumen = $servicio->summary();
 
     expect($resumen['items'][0]['status'])->toBe(CartService::STATUS_UNAVAILABLE)
+        ->and($resumen['subtotal'])->toBe(0);
+
+    // Apagar la categoría se trata igual que apagar el producto: la línea deja
+    // de estar disponible y sale del subtotal, sin borrar lo que se pidió.
+    $producto->update(['status' => 'active']);
+    $producto->category->update(['is_active' => false]);
+
+    $resumen = $servicio->summary();
+
+    expect($resumen['items'][0]['status'])->toBe(CartService::STATUS_UNAVAILABLE)
+        ->and($resumen['items'][0]['quantity'])->toBe(2)
         ->and($resumen['subtotal'])->toBe(0);
 });
 

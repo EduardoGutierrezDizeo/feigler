@@ -22,7 +22,8 @@ use Illuminate\Support\Collection;
  * es el mismo con tres variantes que con doce.
  *
  * Solo un producto visible llega aquí: un slug inexistente, un producto
- * apagado o uno sin variantes activas terminan en 404 (firstOrFail).
+ * apagado, uno sin variantes activas o uno cuya categoría está apagada terminan
+ * en 404 (firstOrFail).
  */
 class ProductPage
 {
