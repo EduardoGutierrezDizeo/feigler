@@ -3,6 +3,7 @@
 use App\Actions\Products\CreateProduct;
 use App\Actions\Products\CreateProductVariant;
 use App\Exceptions\DuplicateImportedProductException;
+use App\Exceptions\InvalidStockAdjustmentException;
 use App\Models\Category;
 use App\Models\Color;
 use App\Models\InventoryMovement;
@@ -13,6 +14,7 @@ use App\Models\Size;
 use App\Models\User;
 use App\Services\ProductImport\BulkProductImporter;
 use App\Services\ProductImport\BulkProductImportValidator;
+use Illuminate\Support\Facades\Log;
 
 /*
  * La mitad que escribe de la carga masiva: el archivo ya leído se crea en la base
@@ -223,7 +225,7 @@ test('a variant that cannot be created takes the product and the other variants 
         ->and($result['rejected'][0]['errors'][0])->toBe([
             'row' => 2,
             'column' => BulkProductImporter::CREATION_COLUMN,
-            'message' => 'Fallo simulado al crear la segunda variante',
+            'message' => 'No se pudo crear este artículo por un error inesperado. Inténtalo de nuevo; si se repite, avisa al administrador del sistema.',
         ]);
 
     expect(Product::query()->count())->toBe(0)
@@ -274,10 +276,14 @@ test('a product of a load is in the catalog but not in the storefront', function
 
 /**
  * A variant action that writes the first variant and then refuses the second, so a
- * test can see a load that breaks half way through an article.
+ * test can see a load that breaks half way through an article. The failure it throws
+ * can be chosen: by default it is an unexpected one, which is what the load has to
+ * turn into a generic notice.
  */
 class BulkImporterFailingOnSecondVariant extends CreateProductVariant
 {
+    public function __construct(private readonly ?Throwable $failure = null) {}
+
     public int $calls = 0;
 
     public function __invoke(
@@ -291,12 +297,71 @@ class BulkImporterFailingOnSecondVariant extends CreateProductVariant
         $this->calls++;
 
         if ($this->calls === 2) {
-            throw new RuntimeException('Fallo simulado al crear la segunda variante');
+            throw $this->failure ?? new RuntimeException('Fallo simulado al crear la segunda variante');
         }
 
         return parent::__invoke($product, $sizeId, $color, $price, $stock, $user);
     }
 }
+
+test('an unexpected failure leaves a generic message, keeps the raw error out and writes the log', function () {
+    bulkFixture();
+    Log::spy();
+
+    $file = bulkFile([
+        bulkRow(['nombre' => 'Polo A', 'talla' => 'M', 'stock' => '4']),
+        bulkRow(['nombre' => 'Polo A', 'talla' => 'L', 'stock' => '2']),
+        bulkRow(['nombre' => 'Polo B', 'talla' => 'M']),
+    ]);
+
+    $importer = new BulkProductImporter(
+        new BulkProductImportValidator,
+        new CreateProduct,
+        new BulkImporterFailingOnSecondVariant(
+            new RuntimeException('SQLSTATE[23000]: Integrity constraint violation: 19 NOT NULL constraint failed: products.name (SQL: insert into "products" ("name") values (Polo A))'),
+        ),
+    );
+
+    $result = $importer->import($file);
+
+    expect(array_column($result['created'], 'name'))->toBe(['Polo B'])
+        ->and($result['rejected'])->toHaveCount(1)
+        ->and($result['rejected'][0]['name'])->toBe('Polo A')
+        ->and($result['rejected'][0]['errors'][0]['message'])
+        ->toBe('No se pudo crear este artículo por un error inesperado. Inténtalo de nuevo; si se repite, avisa al administrador del sistema.')
+        ->and($result['rejected'][0]['errors'][0]['message'])->not->toContain('SQLSTATE')
+        ->and($result['rejected'][0]['errors'][0]['message'])->not->toContain('insert into')
+        ->and(Product::query()->pluck('name')->all())->toBe(['Polo B']);
+
+    Log::shouldHaveReceived('error')->once();
+});
+
+test('an expected refusal keeps the message the action designed and is not written to the log', function () {
+    bulkFixture();
+    Log::spy();
+
+    $failure = InvalidStockAdjustmentException::negativeStock();
+
+    $file = bulkFile([
+        bulkRow(['nombre' => 'Polo A', 'talla' => 'M', 'stock' => '4']),
+        bulkRow(['nombre' => 'Polo A', 'talla' => 'L', 'stock' => '2']),
+    ]);
+
+    $importer = new BulkProductImporter(
+        new BulkProductImportValidator,
+        new CreateProduct,
+        new BulkImporterFailingOnSecondVariant($failure),
+    );
+
+    $result = $importer->import($file);
+
+    expect($result['created'])->toBe([])
+        ->and($result['rejected'][0]['name'])->toBe('Polo A')
+        ->and($result['rejected'][0]['errors'][0]['message'])->toBe($failure->getMessage())
+        ->and(Product::query()->count())->toBe(0);
+
+    Log::shouldNotHaveReceived('error');
+});
 
 /**
  * DuplicateImportedProductException y el validador tienen que decir lo mismo de un

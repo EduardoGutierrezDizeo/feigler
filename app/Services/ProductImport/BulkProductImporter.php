@@ -5,12 +5,26 @@ namespace App\Services\ProductImport;
 use App\Actions\Products\CreateProduct;
 use App\Actions\Products\CreateProductVariant;
 use App\Exceptions\DuplicateImportedProductException;
+use App\Exceptions\DuplicateProductVariantException;
+use App\Exceptions\InactiveProductMaterialException;
+use App\Exceptions\InactiveVariantColorException;
+use App\Exceptions\InactiveVariantSizeException;
+use App\Exceptions\IncompleteMaterialCompositionException;
+use App\Exceptions\InsufficientStockException;
+use App\Exceptions\InvalidMaterialPercentageException;
+use App\Exceptions\InvalidProductNameException;
+use App\Exceptions\InvalidProductStatusException;
+use App\Exceptions\InvalidStockAdjustmentException;
+use App\Exceptions\InvalidVariantSizeException;
+use App\Exceptions\MaterialNotFoundException;
+use App\Exceptions\RepeatedProductMaterialException;
 use App\Models\Category;
 use App\Models\Color;
 use App\Models\Product;
 use App\Models\User;
 use App\Support\Concerns\NormalizesNames;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Throwable;
 
 /**
@@ -60,6 +74,47 @@ final class BulkProductImporter
      * it is reported under a name that is not one of the file's columns.
      */
     public const CREATION_COLUMN = 'creacion';
+
+    /**
+     * The exceptions that already carry a message written for the admin.
+     *
+     * These are the refusals the actions and the catalog rules design: a size that
+     * belongs to another category, a color that was turned off, a composition that
+     * does not add up to a hundred. They are the same refusals the preview shows
+     * for a bad row, so their text can be handed straight to the report. Nothing
+     * else is trusted: a `QueryException`, a PDO error or a programming mistake has
+     * no message anyone can read, so it is replaced by the generic notice below and
+     * sent to the log instead.
+     *
+     * `AdjustProductVariantStock` is not called here, but its refusals are listed
+     * too: they belong to the same family of messages and would be expected if a
+     * later step ever moved stock through it.
+     *
+     * @var list<class-string<Throwable>>
+     */
+    private const EXPECTED_EXCEPTIONS = [
+        DuplicateImportedProductException::class,
+        InvalidProductNameException::class,
+        InvalidProductStatusException::class,
+        RepeatedProductMaterialException::class,
+        InvalidMaterialPercentageException::class,
+        MaterialNotFoundException::class,
+        InactiveProductMaterialException::class,
+        IncompleteMaterialCompositionException::class,
+        DuplicateProductVariantException::class,
+        InvalidVariantSizeException::class,
+        InactiveVariantSizeException::class,
+        InactiveVariantColorException::class,
+        InvalidStockAdjustmentException::class,
+        InsufficientStockException::class,
+    ];
+
+    /**
+     * What the admin is told when an article could not be written for a reason that
+     * was not the file's fault: the raw message could be full of SQL and driver text,
+     * so it never reaches the preview, the result or the report.
+     */
+    private const UNEXPECTED_MESSAGE = 'No se pudo crear este artículo por un error inesperado. Inténtalo de nuevo; si se repite, avisa al administrador del sistema.';
 
     public function __construct(
         private readonly BulkProductImportValidator $validator = new BulkProductImportValidator,
@@ -134,9 +189,14 @@ final class BulkProductImporter
         $category = Category::query()->findOrFail($article['category_id']);
 
         $product = DB::transaction(function () use ($article, $category, $user): Product {
-            // El validador ya lo comprobó, pero la base pudo cambiar entre la vista
-            // previa y esta confirmación: se vuelve a preguntar aquí dentro, con la
-            // transacción abierta, que es la ventana en la que se escribe.
+            // El bloqueo de la categoría va primero, antes de cualquier lectura: es
+            // el turno que hace que dos cargas de la misma categoría no se miren a la
+            // vez, así que la comprobación de nombre de aquí abajo lee lo que la
+            // anterior dejó escrito y no deja pasar dos prendas con el mismo nombre.
+            // `nextReferenceFor` vuelve a tomar este mismo bloqueo dentro de la
+            // transacción sin problema.
+            $category->newQuery()->lockForUpdate()->findOrFail($category->getKey());
+
             $this->guardNameIsFree($category, $article['name']);
 
             $product = ($this->createProduct)($category, [
@@ -213,8 +273,12 @@ final class BulkProductImporter
      * uses for the ones it refused.
      *
      * The rows are the ones the article was written with, so a report can point the
-     * admin at the part of the file the refusal is about, and the reason is the
-     * message of whatever stopped it — the word of the action or of the database.
+     * admin at the part of the file the refusal is about. The reason is the message of
+     * the action when it is one of the refusals of the panel, and the generic notice
+     * when it is not: a message from the database names the SQL and the driver, which
+     * is nothing an admin can act on. That unexpected failure still has to be
+     * understood later, so its full detail goes to the log with the article and its
+     * rows, and never reaches the preview.
      *
      * @param  array{row: int, name: string, variants: list<array{row: int}>}  $article
      * @return array{name: string, rows: list<int>, errors: list<array{row: int, column: string, message: string}>}
@@ -222,16 +286,41 @@ final class BulkProductImporter
     private function creationRejection(array $article, Throwable $exception): array
     {
         $rows = array_map(fn (array $variant): int => $variant['row'], $article['variants']);
+        $rows = $rows === [] ? [$article['row']] : $rows;
+
+        $expected = $this->isExpectedRefusal($exception);
+
+        if (! $expected) {
+            Log::error('No se pudo crear un artículo de la carga masiva por un error inesperado.', [
+                'article' => $article['name'],
+                'rows' => $rows,
+                'exception' => $exception,
+            ]);
+        }
 
         return [
             'name' => $article['name'],
-            'rows' => $rows === [] ? [$article['row']] : $rows,
+            'rows' => $rows,
             'errors' => [[
                 'row' => $article['row'],
                 'column' => self::CREATION_COLUMN,
-                'message' => $exception->getMessage(),
+                'message' => $expected ? $exception->getMessage() : self::UNEXPECTED_MESSAGE,
             ]],
         ];
+    }
+
+    /**
+     * Whether an exception is one of the refusals the panel already knows how to word.
+     */
+    private function isExpectedRefusal(Throwable $exception): bool
+    {
+        foreach (self::EXPECTED_EXCEPTIONS as $expected) {
+            if ($exception instanceof $expected) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
