@@ -12,3 +12,8 @@ Artisan::command('inspire', function () {
 // servidor (o `php artisan schedule:work` en local), la política de cuánto se
 // conserva vive en el propio comando con sus edades por defecto.
 Schedule::command('carts:prune')->daily();
+
+// Y los archivos temporales de la carga masiva que nadie llegó a confirmar: la
+// copia privada se guarda al revisar y se borra al confirmar o cancelar, así que
+// lo que quede a estas horas es lo que quedó a medias.
+Schedule::command('bulk-imports:prune')->daily();

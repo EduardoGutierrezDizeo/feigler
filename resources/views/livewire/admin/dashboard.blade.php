@@ -19,6 +19,7 @@
             ['admin.home-page.index', 'home-page', 'Vista principal', 'Portada, destacados y categorías de la tienda.'],
             ['admin.product-details.index', 'product-details', 'Detalles de productos', 'Categorías, tallas, colores y materiales.'],
             ['admin.products.index', 'products', 'Productos', 'Prendas, variantes e imágenes del catálogo.'],
+            ['admin.bulk-upload', 'bulk-upload', 'Carga masiva', 'Crea artículos desde un archivo CSV o Excel.'],
             ['admin.users.index', 'users', 'Usuarios', 'Gestiona las cuentas internas del personal.'],
         ];
     @endphp

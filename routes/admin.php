@@ -1,5 +1,6 @@
 <?php
 
+use App\Livewire\Admin\BulkUpload;
 use App\Livewire\Admin\Dashboard;
 use App\Livewire\Admin\HomePage;
 use App\Livewire\Admin\ProductDetails;
@@ -12,6 +13,7 @@ Route::middleware(['auth', 'role:admin'])->group(function () {
     Route::livewire('/admin/home-page', HomePage\Index::class)->name('admin.home-page.index');
     Route::livewire('/admin/product-details', ProductDetails\Index::class)->name('admin.product-details.index');
     Route::livewire('/admin/products', Products\Index::class)->name('admin.products.index');
+    Route::livewire('/admin/bulk-upload', BulkUpload::class)->name('admin.bulk-upload');
     Route::livewire('/admin/users', Users\Index::class)->name('admin.users.index');
 
     // La dirección anterior se conserva como puerta de entrada, no como panel: el
