@@ -84,6 +84,17 @@ final class BulkProductImportValidator
     private const ARTICLE_COLUMNS = ['marca', 'materiales'];
 
     /**
+     * The one example of a composition the two hints share, so neither can drift
+     * away from what the parser accepts.
+     *
+     * The parser reads the elements of a composition as the name first and the
+     * percentage last — `ProductDetailsCatalog::splitShare` takes the final word of
+     * an element as its share — so this is the order the example writes, and the
+     * order every hint has to teach.
+     */
+    private const MATERIAL_EXAMPLE = '«Algodón 80% | Poliéster 20%»';
+
+    /**
      * What a composition that was written with commas is told to write instead.
      *
      * The materials of a garment are separated by `|` or `/`, and never by a comma:
@@ -92,7 +103,17 @@ final class BulkProductImportValidator
      * this names the separator that was meant, and only reaches a cell that wrote a
      * comma at all.
      */
-    private const COMMA_HINT = 'Separa los materiales con | o / (ejemplo: «80% Algodón | 20% Poliéster»).';
+    private const COMMA_HINT = 'Separa los materiales con | o / (ejemplo: '.self::MATERIAL_EXAMPLE.').';
+
+    /**
+     * What a composition that wrote the percentage before the name is told instead.
+     *
+     * The parser takes the last word of an element as the share and the words before
+     * it as the material, so `Algodón 80%` is a material with a share and `80%
+     * Algodón` is read as a material named `80` and refused. This names the order
+     * that was meant, with the same example the comma hint teaches.
+     */
+    private const ORDER_HINT = 'Escribe primero el nombre y después el porcentaje (ejemplo: '.self::MATERIAL_EXAMPLE.').';
 
     /**
      * Read a file into the articles that are ready to be saved and the ones that are not.
@@ -475,12 +496,14 @@ final class BulkProductImportValidator
     }
 
     /**
-     * One error of the composition column, with the hint a comma deserves.
+     * One error of the composition column, with the hint the text deserves.
      *
-     * A cell that holds a comma was written with the separator a Spanish CSV uses
-     * to close a field and not the one a composition uses between its materials, so
-     * the refusal is told to write them with `|` or `/` when, and only when, a comma
-     * is what the cell held.
+     * A cell that holds a comma was written with the separator a Spanish CSV uses to
+     * close a field and not the one a composition uses between its materials, so it is
+     * told to write them with `|` or `/`. A cell that wrote the percentage first is
+     * telling the truth about a composition and in the wrong order, so it is told the
+     * order the parser reads. Both hints carry the same example, so whichever one a
+     * person gets, the example they copy is one the parser accepts.
      *
      * @param  list<array{row: int, column: string, message: string}>  $errors
      */
@@ -488,9 +511,35 @@ final class BulkProductImportValidator
     {
         if (str_contains($text, ',')) {
             $message .= ' '.self::COMMA_HINT;
+        } elseif ($this->looksPercentageFirst($text)) {
+            $message .= ' '.self::ORDER_HINT;
         }
 
         $errors[] = $this->error($row, 'materiales', $message);
+    }
+
+    /**
+     * Whether an element of the composition wrote its percentage before its material.
+     *
+     * The parser reads the last word of an element as the share, so an element with
+     * more than one word whose first word is a number is exactly the order that gets
+     * read backwards and refused as a material named after the number. A material
+     * whose own name starts with a number would be read the same way, which is why
+     * the parser cannot accept it either.
+     */
+    private function looksPercentageFirst(string $text): bool
+    {
+        $elements = preg_split('/\s*[|\/]\s*/u', str_replace('%', '', $text)) ?: [];
+
+        foreach ($elements as $element) {
+            $words = preg_split('/\s+/u', $this->cleanName($element)) ?: [];
+
+            if (count($words) > 1 && preg_match('/^\d+(?:[.,]\d+)?$/', $words[0]) === 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

@@ -124,6 +124,14 @@ test('the panel links to the bulk load and the module names itself', function ()
         ->assertSee(route('admin.bulk-upload'), false);
 });
 
+test('the upload step teaches the composition format the parser accepts', function () {
+    $this->seed(RoleSeeder::class);
+
+    $this->actingAs(adminForPanel())->get(route('admin.bulk-upload'))
+        ->assertOk()
+        ->assertSee('Algodón 80% | Poliéster 20%');
+});
+
 test('a file that is neither csv nor xlsx is refused before anything is stored', function () {
     $this->seed(RoleSeeder::class);
     Storage::fake('local');

@@ -96,6 +96,11 @@
                 <span wire:loading wire:target="downloadTemplate" class="text-sm text-gris-calido">Preparando la plantilla…</span>
             </div>
 
+            <p class="mt-2 text-xs text-gris-calido">
+                En la columna «materiales», separa cada material con | o / y escribe primero el nombre y después
+                el porcentaje (ejemplo: Algodón 80% | Poliéster 20%); no uses comas para separarlos.
+            </p>
+
             @if ($file)
                 <p class="mt-3 text-sm text-tinta">
                     Archivo seleccionado:

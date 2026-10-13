@@ -18,6 +18,7 @@ use App\Models\Color;
 use App\Models\Material;
 use App\Models\Product;
 use App\Models\Size;
+use App\Services\ProductImport\BulkProductImporter;
 use App\Services\ProductImport\BulkProductImportValidator;
 use Illuminate\Support\Facades\DB;
 use OpenSpout\Common\Entity\Row;
@@ -602,7 +603,7 @@ test('a composition written with commas is refused and told to write it with | o
         'row' => 2,
         'column' => 'materiales',
         'message' => UnknownMaterialException::forMaterial('Algodón 80, Poliéster')->getMessage()
-            .' Separa los materiales con | o / (ejemplo: «80% Algodón | 20% Poliéster»).',
+            .' Separa los materiales con | o / (ejemplo: «Algodón 80% | Poliéster 20%»).',
     ]);
 });
 
@@ -619,8 +620,47 @@ test('a composition whose shares are decimals written with a comma is refused, w
         'row' => 2,
         'column' => 'materiales',
         'message' => InvalidMaterialPercentageException::forPercentage($catalog['material'], '62,5')->getMessage()
-            .' Separa los materiales con | o / (ejemplo: «80% Algodón | 20% Poliéster»).',
+            .' Separa los materiales con | o / (ejemplo: «Algodón 80% | Poliéster 20%»).',
     ]);
+});
+
+test('a composition that wrote the percentage first is told the order the parser reads', function () {
+    importCatalog();
+    Material::factory()->create(['name' => 'Poliéster']);
+    $file = importFile('csv', csvFrom(importHeaders(), [importRow(['materiales' => '80% Algodón | 20% Poliéster'])]));
+
+    $preview = (new BulkProductImportValidator)->validate($file);
+
+    expect($preview['rejected'][0]['errors'][0])->toBe([
+        'row' => 2,
+        'column' => 'materiales',
+        'message' => UnknownMaterialException::forMaterial('80')->getMessage()
+            .' Escribe primero el nombre y después el porcentaje (ejemplo: «Algodón 80% | Poliéster 20%»).',
+    ]);
+});
+
+test('the example the comma hint teaches is a composition a real load accepts', function () {
+    importCatalog();
+    Material::factory()->create(['name' => 'Poliéster']);
+    $csv = implode(',', importHeaders())."\n"
+        .'hombre,Polos,Polo básico,85000,"Algodón 80%, Poliéster 20%",M,Rojo,5'."\n";
+    $file = importFile('csv', $csv);
+
+    $preview = (new BulkProductImportValidator)->validate($file);
+
+    $message = $preview['rejected'][0]['errors'][0]['message'];
+
+    expect($message)->toContain('«Algodón 80% | Poliéster 20%»');
+
+    preg_match('/ejemplo: «(.+?)»/u', $message, $matches);
+    $example = $matches[1];
+
+    $load = importFile('csv', csvFrom(importHeaders(), [importRow(['materiales' => $example])]));
+    $imported = (new BulkProductImporter)->import($load);
+
+    expect($imported['rejected'])->toBe([])
+        ->and($imported['totals']['created_articles'])->toBe(1)
+        ->and($imported['totals']['created_variants'])->toBe(1);
 });
 
 test('a name a product of the same category already uses is refused even when that product is turned off', function () {
