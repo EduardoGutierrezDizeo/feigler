@@ -88,6 +88,14 @@
                 Formatos admitidos: CSV y Excel (.xlsx). Hasta {{ $maxSizeLabel }} y 2.000 filas por archivo.
             </p>
 
+            <div class="mt-4 flex flex-wrap items-center gap-3">
+                <x-secondary-button type="button" wire:click="downloadTemplate" wire:loading.attr="disabled" wire:target="downloadTemplate">
+                    Descargar plantilla
+                </x-secondary-button>
+
+                <span wire:loading wire:target="downloadTemplate" class="text-sm text-gris-calido">Preparando la plantilla…</span>
+            </div>
+
             @if ($file)
                 <p class="mt-3 text-sm text-tinta">
                     Archivo seleccionado:
@@ -146,6 +154,16 @@
         @if ($totals['ready_articles'] === 0)
             <div class="mt-6 rounded-2xl border border-ladrillo/40 bg-ladrillo/5 px-5 py-4 text-sm text-tinta">
                 Ningún artículo del archivo se puede crear. Corrige los motivos de abajo y vuelve a subirlo.
+            </div>
+        @endif
+
+        @if ($totals['rejected_articles'] > 0)
+            <div class="mt-6 flex flex-wrap items-center gap-3">
+                <x-secondary-button type="button" wire:click="downloadErrorReport" wire:loading.attr="disabled" wire:target="downloadErrorReport">
+                    Descargar reporte de errores (CSV)
+                </x-secondary-button>
+
+                <span wire:loading wire:target="downloadErrorReport" class="text-sm text-gris-calido">Preparando el reporte…</span>
             </div>
         @endif
 
@@ -280,6 +298,16 @@
                 actívalos desde
                 <a href="{{ route('admin.products.index') }}" class="font-medium text-verde underline decoration-laton/60 underline-offset-2 hover:text-verde-hondo">Productos</a>
                 cuando estén listos para el escaparate.
+            </div>
+        @endif
+
+        @if ($reportPath !== null)
+            <div class="mt-6 flex flex-wrap items-center gap-3">
+                <x-secondary-button type="button" wire:click="downloadErrorReport" wire:loading.attr="disabled" wire:target="downloadErrorReport">
+                    Descargar reporte de errores (CSV)
+                </x-secondary-button>
+
+                <span wire:loading wire:target="downloadErrorReport" class="text-sm text-gris-calido">Preparando el reporte…</span>
             </div>
         @endif
 

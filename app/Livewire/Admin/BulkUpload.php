@@ -12,6 +12,8 @@ use App\Livewire\Concerns\Notifies;
 use App\Livewire\Concerns\RequiresAdmin;
 use App\Models\User;
 use App\Services\ProductImport\BulkImportFileStore;
+use App\Services\ProductImport\BulkImportReport;
+use App\Services\ProductImport\BulkImportTemplate;
 use App\Services\ProductImport\BulkProductImporter;
 use App\Services\ProductImport\BulkProductImportValidator;
 use Illuminate\Support\Facades\Cache;
@@ -22,6 +24,7 @@ use Livewire\Attributes\Title;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use OpenSpout\Common\Exception\OpenSpoutException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * The bulk load of products, in the three steps the panel says it in: choose a file,
@@ -222,6 +225,8 @@ class BulkUpload extends Component
 
         $store = new BulkImportFileStore;
 
+        $this->forgetReport($store);
+
         $this->originalName = $this->file->getClientOriginalName();
         $this->storedPath = $store->store($this->file);
         $this->file = null;
@@ -271,7 +276,7 @@ class BulkUpload extends Component
             $store = new BulkImportFileStore;
 
             $result = $this->read(
-                fn (): array => (new BulkProductImporter)->import($store->absolutePath($this->storedPath), $this->user()),
+                fn (): array => app(BulkProductImporter::class)->import($store->absolutePath($this->storedPath), $this->user()),
             );
 
             if ($result === null) {
@@ -316,6 +321,78 @@ class BulkUpload extends Component
         return $this->step === self::STEP_PREVIEW
             && $this->storedPath !== null
             && ($this->preview['totals']['ready_articles'] ?? 0) > 0;
+    }
+
+    /**
+     * Send the spreadsheet the admin fills in, built from the live catalog.
+     *
+     * It is an action of the component and not a public file, so every download
+     * passes through `RequiresAdmin` like the rest of the screen: there is no URL an
+     * anonymous visitor could guess. The bytes are built on the spot and streamed, so
+     * nothing is written to a public folder.
+     */
+    public function downloadTemplate(): StreamedResponse
+    {
+        $contents = (new BulkImportTemplate)->xlsxContents();
+
+        return response()->streamDownload(
+            fn () => print $contents,
+            BulkImportTemplate::FILENAME,
+            ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+        );
+    }
+
+    /**
+     * Send the whole list of refusals as CSV, not only the slice the screen shows.
+     *
+     * The list is read from wherever the step keeps it: the report file once the load
+     * ran, or the file itself re-read while the preview is on screen, because the
+     * preview holds only the first hundred refusals. Nothing to report is said with a
+     * toast; the download still goes out with its header so the button never breaks.
+     */
+    public function downloadErrorReport(): StreamedResponse
+    {
+        $rejected = $this->reportableRejections();
+
+        if ($rejected === []) {
+            $this->notifyError('No hay errores que descargar.');
+        }
+
+        return response()->streamDownload(
+            fn () => print (new BulkImportReport)->csv($rejected ?? []),
+            BulkImportReport::FILENAME,
+            ['Content-Type' => 'text/csv; charset=UTF-8'],
+        );
+    }
+
+    /**
+     * The refusals a download should carry, read from the step that owns them.
+     *
+     * The result step keeps the full list in its report file and only its path in the
+     * state; the preview step keeps only the first slice, so the file is read again to
+     * get them all. A path that no longer names a file of the private folder is left
+     * to `read()`, which turns it into the same toast a tampered upload gets and
+     * answers `null`, so the empty report is not mistaken for one with nothing to say.
+     *
+     * @return list<array<string, mixed>>|null
+     */
+    private function reportableRejections(): ?array
+    {
+        $store = new BulkImportFileStore;
+
+        if ($this->step === self::STEP_RESULT && $this->reportPath !== null) {
+            return $this->read(fn (): array => $store->readReport($this->reportPath));
+        }
+
+        if ($this->step === self::STEP_PREVIEW && $this->storedPath !== null) {
+            $preview = $this->read(
+                fn (): array => (new BulkProductImportValidator)->validate($store->absolutePath($this->storedPath)),
+            );
+
+            return $preview['rejected'] ?? null;
+        }
+
+        return [];
     }
 
     public function render()
