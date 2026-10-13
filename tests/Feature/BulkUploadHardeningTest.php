@@ -299,6 +299,54 @@ test('a load that is already running writes nothing and says so', function () {
     expect(Product::query()->count())->toBe(0);
 });
 
+test('a load that finished releases its lock', function () {
+    $this->seed(RoleSeeder::class);
+    Storage::fake('local');
+
+    hardeningCatalog();
+
+    $admin = adminForPanel();
+
+    hardeningPanel($admin)
+        ->set('file', hardeningFile([hardeningLine()]))
+        ->call('review')
+        ->call('confirm')
+        ->assertSet('step', BulkUpload::STEP_RESULT);
+
+    $free = Cache::lock('bulk-import:'.$admin->getKey(), 1);
+
+    expect($free->get())->toBeTrue();
+
+    $free->release();
+});
+
+test('a load that fails releases its lock', function () {
+    $this->seed(RoleSeeder::class);
+    Storage::fake('local');
+
+    hardeningCatalog();
+
+    $admin = adminForPanel();
+
+    $panel = hardeningPanel($admin)
+        ->set('file', hardeningFile([hardeningLine()]))
+        ->call('review');
+
+    // El archivo revisado desaparece de la carpeta: confirmar falla al resolverlo y
+    // la pantalla vuelve al primer paso, pero el bloqueo no puede quedarse tomado.
+    Storage::disk('local')->delete($panel->get('storedPath'));
+
+    $panel->call('confirm')
+        ->assertSet('noticeType', 'error')
+        ->assertSet('step', BulkUpload::STEP_UPLOAD);
+
+    $free = Cache::lock('bulk-import:'.$admin->getKey(), 1);
+
+    expect($free->get())->toBeTrue();
+
+    $free->release();
+});
+
 test('the whole flow still runs end to end', function () {
     $this->seed(RoleSeeder::class);
     Storage::fake('local');

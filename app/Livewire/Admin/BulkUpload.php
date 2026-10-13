@@ -97,7 +97,7 @@ class BulkUpload extends Component
      * the seconds are a safety net for a process that dies mid-load, not the expected
      * duration.
      */
-    private const CONFIRM_LOCK_SECONDS = 30;
+    private const CONFIRM_LOCK_SECONDS = 120;
 
     /**
      * The name of the per-admin lock. The user is in it so two admins loading at the
@@ -163,6 +163,7 @@ class BulkUpload extends Component
      *
      * @var array{
      *     totals?: array{ready_articles: int, ready_variants: int, rejected_articles: int, rejected_rows: int},
+     *     warnings?: list<array{section_label: string, category: string, articles: int}>,
      *     ready?: list<array<string, mixed>>,
      *     rejected?: list<array<string, mixed>>
      * }
@@ -241,6 +242,7 @@ class BulkUpload extends Component
 
         $this->preview = [
             'totals' => $preview['totals'],
+            'warnings' => $preview['warnings'],
             'ready' => array_slice($preview['ready'], 0, self::READY_PREVIEW_LIMIT),
             'rejected' => array_slice($preview['rejected'], 0, self::REJECTED_PREVIEW_LIMIT),
         ];
@@ -400,6 +402,7 @@ class BulkUpload extends Component
         return view('livewire.admin.bulk-upload', [
             'canConfirm' => $this->canConfirm(),
             'maxSizeLabel' => $this->readableMaxSize(),
+            'maxRowsLabel' => $this->readableMaxRows(),
         ]);
     }
 
@@ -569,6 +572,20 @@ class BulkUpload extends Component
     private function readableMaxSize(): string
     {
         return number_format($this->maxFileSizeInKilobytes() / 1024, 0, ',', '.').' MB';
+    }
+
+    private function maxRows(): int
+    {
+        return max(1, (int) config('bulk_import.max_rows', 1000));
+    }
+
+    /**
+     * The maximum number of rows as the screen writes it, with the thousands
+     * separator the rest of the screen uses.
+     */
+    private function readableMaxRows(): string
+    {
+        return number_format($this->maxRows(), 0, ',', '.');
     }
 
     /**

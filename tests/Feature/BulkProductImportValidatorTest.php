@@ -480,6 +480,50 @@ test('a file with more rows than allowed is refused', function () {
         ->toThrow(ImportRowLimitExceededException::class);
 });
 
+test('un artículo válido de una categoría desactivada queda listo y genera un aviso', function () {
+    $catalog = importCatalog();
+    $catalog['category']->update(['is_active' => false]);
+
+    $preview = (new BulkProductImportValidator)->validate(
+        importFile('csv', csvFrom(importHeaders(), [importRow()])),
+    );
+
+    expect($preview['totals']['ready_articles'])->toBe(1)
+        ->and($preview['totals']['rejected_articles'])->toBe(0)
+        ->and($preview['warnings'])->toBe([[
+            'section_label' => 'Hombre',
+            'category' => 'Polos',
+            'articles' => 1,
+        ]]);
+});
+
+test('los artículos de una misma categoría desactivada se avisan una sola vez', function () {
+    $catalog = importCatalog();
+    $catalog['category']->update(['is_active' => false]);
+
+    $preview = (new BulkProductImportValidator)->validate(importFile('csv', csvFrom(importHeaders(), [
+        importRow(['nombre' => 'Polo uno']),
+        importRow(['nombre' => 'Polo dos', 'talla' => 'L']),
+    ])));
+
+    expect($preview['warnings'])->toBe([[
+        'section_label' => 'Hombre',
+        'category' => 'Polos',
+        'articles' => 2,
+    ]]);
+});
+
+test('un artículo de una categoría activa no genera ningún aviso', function () {
+    importCatalog();
+
+    $preview = (new BulkProductImportValidator)->validate(
+        importFile('csv', csvFrom(importHeaders(), [importRow()])),
+    );
+
+    expect($preview['totals']['ready_articles'])->toBe(1)
+        ->and($preview['warnings'])->toBe([]);
+});
+
 test('a CSV that a Spanish Excel would export, semicolons and Windows-1252, is read', function () {
     $catalog = importCatalog();
     $csv = csvFrom(importHeaders(), [importRow(['nombre' => 'Polo básico'])], ';');

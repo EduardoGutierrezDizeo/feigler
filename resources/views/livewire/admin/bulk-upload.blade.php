@@ -85,7 +85,7 @@
             <x-input-error :messages="$errors->get('file')" class="mt-2" />
 
             <p id="bulk-upload-help" class="mt-3 text-xs text-gris-calido">
-                Formatos admitidos: CSV y Excel (.xlsx). Hasta {{ $maxSizeLabel }} y 2.000 filas por archivo.
+                Formatos admitidos: CSV y Excel (.xlsx). Hasta {{ $maxSizeLabel }} y {{ $maxRowsLabel }} filas por archivo.
             </p>
 
             <div class="mt-4 flex flex-wrap items-center gap-3">
@@ -122,6 +122,7 @@
             $totals = $preview['totals'];
             $ready = $preview['ready'];
             $rejected = $preview['rejected'];
+            $warnings = $preview['warnings'] ?? [];
         @endphp
 
         <div class="mt-6 rounded-2xl border border-laton/40 bg-hueso/60 px-5 py-4 text-sm text-tinta">
@@ -135,6 +136,29 @@
                 Archivo: <span class="font-medium text-tinta">{{ $originalName }}</span>
             </p>
         </div>
+
+        {{-- Aviso, no un rechazo: el artículo se crea igual, pero nace en una
+             categoría desactivada y por eso no se verá en la tienda hasta que se
+             vuelva a activar. Se agrupa por categoría para no listar cada artículo. --}}
+        @if (! empty($warnings))
+            <div class="mt-6 rounded-2xl border border-laton/50 bg-laton/10 px-5 py-4 text-sm text-tinta">
+                <p class="font-medium">Algunos artículos son de categorías desactivadas.</p>
+                <p class="mt-1">
+                    Se crearán igual, pero no se verán en la tienda hasta que actives estas categorías desde
+                    <a href="{{ route('admin.product-details.index', ['tab' => 'categorias']) }}" class="font-medium text-verde underline decoration-laton/60 underline-offset-2 hover:text-verde-hondo">Categorías</a>:
+                </p>
+
+                <ul class="mt-2 space-y-1">
+                    @foreach ($warnings as $warning)
+                        <li>
+                            <span class="font-medium">{{ $warning['category'] }}</span>
+                            <span class="text-gris-calido">({{ $warning['section_label'] }})</span>
+                            · {{ $warning['articles'] }} {{ $warning['articles'] === 1 ? 'artículo' : 'artículos' }}
+                        </li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
 
         <div class="mt-6 grid gap-4 sm:grid-cols-3">
             <div class="tarjeta p-5">

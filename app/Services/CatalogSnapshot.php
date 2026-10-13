@@ -148,6 +148,24 @@ final class CatalogSnapshot
     }
 
     /**
+     * A category by its id, if the store has it.
+     *
+     * The bulk load needs this after it has already resolved an article: the
+     * article kept its category id, and telling whether that category is on
+     * requires reading it back without another query.
+     */
+    public function categoryById(int $id): ?Category
+    {
+        foreach ($this->categories as $category) {
+            if ((int) $category->getKey() === $id) {
+                return $category;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Whether a name is already used by a product of this category.
      */
     public function productNameExists(int $categoryId, string $writtenName): bool

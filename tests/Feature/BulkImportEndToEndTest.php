@@ -435,12 +435,62 @@ test('la carga pasa por la pantalla de principio a fin y no deja el archivo temp
         ->and(Product::query()->where('name', 'Camisa E2E')->sole()->variants()->count())->toBe(3);
 });
 
-test('un archivo de más de dos mil filas se rechaza sin leer la fila que sobra', function () {
+test('la vista previa avisa cuando un artículo es de una categoría desactivada', function () {
+    $this->seed(RoleSeeder::class);
+    Storage::fake('local');
     e2eCatalog();
 
+    Livewire::actingAs(adminForPanel())->test(BulkUpload::class)
+        ->set('file', UploadedFile::fake()->createWithContent('carga.csv', e2eCsvContent(e2eRows())))
+        ->call('review')
+        ->assertHasNoErrors()
+        ->assertSet('preview.warnings', [[
+            'section_label' => 'Hombre',
+            'category' => 'Apagadas',
+            'articles' => 1,
+        ]])
+        ->assertSee('Algunos artículos son de categorías desactivadas')
+        ->assertSee('Apagadas');
+});
+
+test('la vista previa no avisa cuando todas las categorías están activas', function () {
+    $this->seed(RoleSeeder::class);
+    Storage::fake('local');
+    e2eCatalog();
+
+    $rows = [e2eLine('Hombre', 'Camisas', 'Camisa Activa', '', '50000', 'Algodón 100%', 'M', 'Negro', '1')];
+
+    Livewire::actingAs(adminForPanel())->test(BulkUpload::class)
+        ->set('file', UploadedFile::fake()->createWithContent('carga.csv', e2eCsvContent($rows)))
+        ->call('review')
+        ->assertHasNoErrors()
+        ->assertSet('preview.warnings', [])
+        ->assertDontSee('Algunos artículos son de categorías desactivadas');
+});
+
+test('un archivo de tantas filas como el máximo se acepta', function () {
+    e2eCatalog();
+
+    $maxRows = (int) config('bulk_import.max_rows');
     $rows = [];
 
-    for ($n = 1; $n <= 2001; $n++) {
+    for ($n = 1; $n <= $maxRows; $n++) {
+        $rows[] = e2eLine('Hombre', 'Camisas', 'Relleno '.$n, '', '1000', 'Algodón 100%', 'S', 'Negro', '1');
+    }
+
+    $preview = (new BulkProductImportValidator)->validate(e2eCsvFile($rows));
+
+    expect($preview['totals']['ready_articles'])->toBe($maxRows)
+        ->and($preview['totals']['rejected_articles'])->toBe(0);
+});
+
+test('un archivo con más filas que el máximo se rechaza sin leer la fila que sobra', function () {
+    e2eCatalog();
+
+    $maxRows = (int) config('bulk_import.max_rows');
+    $rows = [];
+
+    for ($n = 1; $n <= $maxRows + 1; $n++) {
         $rows[] = e2eLine('Hombre', 'Camisas', 'Relleno '.$n, '', '1000', 'Algodón 100%', 'S', 'Negro', '1');
     }
 

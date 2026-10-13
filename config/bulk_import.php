@@ -16,7 +16,10 @@ return [
     // 2 MB: el mismo tope que `upload_max_filesize` del servidor.
     'max_file_size_kb' => 2048,
 
-    'max_rows' => 2000,
+    // 1.000 filas de datos. Confirmar esa cantidad tarda alrededor de once
+    // segundos, así que entra con margen en el `max_execution_time` de 30 s del
+    // servidor web; un archivo más largo se pide dividido en varios.
+    'max_rows' => 1000,
 
     /*
     |--------------------------------------------------------------------------

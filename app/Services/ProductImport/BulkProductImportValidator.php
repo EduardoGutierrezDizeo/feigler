@@ -136,6 +136,7 @@ final class BulkProductImportValidator
      *         rows: list<int>,
      *         errors: list<array{row: int, column: string, message: string}>
      *     }>,
+     *     warnings: list<array{section_label: string, category: string, articles: int}>,
      *     totals: array{ready_articles: int, ready_variants: int, rejected_articles: int, rejected_rows: int}
      * }
      */
@@ -171,8 +172,46 @@ final class BulkProductImportValidator
         return [
             'ready' => $ready,
             'rejected' => $rejected,
+            'warnings' => $this->categoryWarnings($ready, $snapshot),
             'totals' => $this->totals($ready, $rejected),
         ];
+    }
+
+    /**
+     * The categories the ready articles use that the store has turned off.
+     *
+     * A file is read against the whole catalog, deactivated categories included,
+     * the same way the panel's form offers them, so the article is still created.
+     * What this warns about is that it will be written into a category whose
+     * articles the storefront does not show, and stays hidden until the category
+     * is turned back on. One entry per category and not per article, so a warning
+     * about a long file stays as small as a warning about a short one.
+     *
+     * @param  list<array<string, mixed>>  $ready
+     * @return list<array{section_label: string, category: string, articles: int}>
+     */
+    private function categoryWarnings(array $ready, CatalogSnapshot $snapshot): array
+    {
+        $warnings = [];
+
+        foreach ($ready as $article) {
+            $categoryId = (int) $article['category_id'];
+            $category = $snapshot->categoryById($categoryId);
+
+            if (! $category instanceof Category || $category->is_active) {
+                continue;
+            }
+
+            $warnings[$categoryId] ??= [
+                'section_label' => $article['section_label'],
+                'category' => $article['category'],
+                'articles' => 0,
+            ];
+
+            $warnings[$categoryId]['articles']++;
+        }
+
+        return array_values($warnings);
     }
 
     /**
@@ -757,7 +796,7 @@ final class BulkProductImportValidator
 
     private function maxRows(): int
     {
-        return max(1, (int) config('bulk_import.max_rows', 2000));
+        return max(1, (int) config('bulk_import.max_rows', 1000));
     }
 
     /**
