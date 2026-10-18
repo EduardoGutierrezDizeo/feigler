@@ -469,6 +469,28 @@ test('a filter leaves out what only a garment that is turned off carries', funct
 });
 
 /**
+ * Turning a category off hides its garments from the whole store, not only from the
+ * listing of a section, so a filter asked without a section must leave out an option
+ * that only those garments carry.
+ */
+test('a filter leaves out what only a garment of a turned off category carries', function () {
+    $apagada = Category::factory()->inactive()->create(['sku_prefix' => 'PN', 'name' => 'Pantalones']);
+
+    $size = Size::factory()->for($apagada)->create(['name' => 'L']);
+    $color = Color::factory()->create(['name' => 'Azul']);
+    $material = Material::factory()->create(['name' => 'Lino']);
+
+    $producto = garmentWith($apagada, $size, $color);
+    $producto->materials()->attach($material, ['percentage' => 100]);
+
+    $catalog = new ProductDetailsCatalog;
+
+    expect($catalog->sizeNamesForFilter())->toHaveCount(0)
+        ->and($catalog->colorsForFilter())->toHaveCount(0)
+        ->and($catalog->materialsForFilter())->toHaveCount(0);
+});
+
+/**
  * A garment that has run out is still in the catalog: hiding its sizes because there are
  * no units left would tell the shopper the store has stopped selling them.
  */

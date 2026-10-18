@@ -66,9 +66,13 @@
                 {{-- Apagar una categoría esconde de la tienda todos sus productos, así
                      que el interruptor pide confirmación cuando hay alguno. El aviso
                      solo se arma con productos (el interruptor lo ignora al reactivar)
-                     y cuenta todos, activos o no, porque todos dejan de verse. --}}
+                     y cuenta todos, activos o no, porque todos dejan de verse. El
+                     sujeto va en singular o plural según cuántos sean. --}}
+                @php($productsToHide = $category->products_count === 1
+                    ? 'su producto dejará'
+                    : 'sus '.$category->products_count.' productos dejarán')
                 @php($deactivateConfirmMessage = $category->products_count > 0
-                    ? 'Al desactivar «'.$category->name.'», sus '.$category->products_count.' productos dejarán de verse en la tienda (listados, fichas y carritos) hasta que la actives de nuevo. ¿Continuar?'
+                    ? 'Al desactivar «'.$category->name.'», '.$productsToHide.' de verse en la tienda (listados, fichas y carritos) hasta que la actives de nuevo. ¿Continuar?'
                     : null)
 
                 <div

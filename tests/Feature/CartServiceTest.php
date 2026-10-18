@@ -337,6 +337,55 @@ test('una línea que se quedó sin variante activa o sin producto visible queda 
         ->and($resumen['subtotal'])->toBe(0);
 });
 
+/**
+ * Apagar la categoría de una prenda la esconde de toda la tienda, así que la línea
+ * del carrito deja de poder comprarse igual que si se apagara la variante o el
+ * producto. Reactivar la categoría la vuelve a poner disponible.
+ */
+test('una categoría apagada deja la línea no disponible y el reactivarla la recupera', function () {
+    $catalogo = carritoCatalogo();
+    $producto = carritoProducto($catalogo, stock: 5, product: ['base_price' => 100000]);
+
+    $servicio = carritoDe();
+    $servicio->add($producto->variants()->first(), 2);
+
+    $catalogo['categoria']->update(['is_active' => false]);
+
+    $resumen = $servicio->summary();
+
+    expect($resumen['items'][0]['status'])->toBe(CartService::STATUS_UNAVAILABLE)
+        ->and($resumen['subtotal'])->toBe(0);
+
+    $catalogo['categoria']->update(['is_active' => true]);
+
+    $resumen = $servicio->summary();
+
+    expect($resumen['items'][0]['status'])->toBe(CartService::STATUS_AVAILABLE)
+        ->and($resumen['subtotal'])->toBe(200000);
+});
+
+test('agregar una variante de una categoría apagada se rechaza y vuelve al reactivarla', function () {
+    $catalogo = carritoCatalogo();
+    $variante = carritoProducto($catalogo, stock: 5)->variants()->first();
+
+    $catalogo['categoria']->update(['is_active' => false]);
+
+    $servicio = carritoDe();
+    $resultado = $servicio->add($variante, 2);
+
+    expect($resultado['reason'])->toBe(CartService::REASON_UNAVAILABLE)
+        ->and($resultado['added'])->toBe(0)
+        ->and(Cart::count())->toBe(0);
+
+    $catalogo['categoria']->update(['is_active' => true]);
+
+    $resultado = $servicio->add($variante, 2);
+
+    expect($resultado['reason'])->toBeNull()
+        ->and($resultado['quantity'])->toBe(2)
+        ->and(Cart::count())->toBe(1);
+});
+
 test('summary entrega los campos de pantalla y el subtotal de las líneas disponibles', function () {
     $catalogo = carritoCatalogo();
     $producto = carritoProducto($catalogo, stock: 8, product: ['base_price' => 100000]);

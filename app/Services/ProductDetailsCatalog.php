@@ -341,8 +341,13 @@ class ProductDetailsCatalog
     }
 
     /**
-     * One garment a filter list may count: turned on, and — when a section or a scope
-     * narrows the store — inside an active category of it.
+     * One garment a filter list may count: turned on, and inside a category that is on.
+     *
+     * The category is required with or without a section, because turning a category off
+     * hides its garments from the whole store and not only from the listing of a section:
+     * an option only those garments carry is not offered anywhere. That is why the
+     * no-section branch asks for the active category too, instead of settling for the
+     * stored status alone.
      *
      * A section is read as the scope that covers it alone, so `ListingScope::applyTo()`
      * is the one place that says what a garment of a section (or of several sections)
@@ -354,7 +359,9 @@ class ProductDetailsCatalog
     private function visibleGarment(StoreSection|ListingScope|null $section, Builder $products): Builder
     {
         if ($section === null) {
-            return $products->where('status', '!=', 'inactive');
+            return $products
+                ->where('status', '!=', 'inactive')
+                ->whereHas('category', fn (Builder $category): Builder => $category->where('is_active', true));
         }
 
         return ($section instanceof ListingScope ? $section : ListingScope::section($section))->applyTo($products);

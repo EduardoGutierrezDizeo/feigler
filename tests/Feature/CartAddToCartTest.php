@@ -277,6 +277,27 @@ test('una variante inexistente, inactiva o de un producto apagado se rechaza con
     expect(Cart::count())->toBe(0);
 });
 
+test('una variante cuya categoría está apagada se rechaza y se admite al reactivarla', function () {
+    $catalogo = catalogoDeCarrito();
+    $variante = varianteDeCarrito($catalogo, stock: 5);
+
+    $catalogo['categoria']->update(['is_active' => false]);
+
+    $this->postJson('/carrito/agregar', ['variant_id' => $variante->getKey()])
+        ->assertStatus(422)
+        ->assertJsonPath('ok', false)
+        ->assertJsonPath('message', CartController::MESSAGE_UNAVAILABLE);
+
+    expect(Cart::count())->toBe(0);
+
+    $catalogo['categoria']->update(['is_active' => true]);
+
+    $this->postJson('/carrito/agregar', ['variant_id' => $variante->getKey()])
+        ->assertOk()
+        ->assertJsonPath('ok', true)
+        ->assertJsonPath('count', 1);
+});
+
 test('el contador aparece con el número en la ficha y en el listado', function () {
     $variante = varianteDeCarrito(catalogoDeCarrito(), stock: 10);
     $carrito = Cart::factory()->create();

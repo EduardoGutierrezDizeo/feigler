@@ -319,6 +319,21 @@ test('asks for confirmation before deactivating a category that has products', f
         ->assertSee('hasta que la actives de nuevo');
 });
 
+/**
+ * A category with a single product warns in the singular, so the warning never reads
+ * "sus 1 productos". The message travels through `@js`, which escapes the accents, so
+ * the assertion stops before the accented word.
+ */
+test('warns in singular before deactivating a category with a single product', function () {
+    $category = Category::factory()->create(['name' => 'Camisetas']);
+    Product::factory()->for($category)->create();
+
+    panelDeCategorias()
+        ->assertSee('Al desactivar')
+        ->assertSee('su producto dejar')
+        ->assertDontSee('sus 1 productos');
+});
+
 test('deactivates a category without products without asking for confirmation', function () {
     $category = Category::factory()->create();
 
