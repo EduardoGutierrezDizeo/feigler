@@ -5,6 +5,7 @@
     'isActive' => true,
     'isFirst' => false,
     'isLast' => false,
+    'deactivateConfirmMessage' => null,
 ])
 
 {{-- Celdas «Estado», «Orden» y «Acciones» de una fila reordenable, compartidas por
@@ -18,6 +19,12 @@
      resuelve en el ámbito donde Alpine evalúa la expresión, y ese ámbito es el del
      padre aunque el marcado venga de un `.blade.php` de otro sitio.
 
+     Desactivar una fila se hace directo con `wire:click`, salvo que se pase
+     `deactivateConfirmMessage`: entonces el interruptor abre el diálogo de
+     confirmación (solo cuando la fila está activa; reactivar nunca pregunta) y el
+     método corre en el `onConfirm`. Lo usa la pestaña «Categorías», donde apagar una
+     categoría esconde de la tienda todos sus productos.
+
      `contents` hace que las tres celdas participen directamente en el grid de la
      fila. La alineación replica la de la cabecera: Estado y Orden centrados desde
      `md` (cuando aparece la cabecera), Acciones al final. --}}
@@ -27,7 +34,17 @@
             type="button"
             role="switch"
             aria-checked="{{ $isActive ? 'true' : 'false' }}"
-            wire:click="toggleActive({{ $rowId }})"
+            @if ($isActive && $deactivateConfirmMessage !== null)
+                x-on:click="$dispatch('ask-confirm', {
+                    title: @js('Desactivar ' . $type),
+                    message: @js($deactivateConfirmMessage),
+                    confirmLabel: 'Desactivar',
+                    destructive: false,
+                    onConfirm: () => $wire.toggleActive({{ $rowId }}),
+                })"
+            @else
+                wire:click="toggleActive({{ $rowId }})"
+            @endif
             class="inline-flex items-center gap-2"
         >
             <span @class([

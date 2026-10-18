@@ -63,6 +63,14 @@
             @forelse ($rows as $row)
                 @php($category = $row['category'])
 
+                {{-- Apagar una categoría esconde de la tienda todos sus productos, así
+                     que el interruptor pide confirmación cuando hay alguno. El aviso
+                     solo se arma con productos (el interruptor lo ignora al reactivar)
+                     y cuenta todos, activos o no, porque todos dejan de verse. --}}
+                @php($deactivateConfirmMessage = $category->products_count > 0
+                    ? 'Al desactivar «'.$category->name.'», sus '.$category->products_count.' productos dejarán de verse en la tienda (listados, fichas y carritos) hasta que la actives de nuevo. ¿Continuar?'
+                    : null)
+
                 <div
                     wire:key="category-{{ $category->id }}"
                     data-flip-row
@@ -84,6 +92,7 @@
                             :is-active="$category->is_active"
                             :is-first="$row['isFirst']"
                             :is-last="$row['isLast']"
+                            :deactivate-confirm-message="$deactivateConfirmMessage"
                         />
                     </div>
                 </div>

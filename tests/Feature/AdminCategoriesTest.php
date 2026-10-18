@@ -301,6 +301,49 @@ test('toggles a category between active and inactive', function () {
     expect($category->fresh()->is_active)->toBeTrue();
 });
 
+/**
+ * Deactivating a category hides all of its products from the storefront, so the
+ * panel asks first and counts every product of the category, active or not.
+ *
+ * The confirmation rides on the same `ask-confirm` bridge as the delete button,
+ * which is why the message is checked through the rendered markup: it is the
+ * dialog that runs `toggleActive`, not the switch itself.
+ */
+test('asks for confirmation before deactivating a category that has products', function () {
+    $category = Category::factory()->create(['name' => 'Camisetas']);
+    Product::factory()->for($category)->count(2)->create();
+
+    panelDeCategorias()
+        ->assertSee('Al desactivar')
+        ->assertSee('sus 2 productos dejar')
+        ->assertSee('hasta que la actives de nuevo');
+});
+
+test('deactivates a category without products without asking for confirmation', function () {
+    $category = Category::factory()->create();
+
+    panelDeCategorias()
+        ->assertDontSee('Al desactivar')
+        ->call('toggleActive', $category->id);
+
+    expect($category->fresh()->is_active)->toBeFalse();
+});
+
+/**
+ * Reactivating gives the products back, so there is nothing to warn about and the
+ * switch keeps calling `toggleActive` directly even when the category sells.
+ */
+test('reactivating a category with products does not ask for confirmation', function () {
+    $category = Category::factory()->create(['is_active' => false]);
+    Product::factory()->for($category)->create();
+
+    panelDeCategorias()
+        ->assertDontSee('Al desactivar')
+        ->call('toggleActive', $category->id);
+
+    expect($category->fresh()->is_active)->toBeTrue();
+});
+
 test('blocks deleting a category that has products', function () {
     $category = Category::factory()->create();
     $product = Product::factory()->for($category)->create();

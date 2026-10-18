@@ -268,6 +268,7 @@ class Index extends Component
 
         $categories = Category::query()
             ->inSection($section)
+            ->withCount('products')
             ->orderBy('order')
             ->orderBy('id')
             ->get();

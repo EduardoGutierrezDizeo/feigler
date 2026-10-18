@@ -1,7 +1,5 @@
 <?php
 
-use Livewire\Livewire;
-use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Blade;
 
 it('renders select with placeholder, optgroup and disabled option preserving native options and has aria-haspopup', function () {

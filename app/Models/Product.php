@@ -334,7 +334,8 @@ class Product extends Model
     public function scopeVisible(Builder $query): void
     {
         $query->where('status', '!=', 'inactive')
-            ->whereHas('variants', fn (Builder $variants): Builder => $variants->where('is_active', true));
+            ->whereHas('variants', fn (Builder $variants): Builder => $variants->where('is_active', true))
+            ->whereHas('category', fn (Builder $category): Builder => $category->where('is_active', true));
     }
 
     /**
