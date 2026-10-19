@@ -70,6 +70,11 @@
                             <p class="mt-1 text-sm text-gris-calido">
                                 {{ $line['color_name'] !== '' ? $line['color_name'] : 'Color único' }}@if ($line['size_name'] !== '')<span class="mx-2" aria-hidden="true">·</span>{{ $line['size_name'] }}@endif
                             </p>
+                            <p class="mt-1.5 text-xs text-gris-calido" x-show="status !== 'unavailable'"
+                               @if ($line['status'] === 'unavailable') style="display:none" @endif>
+                                Valor unitario
+                                <span class="ml-1 text-sm text-tinta" x-text="unitPriceLabel">${{ number_format($line['unit_price'], 0, ',', '.') }}</span>
+                            </p>
                             <p class="mt-2 text-sm text-ladrillo" x-show="notice"
                                @if ($line['notice'] === '') style="display:none" @endif
                                x-text="notice">{{ $line['notice'] }}</p>

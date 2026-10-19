@@ -15,12 +15,13 @@
 import formatMoney from './money.js';
 
 /**
- * @param {{ id: number, quantity: number, subtotal: number, status: string, available_stock: number, notice: string, urls: { quantity: string, remove: string } }} line
+ * @param {{ id: number, quantity: number, unit_price: number, subtotal: number, status: string, available_stock: number, notice: string, urls: { quantity: string, remove: string } }} line
  */
 export default function cartLine(line) {
     return {
         id: line.id,
         quantity: Number(line.quantity),
+        unitPrice: Number(line.unit_price),
         subtotal: Number(line.subtotal),
         status: line.status,
         availableStock: Number(line.available_stock),
@@ -47,6 +48,10 @@ export default function cartLine(line) {
 
         get quantityLabel() {
             return this.unavailable ? `${this.quantity} unidades` : `Unidades: ${this.quantity}`;
+        },
+
+        get unitPriceLabel() {
+            return formatMoney(this.unitPrice);
         },
 
         get subtotalLabel() {
@@ -85,6 +90,7 @@ export default function cartLine(line) {
             }
 
             this.quantity = Number(line.quantity);
+            this.unitPrice = Number(line.unit_price);
             this.subtotal = Number(line.subtotal);
             this.status = line.status;
             this.unavailable = line.status === 'unavailable';

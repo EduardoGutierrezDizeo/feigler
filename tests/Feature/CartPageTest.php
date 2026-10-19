@@ -312,6 +312,55 @@ test('el subtotal se calcula sobre el precio en vivo de cada variante', function
         ->assertDontSee('$200.000', false);
 });
 
+test('cada línea muestra su valor unitario junto al subtotal', function () {
+    $catalogo = catalogoPaginaCarrito();
+    $camisa = variantePaginaCarrito($catalogo, stock: 5, precio: 90000);
+    $pantalon = variantePaginaCarrito($catalogo, stock: 3, precio: 130000);
+
+    $carrito = Cart::factory()->create();
+    CartItem::factory()->create(['cart_id' => $carrito->getKey(), 'product_variant_id' => $camisa->getKey(), 'quantity' => 3]);
+    CartItem::factory()->create(['cart_id' => $carrito->getKey(), 'product_variant_id' => $pantalon->getKey(), 'quantity' => 1]);
+
+    $respuesta = $this->withCookie(Cart::TOKEN_COOKIE, $carrito->token)->get('/carrito');
+
+    $respuesta->assertOk()
+        ->assertSee('Valor unitario', false)
+        ->assertSee('$90.000', false)
+        ->assertSee('$270.000', false)
+        ->assertSee('$130.000', false)
+        ->assertSee('$400.000', false)
+        ->assertSee('x-text="unitPriceLabel"', false);
+
+    // El unitario de la camisa ($90.000) solo está en su línea: el subtotal del
+    // pantalón (cantidad 1) sí es el mismo número que su unitario, y por eso
+    // aparece dos veces, pero el total del resumen ($400.000) no lo repite.
+    $html = $respuesta->getContent();
+
+    expect(substr_count($html, '$90.000'))->toBe(1)
+        ->and(substr_count($html, '$270.000'))->toBe(1)
+        ->and(substr_count($html, '$130.000'))->toBe(2);
+});
+
+test('el valor unitario que se muestra es el precio en vivo de la variante', function () {
+    $variante = variantePaginaCarrito(catalogoPaginaCarrito(), stock: 10, precio: 100000);
+    $carrito = Cart::factory()->create();
+    CartItem::factory()->create(['cart_id' => $carrito->getKey(), 'product_variant_id' => $variante->getKey(), 'quantity' => 2]);
+
+    $this->withCookie(Cart::TOKEN_COOKIE, $carrito->token)
+        ->get('/carrito')
+        ->assertOk()
+        ->assertSee('$100.000', false)
+        ->assertSee('$200.000', false);
+
+    $variante->forceFill(['price_override' => 120000])->save();
+
+    $this->withCookie(Cart::TOKEN_COOKIE, $carrito->token)
+        ->get('/carrito')
+        ->assertOk()
+        ->assertSee('$120.000', false)
+        ->assertDontSee('$100.000', false);
+});
+
 test('una cantidad inválida se rechaza con 422 sin tocar la línea', function () {
     $variante = variantePaginaCarrito(catalogoPaginaCarrito(), stock: 10, precio: 50000);
     $carrito = Cart::factory()->create();
