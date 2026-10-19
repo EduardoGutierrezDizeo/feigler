@@ -12,17 +12,19 @@ return [
     */
 
     // TODO: confirmar con el dueño.
-    'horario' => 'Lunes a sábado de 10:00 a 19:00. Domingos cerrado.',
+    'horario' => 'Lunes a viernes de 8:15am a 12:00pm y 2:00pm a 6:00pm. 
+    Sábados de 8:15am a 12:00pm y 2:00pm a 7:00pm
+    Domingos y festivos de 10:00am a 12:30pm',
     // TODO: confirmar con el dueño que el mapa siga apuntando a esta dirección.
-    'como_llegar_url' => 'https://maps.google.com/?q=Calle+2+Santander',
+    'como_llegar_url' => 'https://maps.app.goo.gl/xhChEeMnV5bUVvSb9',
     // TODO: confirmar con el dueño si hay foto de fachada; null = sin foto.
     'imagen' => '/images/fachada.jpg',
     // TODO: confirmar con el dueño. Los requisitos dicen «Calle 2 #20-27, Barrio Landia».
-    'direccion' => 'Calle 2 · Santander',
+    'direccion' => 'Cl. 2, Ocaña, Norte de Santander',
     // TODO: confirmar con el dueño el enlace real de Instagram.
-    'instagram' => '#',
+    'instagram' => 'https://www.instagram.com/feiglertienda/',
     // TODO: confirmar con el dueño el número de WhatsApp.
-    'whatsapp' => '#',
+    'whatsapp' => 'https://api.whatsapp.com/send/?phone=573159609860&text&type=phone_number&app_absent=0&utm_source=ig',
     // CONFIRMAR CON EL DUEÑO: resumen de envíos junto al botón de compra.
     'envio_resumen' => 'Envío nacional',
     // CONFIRMAR CON EL DUEÑO: resumen de cambios junto al botón de compra.

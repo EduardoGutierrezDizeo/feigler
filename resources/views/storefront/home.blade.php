@@ -112,25 +112,79 @@
 
         {{-- Nuestra tienda --}}
         <section class="pt-20" aria-labelledby="titulo-tienda">
-            <div class="grid overflow-hidden rounded-3xl bg-linear-to-br from-verde to-verde-hondo md:grid-cols-2">
-                <div class="flex flex-col items-start justify-center gap-5 px-6 py-12 sm:px-12 sm:py-16">
-                    <p class="text-sm text-laton">Nuestra tienda</p>
-                    <h2 id="titulo-tienda" class="font-display text-4xl leading-tight text-crema sm:text-5xl">
-                        Ven a probarte la <em class="italic text-laton">tradición</em>
-                    </h2>
-                    <p class="text-sm text-crema/90">{{ $store['hours'] ?? 'Madera, ladrillo y cuero. Atendemos de lunes a sábado.' }}</p>
-                    <a href="{{ $store['mapUrl'] ?? '#' }}" class="rounded-full bg-crema px-6 py-2.5 text-sm text-verde transition hover:bg-white">Cómo llegar</a>
+    <div class="relative isolate overflow-hidden rounded-3xl bg-linear-to-br from-verde to-verde-hondo">
+        {{-- Brillo decorativo --}}
+        <div aria-hidden="true" class="pointer-events-none absolute -right-24 -top-24 -z-10 h-72 w-72 rounded-full bg-laton/20 blur-3xl"></div>
+
+        <div class="grid md:grid-cols-2">
+            {{-- Contenido --}}
+            <div class="flex flex-col items-start justify-center gap-6 px-6 py-12 sm:px-10 sm:py-14 lg:px-14 lg:py-16">
+                <p class="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.2em] text-laton">
+                    <span aria-hidden="true" class="h-px w-8 bg-laton"></span>
+                    Nuestra tienda
+                </p>
+
+                <h2 id="titulo-tienda" class="font-display text-4xl leading-tight text-crema sm:text-5xl lg:text-6xl">
+                    Ven a probarte la <em class="italic text-laton">tradición</em>
+                </h2>
+
+                {{-- Horario --}}
+                <div class="w-full max-w-md">
+                    <h3 class="mb-2 text-xs font-medium uppercase tracking-[0.2em] text-laton">Horario de atención</h3>
+
+                    @if (! empty($store['hours']))
+                        <ul class="divide-y divide-crema/15 border-y border-crema/15">
+                            @foreach (preg_split('/\R/u', trim($store['hours'])) as $line)
+                                @php
+                                    $parts = preg_split('/:\s+/u', trim($line), 2);
+                                @endphp
+                                <li class="flex items-baseline justify-between gap-4 py-3 text-sm">
+                                    @if (count($parts) === 2)
+                                        <span class="text-crema/70">{{ $parts[0] }}</span>
+                                        <span class="text-right font-medium text-crema">{{ $parts[1] }}</span>
+                                    @else
+                                        <span class="text-crema">{{ trim($line) }}</span>
+                                    @endif
+                                </li>
+                            @endforeach
+                        </ul>
+                    @else
+                        <p class="border-y border-crema/15 py-3 text-sm text-crema/90">
+                            Madera, ladrillo y cuero. Atendemos de lunes a sábado.
+                        </p>
+                    @endif
                 </div>
-                <div class="flex items-end justify-center px-6 pt-2 md:justify-end md:px-12">
-                    <div class="relative h-64 w-56 overflow-hidden rounded-t-full bg-linear-to-b from-madera/80 to-madera sm:h-80 sm:w-64">
-                        @if (! empty($store['image']))
-                            <img src="{{ $store['image'] }}" alt="Fachada de la tienda Feigler" loading="lazy" class="h-full w-full object-cover">
-                        @else
-                            <span class="absolute bottom-3 left-4 text-xs text-crema/80">Foto: fachada</span>
-                        @endif
-                    </div>
+
+                {{-- Botón --}}
+                <div class="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+                    <a href="{{ $store['mapUrl'] ?? '#' }}"
+                       class="inline-flex items-center justify-center gap-2 rounded-full bg-crema px-7 py-3 text-sm font-medium text-verde transition hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-laton">
+                        Cómo llegar
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                        </svg>
+                    </a>
                 </div>
             </div>
-        </section>
+
+            {{-- Imagen --}}
+            <div class="relative order-first h-64 sm:h-80 md:order-last md:h-auto md:min-h-[26rem]">
+                @if (! empty($store['image']))
+                    <img src="{{ $store['image'] }}"
+                         alt="Fachada de la tienda Feigler"
+                         loading="lazy"
+                         class="absolute inset-0 h-full w-full object-cover">
+                @else
+                    <div class="absolute inset-0 bg-linear-to-b from-madera/80 to-madera">
+                        <span class="absolute bottom-4 left-5 text-xs text-crema/80">Foto: fachada</span>
+                    </div>
+                @endif
+
+                {{-- Degradado para fundir la imagen con el contenido --}}
+                <div aria-hidden="true" class="absolute inset-0 bg-linear-to-t from-verde-hondo/70 via-transparent to-transparent md:bg-linear-to-r md:from-verde-hondo/60 md:via-transparent md:to-transparent"></div>
+            </div>
+        </div>
+    </div>
+</section>
     </div>
 </x-store.layout>
