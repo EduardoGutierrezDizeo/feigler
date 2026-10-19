@@ -310,9 +310,23 @@ class Index extends Component
 
         $product->update(['status' => $turningOn ? 'active' : 'inactive']);
 
-        $this->notifySuccess($turningOn
-            ? "Producto «{$product->name}» activado correctamente."
-            : "Producto «{$product->name}» desactivado correctamente.");
+        if (! $turningOn) {
+            $this->notifySuccess("Producto «{$product->name}» desactivado correctamente.");
+
+            return;
+        }
+
+        // Un producto se activa igual aunque todavía no tenga fotos: la tienda lo
+        // muestra con un degradado hasta que se le suban, así que no es un fallo que
+        // impida activarlo, sino algo que el admin debe ver. Se avisa en tono de
+        // advertencia en vez del aviso normal de éxito.
+        if (! $product->images()->exists()) {
+            $this->notifyWarning("«{$product->name}» está activo, pero todavía no tiene fotos: en la tienda se verá con un degradado.");
+
+            return;
+        }
+
+        $this->notifySuccess("Producto «{$product->name}» activado correctamente.");
     }
 
     public function loadMore(): void

@@ -10,7 +10,7 @@
 import { createRowMover } from './admin/row-mover.js';
 import './alpine/index.js';
 
-const TOAST_TONES = ['success', 'error'];
+const TOAST_TONES = ['success', 'warning', 'error'];
 const TOAST_DURATION = 5000;
 
 let toastSequence = 0;
@@ -23,7 +23,7 @@ document.addEventListener('alpine:init', () => {
          * Agrega un aviso a la pila y programa su desaparición.
          *
          * @param {string} message
-         * @param {'success'|'error'} [tone]
+         * @param {'success'|'warning'|'error'} [tone]
          */
         push(message, tone = 'success') {
             const text = String(message ?? '').trim()
@@ -47,6 +47,10 @@ document.addEventListener('alpine:init', () => {
 
         success(message) {
             return this.push(message, 'success')
+        },
+
+        warning(message) {
+            return this.push(message, 'warning')
         },
 
         error(message) {

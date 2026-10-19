@@ -28,6 +28,15 @@ trait Notifies
         $this->notify($message, 'success');
     }
 
+    /**
+     * A message that neither fails nor is quite good news: the panel carries on
+     * with what it was doing, but there is something the admin should look at.
+     */
+    protected function notifyWarning(string $message): void
+    {
+        $this->notify($message, 'warning');
+    }
+
     protected function notifyError(string $message): void
     {
         $this->notify($message, 'error');

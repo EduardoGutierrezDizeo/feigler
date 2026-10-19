@@ -4,7 +4,8 @@
     Se alimenta de la store Alpine `toast`, que a su vez recibe los avisos que
     Livewire despacha desde PHP mediante el evento `toast` (`$this->dispatch` en
     el trait App\Livewire\Concerns\Notifies). Para mostrar un aviso desde
-    Alpine se usa `$store.toast.success('…')` o `$store.toast.error('…')`.
+    Alpine se usa `$store.toast.success('…')`, `$store.toast.warning('…')` o
+    `$store.toast.error('…')`.
 --}}
 {{-- Por encima de los modales (admin-modal z-50 y confirm-dialog z-[70]): un aviso
      debe verse aunque haya un modal abierto. Fuera solo queda el panel del select
@@ -20,6 +21,7 @@
             class="pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-lg border border-arena bg-crema px-4 py-3 text-sm shadow-md sm:w-96"
             :class="{
                 'border-verde/40': toast.tone === 'success',
+                'border-laton/60': toast.tone === 'warning',
                 'border-ladrillo/50': toast.tone === 'error',
             }"
             role="status"
@@ -31,8 +33,12 @@
             x-transition:leave-end="translate-y-2 opacity-0 sm:translate-x-3 sm:translate-y-0"
         >
             <span
-                class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
-                :class="toast.tone === 'success' ? 'bg-verde text-crema' : 'bg-ladrillo text-crema'"
+                class="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-crema"
+                :class="{
+                    'bg-verde': toast.tone === 'success',
+                    'bg-laton': toast.tone === 'warning',
+                    'bg-ladrillo': toast.tone === 'error',
+                }"
                 aria-hidden="true"
             >
                 <svg
@@ -62,7 +68,11 @@
 
             <p
                 class="min-w-0 flex-1"
-                :class="toast.tone === 'success' ? 'text-verde' : 'text-ladrillo'"
+                :class="{
+                    'text-verde': toast.tone === 'success',
+                    'text-tinta': toast.tone === 'warning',
+                    'text-ladrillo': toast.tone === 'error',
+                }"
                 x-text="toast.message"
             ></p>
 

@@ -5,6 +5,7 @@ use App\Livewire\Admin\Products\Index;
 use App\Models\Category;
 use App\Models\Material;
 use App\Models\Product;
+use App\Models\ProductImage;
 use App\Models\ProductVariant;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
@@ -736,6 +737,12 @@ test('the status toggle alternates active and inactive and notifies', function (
         ->assertDispatched('toast', tone: 'success', message: 'Producto «Polo clásico» desactivado correctamente.');
 
     expect($producto->refresh()->status)->toBe('inactive');
+
+    $producto->refresh();
+    $talla = sizeOfProduct($producto);
+    ProductVariant::factory()->for($producto)->for($talla)->create();
+    $color = $producto->colors()->first() ?? ProductImage::factory()->for($producto)->create()->color;
+    ProductImage::factory()->primary()->for($producto)->for($color)->create();
 
     Livewire::actingAs(adminForPanel())
         ->test(Index::class)

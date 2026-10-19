@@ -17,3 +17,9 @@ Schedule::command('carts:prune')->daily();
 // copia privada se guarda al revisar y se borra al confirmar o cancelar, así que
 // lo que quede a estas horas es lo que quedó a medias.
 Schedule::command('bulk-imports:prune')->daily();
+
+// Y los temporales de Livewire, que la propia librería solo barre cuando alguien
+// vuelve a subir un archivo: en un panel con poco tráfico lo que quedó a medias se
+// acumula, así que se limpian a diario. Media hora después de las otras dos, para
+// no encimar tres barridos a la misma hora.
+Schedule::command('livewire-tmp:prune')->dailyAt('00:30');
